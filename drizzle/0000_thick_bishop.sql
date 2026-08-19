@@ -67,6 +67,7 @@ CREATE TABLE "gift_intents" (
 	"received_amount_cents" integer,
 	"applied_amount_cents" integer DEFAULT 0 NOT NULL,
 	"idempotency_key" varchar(128) NOT NULL,
+	"request_fingerprint_hash" varchar(64) NOT NULL,
 	"guest_token_hash" varchar(64) NOT NULL,
 	"guest_email_hash" varchar(64),
 	"fingerprint_hash" varchar(64),
@@ -185,6 +186,7 @@ CREATE INDEX "gift_intents_status_idx" ON "gift_intents" USING btree ("status");
 CREATE INDEX "gift_intents_expires_at_idx" ON "gift_intents" USING btree ("expires_at");--> statement-breakpoint
 CREATE INDEX "gift_intents_gift_status_expiry_idx" ON "gift_intents" USING btree ("gift_id","status","expires_at");--> statement-breakpoint
 CREATE INDEX "gift_intents_email_hash_idx" ON "gift_intents" USING btree ("guest_email_hash");--> statement-breakpoint
+CREATE INDEX "gift_intents_request_fingerprint_idx" ON "gift_intents" USING btree ("request_fingerprint_hash");--> statement-breakpoint
 CREATE UNIQUE INDEX "gift_locks_intent_unique" ON "gift_locks" USING btree ("intent_id");--> statement-breakpoint
 CREATE INDEX "gift_locks_expires_at_idx" ON "gift_locks" USING btree ("expires_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "gifts_public_reference_unique" ON "gifts" USING btree ("public_reference");--> statement-breakpoint

@@ -526,6 +526,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "request_fingerprint_hash": {
+          "name": "request_fingerprint_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "guest_token_hash": {
           "name": "guest_token_hash",
           "type": "varchar(64)",
@@ -706,6 +712,21 @@
           "columns": [
             {
               "expression": "guest_email_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "gift_intents_request_fingerprint_idx": {
+          "name": "gift_intents_request_fingerprint_idx",
+          "columns": [
+            {
+              "expression": "request_fingerprint_hash",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

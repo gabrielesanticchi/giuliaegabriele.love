@@ -1,0 +1,107 @@
+import { readFile } from "node:fs/promises";
+import { randomBytes, randomUUID } from "node:crypto";
+
+import { eq } from "drizzle-orm";
+import postgres from "postgres";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { createDatabase, type WeddingDatabase } from "@/db";
+import { gifts, giftIntents } from "@/db/schema";
+import { reserveGift } from "@/db/transactions";
+
+const databaseUrl = process.env.TEST_DATABASE_URL;
+const integration = databaseUrl ? describe : describe.skip;
+
+integration(
+  "initial schema bootstrap (requires TEST_DATABASE_URL; skipped without a real database)",
+  () => {
+    const schemaName = `bootstrap_${randomUUID().replaceAll("-", "")}`;
+    let adminSql: postgres.Sql;
+    let bootstrapSql: postgres.Sql;
+    let db: WeddingDatabase;
+
+    beforeAll(async () => {
+      adminSql = postgres(databaseUrl!, { max: 1 });
+      await adminSql.unsafe(`create schema "${schemaName}"`);
+      bootstrapSql = postgres(databaseUrl!, {
+        max: 1,
+        connection: { search_path: schemaName }
+      });
+
+      const migration = await readFile(
+        new URL("../../drizzle/0000_thick_bishop.sql", import.meta.url),
+        "utf8"
+      );
+      for (const original of migration.split("--> statement-breakpoint")) {
+        const statement = original
+          .trim()
+          .replaceAll('"public".', `"${schemaName}".`);
+        if (statement) await bootstrapSql.unsafe(statement);
+      }
+      db = createDatabase(bootstrapSql);
+    });
+
+    afterAll(async () => {
+      if (bootstrapSql) await bootstrapSql.end();
+      if (adminSql) {
+        await adminSql.unsafe(`drop schema if exists "${schemaName}" cascade`);
+        await adminSql.end();
+      }
+    });
+
+    it("creates the request fingerprint column and index from migration 0000", async () => {
+      const columns = await adminSql<Array<{ is_nullable: "YES" | "NO" }>>`
+        select is_nullable
+        from information_schema.columns
+        where table_schema = ${schemaName}
+          and table_name = 'gift_intents'
+          and column_name = 'request_fingerprint_hash'
+      `;
+      const indexes = await adminSql<Array<{ indexname: string }>>`
+        select indexname
+        from pg_indexes
+        where schemaname = ${schemaName}
+          and tablename = 'gift_intents'
+          and indexname = 'gift_intents_request_fingerprint_idx'
+      `;
+
+      expect(columns).toEqual([{ is_nullable: "NO" }]);
+      expect(indexes).toEqual([
+        { indexname: "gift_intents_request_fingerprint_idx" }
+      ]);
+    });
+
+    it("supports an exact idempotent retry immediately after bootstrap", async () => {
+      const giftId = randomUUID();
+      await db.insert(gifts).values({
+        id: giftId,
+        publicReference: `G-${giftId}`,
+        title: "Regalo bootstrap",
+        priceCents: 10_000
+      });
+      const input = {
+        giftId,
+        amountCents: 10_000,
+        idempotencyKey: randomUUID(),
+        requestFingerprintHash: randomBytes(32).toString("hex"),
+        publicReference: `I-${randomUUID()}`,
+        method: "bank_transfer" as const,
+        guestTokenHash: randomBytes(32).toString("hex"),
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+      };
+
+      const first = await reserveGift(db, input);
+      const retry = await reserveGift(db, {
+        ...input,
+        publicReference: `I-${randomUUID()}`
+      });
+
+      expect(retry.id).toBe(first.id);
+      const rows = await db
+        .select()
+        .from(giftIntents)
+        .where(eq(giftIntents.idempotencyKey, input.idempotencyKey));
+      expect(rows).toHaveLength(1);
+    });
+  }
+);
