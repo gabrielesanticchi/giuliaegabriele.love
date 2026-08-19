@@ -57,6 +57,26 @@ const commonGiftRequestSchema = z.object({
   ...antiAbuseSchema
 });
 
+export function parseEuroAmountToCents(value: string): number | null {
+  const normalized = value.trim();
+  const match = /^(0|[1-9]\d*)(?:[.,](\d{1,2}))?$/.exec(normalized);
+  if (!match) return null;
+  const cents =
+    BigInt(match[1] ?? "0") * 100n +
+    BigInt((match[2] ?? "").padEnd(2, "0") || "0");
+  if (cents <= 0n || cents > 100_000_000n) return null;
+  return Number(cents);
+}
+
+export const euroAmountInputSchema = z
+  .string()
+  .trim()
+  .min(1, "Inserisci un importo")
+  .refine(
+    (value) => parseEuroAmountToCents(value) !== null,
+    "Usa al massimo due decimali"
+  );
+
 export const reserveGiftRequestSchema = commonGiftRequestSchema
   .extend({
     method: z.enum(["external_purchase", "bank_transfer"])
@@ -71,6 +91,10 @@ export const contributionRequestSchema = commonGiftRequestSchema
       .positive("Inserisci un importo positivo")
       .max(100_000_000, "L’importo supera il limite")
   })
+  .strict();
+
+export const contributionGiftFormSchema = commonGiftRequestSchema
+  .extend({ amount: euroAmountInputSchema })
   .strict();
 
 export const requestActionSchema = z.object(antiAbuseSchema).strict();

@@ -57,7 +57,12 @@ integration(
         from information_schema.columns
         where table_schema = ${schemaName}
           and table_name = 'gift_intents'
-          and column_name in ('request_fingerprint_hash', 'guest_details_encrypted')
+          and column_name in (
+            'request_fingerprint_hash',
+            'guest_details_encrypted',
+            'guest_complete_idempotency_key',
+            'guest_cancel_idempotency_key'
+          )
         order by column_name
       `;
       const indexes = await adminSql<Array<{ indexname: string }>>`
@@ -69,6 +74,8 @@ integration(
       `;
 
       expect(columns).toEqual([
+        { column_name: "guest_cancel_idempotency_key", is_nullable: "YES" },
+        { column_name: "guest_complete_idempotency_key", is_nullable: "YES" },
         { column_name: "guest_details_encrypted", is_nullable: "NO" },
         { column_name: "request_fingerprint_hash", is_nullable: "NO" }
       ]);

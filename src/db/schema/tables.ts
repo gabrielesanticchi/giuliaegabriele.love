@@ -209,6 +209,12 @@ export const giftIntents = pgTable(
     paymentDeclaredAt: timestamp("payment_declared_at", {
       withTimezone: true
     }),
+    guestCompleteIdempotencyKey: varchar("guest_complete_idempotency_key", {
+      length: 128
+    }),
+    guestCancelIdempotencyKey: varchar("guest_cancel_idempotency_key", {
+      length: 128
+    }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     ...timestamps

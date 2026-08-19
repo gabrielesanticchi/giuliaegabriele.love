@@ -568,6 +568,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "guest_complete_idempotency_key": {
+          "name": "guest_complete_idempotency_key",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "guest_cancel_idempotency_key": {
+          "name": "guest_cancel_idempotency_key",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": false
+        },
         "verified_at": {
           "name": "verified_at",
           "type": "timestamp with time zone",

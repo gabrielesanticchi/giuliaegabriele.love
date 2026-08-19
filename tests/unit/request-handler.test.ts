@@ -15,7 +15,8 @@ const body = {
 
 function request(
   payload: unknown = body,
-  origin = "https://giuliaegabriele.love"
+  origin = "https://giuliaegabriele.love",
+  headers: Record<string, string> = {}
 ) {
   return new Request(
     `https://giuliaegabriele.love/api/requests/${token}/complete`,
@@ -24,7 +25,8 @@ function request(
       headers: {
         "content-type": "application/json",
         origin,
-        "x-forwarded-for": "198.51.100.4"
+        "x-forwarded-for": "198.51.100.4",
+        ...headers
       },
       body: JSON.stringify(payload)
     }
@@ -37,7 +39,7 @@ function dependencies(
   return {
     siteOrigin: "https://giuliaegabriele.love",
     fingerprintSecret: "fingerprint-secret",
-    tokenSecret: "token-secret",
+    guestTokenSecret: "token-secret",
     verifyTurnstile: vi.fn().mockResolvedValue({ success: true }),
     consumeRateLimit: vi.fn().mockResolvedValue({
       allowed: true,
@@ -52,9 +54,10 @@ function dependencies(
     }),
     complete: vi.fn().mockResolvedValue({
       status: "pending",
-      paymentDeclaredAt: new Date("2026-08-19T12:00:00.000Z")
+      paymentDeclaredAt: new Date("2026-08-19T12:00:00.000Z"),
+      replayed: false
     }),
-    cancel: vi.fn().mockResolvedValue({ status: "cancelled" }),
+    cancel: vi.fn().mockResolvedValue({ status: "cancelled", replayed: false }),
     notify: vi.fn().mockResolvedValue(undefined),
     now: () => new Date("2026-08-19T12:00:00.000Z"),
     ...overrides
@@ -79,7 +82,8 @@ describe("personal request action route", () => {
       expect.stringMatching(/^[a-f0-9]{64}$/)
     );
     expect(deps.complete).toHaveBeenCalledWith(
-      "123e4567-e89b-42d3-a456-426614174002"
+      "123e4567-e89b-42d3-a456-426614174002",
+      body.idempotencyKey
     );
     expect(JSON.stringify(vi.mocked(deps.complete).mock.calls)).not.toContain(
       token
@@ -133,6 +137,24 @@ describe("personal request action route", () => {
     expect(deps.complete).not.toHaveBeenCalled();
   });
 
+  it("non ripete la notifica quando la action key è già stata applicata", async () => {
+    const deps = dependencies({
+      complete: vi.fn().mockResolvedValue({
+        status: "pending",
+        paymentDeclaredAt: new Date("2026-08-19T12:00:00.000Z"),
+        replayed: true
+      })
+    });
+
+    const response = await createRequestActionHandler("complete", deps)(
+      request(),
+      { token }
+    );
+
+    expect(response.status).toBe(200);
+    expect(deps.notify).not.toHaveBeenCalled();
+  });
+
   it("revoca i token terminali oltre trenta giorni", async () => {
     const deps = dependencies({
       resolveIntent: vi.fn().mockResolvedValue({
@@ -151,5 +173,47 @@ describe("personal request action route", () => {
 
     expect(response.status).toBe(403);
     expect(deps.cancel).not.toHaveBeenCalled();
+  });
+
+  it("rifiuta media type estesi e body chunked oltre limite cancellando lo stream", async () => {
+    const deps = dependencies();
+    const wrongType = await createRequestActionHandler("complete", deps)(
+      request(body, "https://giuliaegabriele.love", {
+        "content-type": "application/problem+json"
+      }),
+      { token }
+    );
+    const cancel = vi.fn();
+    const chunks = [new Uint8Array(10_000), new Uint8Array(7_000)];
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = chunks.shift();
+        if (chunk) controller.enqueue(chunk);
+        else controller.close();
+      },
+      cancel
+    });
+    const chunked = new Request(
+      `https://giuliaegabriele.love/api/requests/${token}/complete`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": "10",
+          origin: "https://giuliaegabriele.love"
+        },
+        body: stream,
+        duplex: "half"
+      } as RequestInit & { duplex: "half" }
+    );
+    const oversized = await createRequestActionHandler("complete", deps)(
+      chunked,
+      { token }
+    );
+
+    expect(wrongType.status).toBe(400);
+    expect(oversized.status).toBe(400);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(deps.complete).not.toHaveBeenCalled();
   });
 });

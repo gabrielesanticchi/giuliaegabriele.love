@@ -46,8 +46,18 @@ function requiredEnvironment(name: string): string {
 function publicConfig() {
   const siteOrigin = requiredEnvironment("NEXT_PUBLIC_SITE_URL");
   const fingerprintSecret = requiredEnvironment("REQUEST_FINGERPRINT_SECRET");
-  const tokenSecret = fingerprintSecret;
-  return { siteOrigin, fingerprintSecret, tokenSecret };
+  const guestTokenSecret = requiredEnvironment("GUEST_TOKEN_SECRET");
+  if (fingerprintSecret === guestTokenSecret) {
+    throw new PublicServiceUnavailableError();
+  }
+  const trustVercelProxy =
+    process.env.VERCEL === "1" || process.env.TRUST_VERCEL_PROXY === "true";
+  return {
+    siteOrigin,
+    fingerprintSecret,
+    guestTokenSecret,
+    trustVercelProxy
+  };
 }
 
 function positiveInteger(value: string | undefined, fallback: number): number {
@@ -250,8 +260,10 @@ export function createRequestRuntimeDependencies(): RequestActionDependencies {
           : (intent.verifiedAt ?? intent.cancelledAt ?? intent.updatedAt);
       return { ...intent, terminalAt };
     },
-    complete: (intentId) => declareIntentPayment(db, { intentId }),
-    cancel: (intentId) => cancelIntent(db, { intentId, actor: "guest" }),
+    complete: (intentId, idempotencyKey) =>
+      declareIntentPayment(db, { intentId, idempotencyKey }),
+    cancel: (intentId, idempotencyKey) =>
+      cancelIntent(db, { intentId, actor: "guest", idempotencyKey }),
     notify: async () => undefined
   };
 }

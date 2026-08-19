@@ -1,9 +1,15 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
+import { vi } from "vitest";
 
 import { GuestRequestView } from "@/app/(public)/richiesta/[token]/guest-request-view";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  delete window.turnstile;
+  vi.unstubAllGlobals();
+});
 
 const pending = {
   token: "a".repeat(43),
@@ -75,5 +81,38 @@ describe("GuestRequestView", () => {
 
     expect(screen.getByText("Verificato")).toBeInTheDocument();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("resetta Turnstile dopo un tentativo di azione", async () => {
+    const user = userEvent.setup();
+    let issueToken: ((token: string) => void) | undefined;
+    const reset = vi.fn();
+    window.turnstile = {
+      render: vi.fn((_element, options) => {
+        issueToken = options.callback;
+        return "guest-widget";
+      }),
+      reset
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: "retryable" } }), {
+          status: 503,
+          headers: { "content-type": "application/json" }
+        })
+      )
+    );
+    render(<GuestRequestView request={pending} />);
+    act(() => issueToken?.("verified-token"));
+
+    await user.click(
+      screen.getByRole("button", { name: "Dichiara il completamento" })
+    );
+
+    await waitFor(() => expect(reset).toHaveBeenCalledWith("guest-widget"));
+    expect(document.querySelector('input[name="turnstileToken"]')).toHaveValue(
+      ""
+    );
   });
 });

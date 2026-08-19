@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHmac, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import { TransactionError } from "@/db/transactions/errors";
@@ -17,6 +17,8 @@ import {
   type ContributionRequest,
   type ReserveGiftRequest
 } from "./validation";
+import { resolveClientIdentity } from "./client-identity";
+import { readBoundedJson } from "./request-body";
 
 const MAX_BODY_BYTES = 16_384;
 const GIFT_HOLD_MS = 48 * 60 * 60 * 1_000;
@@ -51,6 +53,7 @@ type MutationResult = {
   id: string;
   publicReference: string;
   expiresAt: Date;
+  replayed: boolean;
 };
 
 type GiftForMutation = {
@@ -70,7 +73,8 @@ export type BankInstructions = {
 export type GiftIntentHandlerDependencies = {
   siteOrigin: string;
   fingerprintSecret: string;
-  tokenSecret: string;
+  guestTokenSecret: string;
+  trustVercelProxy?: boolean;
   verifyTurnstile: (input: {
     token: string;
     remoteIp?: string;
@@ -148,14 +152,6 @@ function publicErrorMessage(code: PublicErrorCode): string {
   return messages[code];
 }
 
-function getRemoteIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown"
-  );
-}
-
 function isAllowedOrigin(request: Request, siteOrigin: string): boolean {
   try {
     const expected = new URL(siteOrigin).origin;
@@ -164,13 +160,6 @@ function isAllowedOrigin(request: Request, siteOrigin: string): boolean {
   } catch {
     return false;
   }
-}
-
-function deriveGuestToken(idempotencyKey: string, secret: string): string {
-  if (!secret) throw new PublicServiceUnavailableError();
-  return createHmac("sha256", secret)
-    .update(`guest-link\0${idempotencyKey}`, "utf8")
-    .digest("base64url");
 }
 
 function requestFingerprint(
@@ -218,40 +207,18 @@ export function createGiftIntentHandler(
 ) {
   return async (request: Request, context: { giftId: string }) => {
     try {
-      if (
-        !request.headers
-          .get("content-type")
-          ?.toLowerCase()
-          .startsWith("application/json")
-      ) {
-        return publicError(400, "invalid_request");
-      }
-      const declaredLength = Number(request.headers.get("content-length"));
-      if (declaredLength > MAX_BODY_BYTES) {
-        return publicError(400, "invalid_request");
-      }
       if (!isAllowedOrigin(request, dependencies.siteOrigin)) {
         return publicError(403, "forbidden");
       }
-
-      const rawBody = await request.text();
-      if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
-        return publicError(400, "invalid_request");
-      }
-
-      let untrusted: unknown;
-      try {
-        untrusted = JSON.parse(rawBody);
-      } catch {
-        return publicError(400, "invalid_request");
-      }
+      const body = await readBoundedJson(request, MAX_BODY_BYTES);
+      if (!body.ok) return publicError(400, "invalid_request");
 
       const giftId = z.uuid().safeParse(context.giftId);
       const parsed = (
         kind === "reserve"
           ? reserveGiftRequestSchema
           : contributionRequestSchema
-      ).safeParse(untrusted);
+      ).safeParse(body.value);
       if (!giftId.success || !parsed.success) {
         return publicError(422, "validation_failed");
       }
@@ -259,18 +226,21 @@ export function createGiftIntentHandler(
         return publicError(403, "forbidden");
       }
 
-      const remoteIp = getRemoteIp(request);
+      const client = resolveClientIdentity(
+        request,
+        dependencies.trustVercelProxy ?? false
+      );
       const turnstile = await dependencies.verifyTurnstile({
         token: parsed.data.turnstileToken,
-        remoteIp
+        remoteIp: client.remoteIp
       });
       if (!turnstile.success) return publicError(403, "forbidden");
 
-      if (!dependencies.fingerprintSecret || !dependencies.tokenSecret) {
+      if (!dependencies.fingerprintSecret || !dependencies.guestTokenSecret) {
         throw new PublicServiceUnavailableError();
       }
       const fingerprintHash = hashFingerprint(
-        remoteIp,
+        client.fingerprintMaterial,
         dependencies.fingerprintSecret
       );
       const rateLimit = await dependencies.consumeRateLimit({
@@ -287,16 +257,17 @@ export function createGiftIntentHandler(
       if (!gift) return publicError(409, "gift_unavailable");
 
       const now = dependencies.now?.() ?? new Date();
-      const guestToken = deriveGuestToken(
-        parsed.data.idempotencyKey,
-        dependencies.tokenSecret
-      );
+      const guestToken = randomBytes(32).toString("base64url");
       const method =
         "method" in parsed.data ? parsed.data.method : "bank_transfer";
       const amountCents =
         "amountCents" in parsed.data
           ? parsed.data.amountCents
           : gift.priceCents;
+      const bank =
+        method === "bank_transfer"
+          ? await dependencies.loadBankInstructions()
+          : null;
       const intent = await dependencies.mutate({
         giftId: gift.id,
         idempotencyKey: parsed.data.idempotencyKey,
@@ -308,7 +279,7 @@ export function createGiftIntentHandler(
           gift.id,
           dependencies.fingerprintSecret
         ),
-        guestTokenHash: hashToken(guestToken, dependencies.tokenSecret),
+        guestTokenHash: hashToken(guestToken, dependencies.guestTokenSecret),
         guestDetailsEncrypted: dependencies.encryptGuestDetails({
           firstName: parsed.data.guest.firstName,
           lastName: parsed.data.guest.lastName,
@@ -327,10 +298,21 @@ export function createGiftIntentHandler(
         )
       });
 
+      if (intent.replayed) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            reference: intent.publicReference,
+            giftStatus: kind === "reserve" ? "reserved" : "available",
+            replayed: true
+          }),
+          { status: 200, headers: responseHeaders() }
+        );
+      }
+
       const personalLink = `/richiesta/${guestToken}`;
       let instructions: Record<string, string | undefined> = { type: method };
-      if (method === "bank_transfer") {
-        const bank = await dependencies.loadBankInstructions();
+      if (bank) {
         instructions = {
           type: method,
           ...bank,

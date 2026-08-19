@@ -4,7 +4,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { formatCurrency } from "@/lib/domain/currency";
-import { TurnstileWidget } from "@/lib/turnstile/widget";
+import {
+  TurnstileWidget,
+  type TurnstileWidgetHandle
+} from "@/lib/turnstile/widget";
 
 export type GuestRequestSnapshot = {
   token: string;
@@ -40,6 +43,7 @@ export function GuestRequestView({
   const [declared, setDeclared] = useState(request.paymentDeclaredAt !== null);
   const [feedback, setFeedback] = useState("");
   const summaryRef = useRef<HTMLDivElement>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const [idempotencyKeys, setIdempotencyKeys] = useState<
     Record<"complete" | "cancel", string | null>
   >({ complete: null, cancel: null });
@@ -47,6 +51,7 @@ export function GuestRequestView({
   const {
     register,
     setValue,
+    getValues,
     handleSubmit,
     formState: { isSubmitting }
   } = useForm<ActionForm>({
@@ -63,10 +68,8 @@ export function GuestRequestView({
     const action = submitter?.dataset.action as
       "complete" | "cancel" | undefined;
     if (!action) return;
-    const turnstileToken = (
-      event?.currentTarget as HTMLFormElement | undefined
-    )?.elements.namedItem("turnstileToken") as HTMLInputElement | null;
-    if (!turnstileToken?.value) {
+    const turnstileToken = getValues("turnstileToken");
+    if (!turnstileToken) {
       setFeedback("Completa la verifica anti-spam prima di continuare.");
       return;
     }
@@ -83,7 +86,7 @@ export function GuestRequestView({
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            turnstileToken: turnstileToken.value,
+            turnstileToken,
             honeypot: "",
             idempotencyKey: requestKey
           })
@@ -107,6 +110,9 @@ export function GuestRequestView({
       }
     } catch {
       setFeedback("Connessione non disponibile. Riprova.");
+    } finally {
+      turnstileRef.current?.reset();
+      setValue("turnstileToken", "");
     }
   });
 
@@ -161,6 +167,7 @@ export function GuestRequestView({
               />
             </div>
             <TurnstileWidget
+              ref={turnstileRef}
               siteKey={request.turnstileSiteKey}
               onToken={(token) =>
                 setValue("turnstileToken", token, { shouldValidate: true })

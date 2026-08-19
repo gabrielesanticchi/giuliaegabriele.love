@@ -14,7 +14,7 @@ const RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
 export async function loadGuestRequest(
   token: string
 ): Promise<GuestRequestSnapshot | null> {
-  const secret = process.env.REQUEST_FINGERPRINT_SECRET?.trim();
+  const secret = process.env.GUEST_TOKEN_SECRET?.trim();
   if (!secret || !TOKEN_PATTERN.test(token) || !process.env.DATABASE_URL) {
     return null;
   }

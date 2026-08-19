@@ -74,6 +74,8 @@ CREATE TABLE "gift_intents" (
 	"fingerprint_hash" varchar(64),
 	"expires_at" timestamp with time zone NOT NULL,
 	"payment_declared_at" timestamp with time zone,
+	"guest_complete_idempotency_key" varchar(128),
+	"guest_cancel_idempotency_key" varchar(128),
 	"verified_at" timestamp with time zone,
 	"cancelled_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

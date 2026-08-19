@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { describe, expect, it, vi } from "vitest";
 
 import { TransactionError } from "@/db/transactions/errors";
@@ -49,7 +51,7 @@ function dependencies(
   return {
     siteOrigin: "https://giuliaegabriele.love",
     fingerprintSecret: "fingerprint-secret",
-    tokenSecret: "token-secret",
+    guestTokenSecret: "token-secret",
     verifyTurnstile: vi.fn().mockResolvedValue({ success: true }),
     consumeRateLimit: vi.fn().mockResolvedValue({
       allowed: true,
@@ -65,7 +67,8 @@ function dependencies(
     mutate: vi.fn().mockResolvedValue({
       id: "123e4567-e89b-42d3-a456-426614174002",
       publicReference: "REQ-ABC123",
-      expiresAt: new Date("2026-08-21T12:00:00.000Z")
+      expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+      replayed: false
     }),
     loadBankInstructions: vi.fn().mockResolvedValue({
       accountHolder: "Intestatario configurato",
@@ -101,6 +104,65 @@ describe("public gift route", () => {
     expect(await errorCode(oversized)).toBe("invalid_request");
     expect(deps.verifyTurnstile).not.toHaveBeenCalled();
     expect(deps.mutate).not.toHaveBeenCalled();
+  });
+
+  it("accetta soltanto application/json con charset UTF-8 opzionale", async () => {
+    const deps = dependencies();
+    const handler = createGiftIntentHandler("reserve", deps);
+
+    const accepted = await handler(
+      post(requestBody, { "content-type": "application/json; charset=utf-8" }),
+      { giftId }
+    );
+    const profiled = await handler(
+      post(requestBody, {
+        "content-type": "application/json; profile=https://example.test"
+      }),
+      { giftId }
+    );
+    const latin1 = await handler(
+      post(requestBody, { "content-type": "application/json; charset=latin1" }),
+      { giftId }
+    );
+
+    expect(accepted.status).toBe(200);
+    expect(profiled.status).toBe(400);
+    expect(latin1.status).toBe(400);
+  });
+
+  it("interrompe uno stream chunked oltre 16 KiB anche se content-length mente", async () => {
+    const cancel = vi.fn();
+    const chunks = [new Uint8Array(9_000), new Uint8Array(9_000)];
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = chunks.shift();
+        if (chunk) controller.enqueue(chunk);
+        else controller.close();
+      },
+      cancel
+    });
+    const oversized = new Request(
+      `https://giuliaegabriele.love/api/gifts/${giftId}/reserve`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "content-length": "12",
+          origin: "https://giuliaegabriele.love"
+        },
+        body: stream,
+        duplex: "half"
+      } as RequestInit & { duplex: "half" }
+    );
+    const deps = dependencies();
+
+    const response = await createGiftIntentHandler("reserve", deps)(oversized, {
+      giftId
+    });
+
+    expect(response.status).toBe(400);
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
   });
 
   it("rifiuta origin estranea, validazione e honeypot prima del database", async () => {
@@ -194,21 +256,121 @@ describe("public gift route", () => {
     );
     expect(
       vi.mocked(deps.loadBankInstructions).mock.invocationCallOrder[0]
-    ).toBeGreaterThan(vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0);
+    ).toBeLessThan(vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0);
   });
 
-  it("restituisce lo stesso link personale su retry idempotente", async () => {
-    const deps = dependencies();
+  it("usa token casuali non derivabili dalla idempotency key", async () => {
+    const deps = dependencies({
+      mutate: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: "123e4567-e89b-42d3-a456-426614174002",
+          publicReference: "REQ-ABC123",
+          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+          replayed: false
+        })
+        .mockResolvedValueOnce({
+          id: "123e4567-e89b-42d3-a456-426614174003",
+          publicReference: "REQ-DEF456",
+          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+          replayed: false
+        })
+    });
     const handler = createGiftIntentHandler("reserve", deps);
 
     const first = (await (await handler(post(), { giftId })).json()) as {
       personalLink: string;
     };
-    const retry = (await (await handler(post(), { giftId })).json()) as {
+    const secondRequest = {
+      ...requestBody,
+      idempotencyKey: "223e4567-e89b-42d3-a456-426614174000"
+    };
+    const second = (await (
+      await handler(post(secondRequest), { giftId })
+    ).json()) as {
       personalLink: string;
     };
+    const deterministic = createHmac("sha256", "token-secret")
+      .update(`guest-link\0${requestBody.idempotencyKey}`, "utf8")
+      .digest("base64url");
 
-    expect(retry.personalLink).toBe(first.personalLink);
+    expect(first.personalLink).not.toBe(second.personalLink);
+    expect(first.personalLink).not.toBe(`/richiesta/${deterministic}`);
+  });
+
+  it("su replay idempotente non ridivulga token o coordinate bancarie", async () => {
+    const deps = dependencies({
+      mutate: vi
+        .fn()
+        .mockResolvedValueOnce({
+          id: "123e4567-e89b-42d3-a456-426614174002",
+          publicReference: "REQ-ABC123",
+          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+          replayed: false
+        })
+        .mockResolvedValueOnce({
+          id: "123e4567-e89b-42d3-a456-426614174002",
+          publicReference: "REQ-ABC123",
+          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+          replayed: true
+        })
+    });
+    const handler = createGiftIntentHandler("reserve", deps);
+
+    const first = (await (await handler(post(), { giftId })).json()) as Record<
+      string,
+      unknown
+    >;
+    const replay = (await (await handler(post(), { giftId })).json()) as Record<
+      string,
+      unknown
+    >;
+
+    expect(first).toHaveProperty("personalLink");
+    expect(first).toHaveProperty("instructions.iban");
+    expect(replay).toEqual({
+      ok: true,
+      reference: "REQ-ABC123",
+      giftStatus: "reserved",
+      replayed: true
+    });
+  });
+
+  it("ignora x-forwarded-for fuori dal boundary Vercel", async () => {
+    const consumeRateLimit = vi.fn().mockResolvedValue({
+      allowed: true,
+      remaining: 7,
+      retryAfterSeconds: 0
+    });
+    const verifyTurnstile = vi.fn().mockResolvedValue({ success: true });
+    const deps = dependencies({ consumeRateLimit, verifyTurnstile });
+    Object.assign(deps, { trustVercelProxy: false });
+    const handler = createGiftIntentHandler("reserve", deps);
+
+    await handler(post(requestBody, { "x-forwarded-for": "203.0.113.10" }), {
+      giftId
+    });
+    await handler(post(requestBody, { "x-forwarded-for": "203.0.113.99" }), {
+      giftId
+    });
+    await handler(
+      post(requestBody, {
+        "x-forwarded-for": "203.0.113.99",
+        "user-agent": "different-client"
+      }),
+      { giftId }
+    );
+
+    expect(verifyTurnstile).toHaveBeenNthCalledWith(1, {
+      token: "verified-token",
+      remoteIp: undefined
+    });
+    expect(consumeRateLimit.mock.calls[0]?.[0].fingerprintHash).toBe(
+      consumeRateLimit.mock.calls[1]?.[0].fingerprintHash
+    );
+    expect(consumeRateLimit.mock.calls[2]?.[0].fingerprintHash).not.toBe(
+      consumeRateLimit.mock.calls[1]?.[0].fingerprintHash
+    );
   });
 
   it("mappa i conflitti e non espone errori interni", async () => {

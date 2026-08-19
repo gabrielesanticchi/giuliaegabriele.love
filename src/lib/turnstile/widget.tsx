@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef
+} from "react";
 
 type TurnstileApi = {
   render: (
@@ -12,6 +18,7 @@ type TurnstileApi = {
       "error-callback": () => void;
     }
   ) => string;
+  reset: (widgetId: string) => void;
 };
 
 declare global {
@@ -20,24 +27,54 @@ declare global {
   }
 }
 
-export function TurnstileWidget({
-  siteKey,
-  onToken
-}: {
+export type TurnstileWidgetHandle = { reset: () => void };
+
+type TurnstileWidgetProps = {
   siteKey: string;
   onToken: (token: string) => void;
-}) {
+  resetSignal?: number;
+};
+
+export const TurnstileWidget = forwardRef<
+  TurnstileWidgetHandle,
+  TurnstileWidgetProps
+>(function TurnstileWidget({ siteKey, onToken, resetSignal = 0 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const callbackRef = useRef(onToken);
+  const previousResetSignalRef = useRef(resetSignal);
 
   useEffect(() => {
     callbackRef.current = onToken;
   }, [onToken]);
 
+  const reset = useCallback(() => {
+    callbackRef.current("");
+    if (widgetIdRef.current && window.turnstile) {
+      try {
+        window.turnstile.reset(widgetIdRef.current);
+      } catch {
+        // Il token locale resta comunque invalidato.
+      }
+    }
+  }, []);
+
+  useImperativeHandle(ref, () => ({ reset }), [reset]);
+
   useEffect(() => {
-    if (!siteKey || process.env.NODE_ENV === "test") return;
+    if (previousResetSignalRef.current === resetSignal) return;
+    previousResetSignalRef.current = resetSignal;
+    reset();
+  }, [reset, resetSignal]);
+
+  useEffect(() => {
+    if (!siteKey) return;
     let cancelled = false;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const stopPolling = () => {
+      if (timer) clearInterval(timer);
+    };
 
     const render = () => {
       if (
@@ -54,10 +91,14 @@ export function TurnstileWidget({
         "expired-callback": () => callbackRef.current(""),
         "error-callback": () => callbackRef.current("")
       });
-      clearInterval(timer);
+      stopPolling();
     };
 
-    if (!document.querySelector('script[data-wedding-turnstile="true"]')) {
+    if (
+      !window.turnstile &&
+      process.env.NODE_ENV !== "test" &&
+      !document.querySelector('script[data-wedding-turnstile="true"]')
+    ) {
       const script = document.createElement("script");
       script.src =
         "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
@@ -67,14 +108,16 @@ export function TurnstileWidget({
       script.addEventListener("load", render, { once: true });
       document.head.append(script);
     }
-    const timer = setInterval(render, 100);
+    if (!window.turnstile && process.env.NODE_ENV !== "test") {
+      timer = setInterval(render, 100);
+    }
     render();
 
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stopPolling();
     };
   }, [siteKey]);
 
   return <div ref={containerRef} aria-label="Verifica anti-spam" />;
-}
+});

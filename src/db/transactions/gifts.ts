@@ -17,6 +17,8 @@ import {
 
 type Transaction = Parameters<Parameters<WeddingDatabase["transaction"]>[0]>[0];
 type GiftIntent = typeof giftIntents.$inferSelect;
+export type GiftMutationResult = GiftIntent & { replayed: boolean };
+export type GiftActionResult = GiftIntent & { replayed: boolean };
 type GiftMethod = GiftIntent["method"];
 
 type NewIntentInput = {
@@ -124,15 +126,15 @@ function requestSemantics(
 function resolveIdempotentIntent(
   intent: GiftIntent,
   requested: IntentRequestSemantics
-): GiftIntent {
+): GiftMutationResult {
   assertIdempotentRequestMatches(intentSemantics(intent), requested);
-  return intent;
+  return { ...intent, replayed: true };
 }
 
 export async function reserveGift(
   db: WeddingDatabase,
   input: NewIntentInput
-): Promise<GiftIntent> {
+): Promise<GiftMutationResult> {
   const requested = requestSemantics(input, "full_gift");
   try {
     return await runSerializable(db, async (tx) => {
@@ -183,7 +185,7 @@ export async function reserveGift(
         intentId: intent.id,
         expiresAt: input.expiresAt
       });
-      return intent;
+      return { ...intent, replayed: false };
     });
   } catch (error) {
     if (error instanceof TransactionError) throw error;
@@ -208,7 +210,7 @@ export async function reserveGift(
 export async function contributeToGift(
   db: WeddingDatabase,
   input: NewIntentInput
-): Promise<GiftIntent> {
+): Promise<GiftMutationResult> {
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
     throw new TransactionError("amount_unavailable");
   }
@@ -276,7 +278,7 @@ export async function contributeToGift(
         })
         .returning();
       if (!inserted[0]) throw new Error("Intent non creato");
-      return inserted[0];
+      return { ...inserted[0], replayed: false };
     });
   } catch (error) {
     if (error instanceof TransactionError) throw error;
@@ -387,8 +389,9 @@ export async function cancelIntent(
     intentId: string;
     actor: "guest" | "admin";
     actorAdminId?: string;
+    idempotencyKey?: string;
   }
-): Promise<GiftIntent> {
+): Promise<GiftActionResult> {
   return runSerializable(db, async (tx) => {
     const initial = await tx
       .select({ giftId: giftIntents.giftId })
@@ -408,7 +411,14 @@ export async function cancelIntent(
       .limit(1);
     const intent = rows[0];
     if (!intent) throw new TransactionError("intent_not_found", 404);
-    if (intent.status === "cancelled") return intent;
+    if (
+      input.actor === "guest" &&
+      input.idempotencyKey &&
+      intent.guestCancelIdempotencyKey === input.idempotencyKey
+    ) {
+      return { ...intent, replayed: true };
+    }
+    if (intent.status === "cancelled") return { ...intent, replayed: true };
     assertCancellationAllowed({
       actor: input.actor,
       status: intent.status,
@@ -418,7 +428,13 @@ export async function cancelIntent(
     const now = new Date();
     const updated = await tx
       .update(giftIntents)
-      .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
+      .set({
+        status: "cancelled",
+        cancelledAt: now,
+        updatedAt: now,
+        guestCancelIdempotencyKey:
+          input.actor === "guest" ? input.idempotencyKey : undefined
+      })
       .where(eq(giftIntents.id, intent.id))
       .returning();
     await tx.delete(giftLocks).where(eq(giftLocks.intentId, intent.id));
@@ -431,14 +447,14 @@ export async function cancelIntent(
       metadata: {}
     });
     if (!updated[0]) throw new Error("Intent non aggiornato");
-    return updated[0];
+    return { ...updated[0], replayed: false };
   });
 }
 
 export async function declareIntentPayment(
   db: WeddingDatabase,
-  input: { intentId: string }
-): Promise<GiftIntent> {
+  input: { intentId: string; idempotencyKey?: string }
+): Promise<GiftActionResult> {
   return runSerializable(db, async (tx) => {
     const initial = await tx
       .select({ giftId: giftIntents.giftId })
@@ -458,16 +474,26 @@ export async function declareIntentPayment(
       .limit(1);
     const intent = rows[0];
     if (!intent) throw new TransactionError("intent_not_found", 404);
+    if (
+      input.idempotencyKey &&
+      intent.guestCompleteIdempotencyKey === input.idempotencyKey
+    ) {
+      return { ...intent, replayed: true };
+    }
     assertPaymentDeclarationAllowed({
       status: intent.status,
       paymentDeclaredAt: intent.paymentDeclaredAt
     });
-    if (intent.paymentDeclaredAt) return intent;
+    if (intent.paymentDeclaredAt) return { ...intent, replayed: true };
 
     const now = new Date();
     const updated = await tx
       .update(giftIntents)
-      .set({ paymentDeclaredAt: now, updatedAt: now })
+      .set({
+        paymentDeclaredAt: now,
+        guestCompleteIdempotencyKey: input.idempotencyKey,
+        updatedAt: now
+      })
       .where(eq(giftIntents.id, intent.id))
       .returning();
     await tx.insert(auditLogs).values({
@@ -478,6 +504,6 @@ export async function declareIntentPayment(
       metadata: { paymentDeclared: true }
     });
     if (!updated[0]) throw new Error("Intent non aggiornato");
-    return updated[0];
+    return { ...updated[0], replayed: false };
   });
 }

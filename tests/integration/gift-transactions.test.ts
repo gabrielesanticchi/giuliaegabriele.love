@@ -207,9 +207,20 @@ integration(
       });
       const cancelled = await cancelIntent(db, {
         intentId: cancellable.id,
-        actor: "guest"
+        actor: "guest",
+        idempotencyKey: "cancel-action-key-0001"
+      });
+      const cancelReplay = await cancelIntent(db, {
+        intentId: cancellable.id,
+        actor: "guest",
+        idempotencyKey: "cancel-action-key-0001"
       });
       expect(cancelled.status).toBe("cancelled");
+      expect(cancelled.guestCancelIdempotencyKey).toBe(
+        "cancel-action-key-0001"
+      );
+      expect(cancelled.replayed).toBe(false);
+      expect(cancelReplay.replayed).toBe(true);
 
       const declared = await reserveGift(db, {
         giftId,
@@ -249,12 +260,23 @@ integration(
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
 
-      const declared = await declareIntentPayment(db, { intentId: intent.id });
-      const repeated = await declareIntentPayment(db, { intentId: intent.id });
+      const declared = await declareIntentPayment(db, {
+        intentId: intent.id,
+        idempotencyKey: "complete-action-key-0001"
+      });
+      const repeated = await declareIntentPayment(db, {
+        intentId: intent.id,
+        idempotencyKey: "complete-action-key-0001"
+      });
 
       expect(declared.status).toBe("pending");
       expect(declared.paymentDeclaredAt).not.toBeNull();
+      expect(declared.guestCompleteIdempotencyKey).toBe(
+        "complete-action-key-0001"
+      );
+      expect(declared.replayed).toBe(false);
       expect(repeated.paymentDeclaredAt).toEqual(declared.paymentDeclaredAt);
+      expect(repeated.replayed).toBe(true);
     });
 
     it.each(["pending", "verified"] as const)(

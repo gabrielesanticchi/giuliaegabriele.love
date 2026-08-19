@@ -10,6 +10,8 @@ import {
 } from "@/lib/turnstile";
 
 import { PublicServiceUnavailableError, publicError } from "./gift-handler";
+import { resolveClientIdentity } from "./client-identity";
+import { readBoundedJson } from "./request-body";
 import { requestActionSchema } from "./validation";
 
 const TOKEN_RETENTION_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -26,7 +28,8 @@ type GuestIntent = {
 export type RequestActionDependencies = {
   siteOrigin: string;
   fingerprintSecret: string;
-  tokenSecret: string;
+  guestTokenSecret: string;
+  trustVercelProxy?: boolean;
   verifyTurnstile: (input: {
     token: string;
     remoteIp?: string;
@@ -40,11 +43,18 @@ export type RequestActionDependencies = {
     retryAfterSeconds: number;
   }>;
   resolveIntent: (tokenHash: string) => Promise<GuestIntent | null>;
-  complete: (intentId: string) => Promise<{
+  complete: (
+    intentId: string,
+    idempotencyKey: string
+  ) => Promise<{
     status: string;
     paymentDeclaredAt: Date | null;
+    replayed: boolean;
   }>;
-  cancel: (intentId: string) => Promise<{ status: string }>;
+  cancel: (
+    intentId: string,
+    idempotencyKey: string
+  ) => Promise<{ status: string; replayed: boolean }>;
   notify: (intentId: string, action: "complete" | "cancel") => Promise<void>;
   now?: () => Date;
 };
@@ -54,14 +64,6 @@ function headers(extra?: HeadersInit): Headers {
   result.set("cache-control", "no-store");
   result.set("content-type", "application/json; charset=utf-8");
   return result;
-}
-
-function remoteIp(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip")?.trim() ||
-    "unknown"
-  );
 }
 
 function originAllowed(request: Request, siteOrigin: string): boolean {
@@ -117,14 +119,6 @@ export function createRequestActionHandler(
 ) {
   return async (request: Request, context: { token: string }) => {
     try {
-      if (
-        !request.headers
-          .get("content-type")
-          ?.toLowerCase()
-          .startsWith("application/json")
-      ) {
-        return publicError(400, "invalid_request");
-      }
       if (!originAllowed(request, dependencies.siteOrigin)) {
         return publicError(403, "forbidden");
       }
@@ -132,34 +126,29 @@ export function createRequestActionHandler(
         return publicError(403, "forbidden");
       }
 
-      const raw = await request.text();
-      if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) {
-        return publicError(400, "invalid_request");
-      }
-      let untrusted: unknown;
-      try {
-        untrusted = JSON.parse(raw);
-      } catch {
-        return publicError(400, "invalid_request");
-      }
-      const parsed = requestActionSchema.safeParse(untrusted);
+      const body = await readBoundedJson(request, MAX_BODY_BYTES);
+      if (!body.ok) return publicError(400, "invalid_request");
+      const parsed = requestActionSchema.safeParse(body.value);
       if (!parsed.success) return publicError(422, "validation_failed");
       if (parsed.data.honeypot.trim() !== "") {
         return publicError(403, "forbidden");
       }
-      if (!dependencies.fingerprintSecret || !dependencies.tokenSecret) {
+      if (!dependencies.fingerprintSecret || !dependencies.guestTokenSecret) {
         throw new PublicServiceUnavailableError();
       }
 
-      const ip = remoteIp(request);
+      const client = resolveClientIdentity(
+        request,
+        dependencies.trustVercelProxy ?? false
+      );
       const turnstile = await dependencies.verifyTurnstile({
         token: parsed.data.turnstileToken,
-        remoteIp: ip
+        remoteIp: client.remoteIp
       });
       if (!turnstile.success) return publicError(403, "forbidden");
 
       const fingerprintHash = hashFingerprint(
-        ip,
+        client.fingerprintMaterial,
         dependencies.fingerprintSecret
       );
       const rateLimit = await dependencies.consumeRateLimit({
@@ -173,7 +162,7 @@ export function createRequestActionHandler(
       }
 
       const intent = await dependencies.resolveIntent(
-        hashToken(context.token, dependencies.tokenSecret)
+        hashToken(context.token, dependencies.guestTokenSecret)
       );
       const now = dependencies.now?.() ?? new Date();
       if (!intent || !terminalTokenIsValid(intent, now)) {
@@ -182,12 +171,14 @@ export function createRequestActionHandler(
 
       const result =
         action === "complete"
-          ? await dependencies.complete(intent.id)
-          : await dependencies.cancel(intent.id);
-      try {
-        await dependencies.notify(intent.id, action);
-      } catch {
-        // Le notifiche non devono cambiare l'esito della mutation.
+          ? await dependencies.complete(intent.id, parsed.data.idempotencyKey)
+          : await dependencies.cancel(intent.id, parsed.data.idempotencyKey);
+      if (!result.replayed) {
+        try {
+          await dependencies.notify(intent.id, action);
+        } catch {
+          // Le notifiche non devono cambiare l'esito della mutation.
+        }
       }
 
       const status =

@@ -16,10 +16,14 @@ import { type Resolver, useForm } from "react-hook-form";
 import type { PublicGift } from "@/data/demo-content";
 import { formatCurrency } from "@/lib/domain/currency";
 import {
-  contributionRequestSchema,
+  contributionGiftFormSchema,
+  parseEuroAmountToCents,
   reserveGiftRequestSchema
 } from "@/lib/public-api/validation";
-import { TurnstileWidget } from "@/lib/turnstile/widget";
+import {
+  TurnstileWidget,
+  type TurnstileWidgetHandle
+} from "@/lib/turnstile/widget";
 
 type GiftFilter = "all" | "available" | "reserved" | "gifted";
 type GiftAction = "gift" | "contribute";
@@ -284,11 +288,12 @@ type GiftFormValues = {
   honeypot: string;
   idempotencyKey: string;
   method: "external_purchase" | "bank_transfer";
-  amountCents?: number;
+  amount?: string;
 };
 
-type GiftSuccess = {
+type GiftFirstSuccess = {
   ok: true;
+  replayed?: false;
   reference: string;
   expiresAt: string;
   personalLink: string;
@@ -301,6 +306,15 @@ type GiftSuccess = {
     instructions?: string;
   };
 };
+
+type GiftReplaySuccess = {
+  ok: true;
+  replayed: true;
+  reference: string;
+  giftStatus: "reserved" | "available";
+};
+
+type GiftSuccess = GiftFirstSuccess | GiftReplaySuccess;
 
 function GiftIntentForm({
   selection,
@@ -320,6 +334,7 @@ function GiftIntentForm({
   const isContribution = selection.action === "contribute";
   const formId = useId();
   const summaryRef = useRef<HTMLDivElement>(null);
+  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{
     kind: "error" | "success";
@@ -327,7 +342,7 @@ function GiftIntentForm({
     result?: GiftSuccess;
   } | null>(null);
   const resolver = zodResolver(
-    isContribution ? contributionRequestSchema : reserveGiftRequestSchema
+    isContribution ? contributionGiftFormSchema : reserveGiftRequestSchema
   ) as Resolver<GiftFormValues>;
   const {
     register,
@@ -350,7 +365,9 @@ function GiftIntentForm({
       privacyAccepted: false,
       privacyVersion,
       turnstileToken:
-        demoMode && allowDemoSubmission
+        demoMode &&
+        allowDemoSubmission &&
+        process.env.NODE_ENV === "development"
           ? "development-demo"
           : process.env.NODE_ENV === "test" && turnstileSiteKey
             ? "turnstile-test-token"
@@ -358,7 +375,7 @@ function GiftIntentForm({
       honeypot: "",
       idempotencyKey: "pending-idempotency-key",
       ...(isContribution
-        ? { amountCents: undefined }
+        ? { amount: "" }
         : { method: "bank_transfer" as const })
     }
   });
@@ -373,7 +390,7 @@ function GiftIntentForm({
       if (
         demoMode &&
         allowDemoSubmission &&
-        process.env.NODE_ENV !== "production"
+        process.env.NODE_ENV === "development"
       ) {
         onDemoAction?.(selection.gift, selection.action);
         setFeedback({ kind: "success", message: "Simulazione completata." });
@@ -391,7 +408,10 @@ function GiftIntentForm({
         idempotencyKey: requestKey
       };
       const payload = isContribution
-        ? { ...common, amountCents: values.amountCents }
+        ? {
+            ...common,
+            amountCents: parseEuroAmountToCents(values.amount ?? "")
+          }
         : { ...common, method: values.method };
 
       try {
@@ -420,7 +440,10 @@ function GiftIntentForm({
         setIdempotencyKey(null);
         setFeedback({
           kind: "success",
-          message: "Richiesta registrata. Conserva il link personale.",
+          message:
+            "replayed" in body && body.replayed
+              ? "La richiesta era già stata registrata. Per sicurezza il link personale e le coordinate vengono mostrati una sola volta."
+              : "Richiesta registrata. Conserva il link personale.",
           result: body
         });
       } catch {
@@ -428,6 +451,9 @@ function GiftIntentForm({
           kind: "error",
           message: "Connessione non disponibile. Riprova."
         });
+      } finally {
+        turnstileRef.current?.reset();
+        setValue("turnstileToken", "");
       }
     },
     () => {
@@ -438,8 +464,68 @@ function GiftIntentForm({
     }
   );
 
-  const error = (message?: string) =>
-    message ? <span className="field-error">{message}</span> : null;
+  const fieldErrors = [
+    {
+      inputId: `${formId}-first-name`,
+      errorId: `${formId}-first-name-error`,
+      message: errors.guest?.firstName?.message
+    },
+    {
+      inputId: `${formId}-last-name`,
+      errorId: `${formId}-last-name-error`,
+      message: errors.guest?.lastName?.message
+    },
+    {
+      inputId: `${formId}-email`,
+      errorId: `${formId}-email-error`,
+      message: errors.guest?.email?.message
+    },
+    {
+      inputId: `${formId}-email-confirmation`,
+      errorId: `${formId}-email-confirmation-error`,
+      message: errors.guest?.emailConfirmation?.message
+    },
+    {
+      inputId: `${formId}-phone`,
+      errorId: `${formId}-phone-error`,
+      message: errors.guest?.phone?.message
+    },
+    {
+      inputId: `${formId}-message`,
+      errorId: `${formId}-message-error`,
+      message: errors.guest?.message?.message
+    },
+    {
+      inputId: `${formId}-amount`,
+      errorId: `${formId}-amount-error`,
+      message: errors.amount?.message
+    },
+    {
+      inputId: `${formId}-method`,
+      errorId: `${formId}-method-error`,
+      message: errors.method?.message
+    },
+    {
+      inputId: `${formId}-privacy`,
+      errorId: `${formId}-privacy-error`,
+      message: errors.privacyAccepted?.message
+    },
+    {
+      inputId: `${formId}-turnstile`,
+      errorId: `${formId}-turnstile-error`,
+      message: errors.turnstileToken?.message
+    }
+  ].filter(
+    (entry): entry is { inputId: string; errorId: string; message: string } =>
+      typeof entry.message === "string"
+  );
+
+  const fieldError = (message: string | undefined, id: string) =>
+    message ? (
+      <span className="field-error" id={id}>
+        {message}
+      </span>
+    ) : null;
 
   return (
     <form className="gift-intent-form" onSubmit={submit} noValidate>
@@ -452,27 +538,44 @@ function GiftIntentForm({
           tabIndex={-1}
         >
           <p>{feedback.message}</p>
+          {feedback.kind === "error" && fieldErrors.length > 0 ? (
+            <ul>
+              {fieldErrors.map((entry) => (
+                <li key={entry.inputId}>
+                  <a href={`#${entry.inputId}`}>{entry.message}</a>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           {feedback.result ? (
             <div className="one-time-instructions">
               <p>Riferimento: {feedback.result.reference}</p>
-              {feedback.result.instructions.accountHolder ? (
-                <p>
-                  Intestatario: {feedback.result.instructions.accountHolder}
-                </p>
+              {!("replayed" in feedback.result) || !feedback.result.replayed ? (
+                <>
+                  {feedback.result.instructions.accountHolder ? (
+                    <p>
+                      Intestatario: {feedback.result.instructions.accountHolder}
+                    </p>
+                  ) : null}
+                  {feedback.result.instructions.iban ? (
+                    <p>IBAN: {feedback.result.instructions.iban}</p>
+                  ) : null}
+                  {feedback.result.instructions.bankName ? (
+                    <p>Banca: {feedback.result.instructions.bankName}</p>
+                  ) : null}
+                  {feedback.result.instructions.transferReason ? (
+                    <p>
+                      Causale: {feedback.result.instructions.transferReason}
+                    </p>
+                  ) : null}
+                  {feedback.result.instructions.instructions ? (
+                    <p>{feedback.result.instructions.instructions}</p>
+                  ) : null}
+                  <a href={feedback.result.personalLink}>
+                    Gestisci la richiesta
+                  </a>
+                </>
               ) : null}
-              {feedback.result.instructions.iban ? (
-                <p>IBAN: {feedback.result.instructions.iban}</p>
-              ) : null}
-              {feedback.result.instructions.bankName ? (
-                <p>Banca: {feedback.result.instructions.bankName}</p>
-              ) : null}
-              {feedback.result.instructions.transferReason ? (
-                <p>Causale: {feedback.result.instructions.transferReason}</p>
-              ) : null}
-              {feedback.result.instructions.instructions ? (
-                <p>{feedback.result.instructions.instructions}</p>
-              ) : null}
-              <a href={feedback.result.personalLink}>Gestisci la richiesta</a>
             </div>
           ) : null}
         </div>
@@ -486,9 +589,17 @@ function GiftIntentForm({
                 id={`${formId}-first-name`}
                 autoComplete="given-name"
                 aria-invalid={Boolean(errors.guest?.firstName)}
+                aria-describedby={
+                  errors.guest?.firstName
+                    ? `${formId}-first-name-error`
+                    : undefined
+                }
                 {...register("guest.firstName")}
               />
-              {error(errors.guest?.firstName?.message)}
+              {fieldError(
+                errors.guest?.firstName?.message,
+                `${formId}-first-name-error`
+              )}
             </label>
             <label htmlFor={`${formId}-last-name`}>
               Cognome
@@ -496,9 +607,17 @@ function GiftIntentForm({
                 id={`${formId}-last-name`}
                 autoComplete="family-name"
                 aria-invalid={Boolean(errors.guest?.lastName)}
+                aria-describedby={
+                  errors.guest?.lastName
+                    ? `${formId}-last-name-error`
+                    : undefined
+                }
                 {...register("guest.lastName")}
               />
-              {error(errors.guest?.lastName?.message)}
+              {fieldError(
+                errors.guest?.lastName?.message,
+                `${formId}-last-name-error`
+              )}
             </label>
           </div>
           <label htmlFor={`${formId}-email`}>
@@ -508,9 +627,12 @@ function GiftIntentForm({
               type="email"
               autoComplete="email"
               aria-invalid={Boolean(errors.guest?.email)}
+              aria-describedby={
+                errors.guest?.email ? `${formId}-email-error` : undefined
+              }
               {...register("guest.email")}
             />
-            {error(errors.guest?.email?.message)}
+            {fieldError(errors.guest?.email?.message, `${formId}-email-error`)}
           </label>
           <label htmlFor={`${formId}-email-confirmation`}>
             Conferma email
@@ -519,9 +641,17 @@ function GiftIntentForm({
               type="email"
               autoComplete="email"
               aria-invalid={Boolean(errors.guest?.emailConfirmation)}
+              aria-describedby={
+                errors.guest?.emailConfirmation
+                  ? `${formId}-email-confirmation-error`
+                  : undefined
+              }
               {...register("guest.emailConfirmation")}
             />
-            {error(errors.guest?.emailConfirmation?.message)}
+            {fieldError(
+              errors.guest?.emailConfirmation?.message,
+              `${formId}-email-confirmation-error`
+            )}
           </label>
           <label htmlFor={`${formId}-phone`}>
             Telefono (facoltativo)
@@ -529,36 +659,52 @@ function GiftIntentForm({
               id={`${formId}-phone`}
               type="tel"
               autoComplete="tel"
+              aria-invalid={Boolean(errors.guest?.phone)}
+              aria-describedby={
+                errors.guest?.phone ? `${formId}-phone-error` : undefined
+              }
               {...register("guest.phone")}
             />
+            {fieldError(errors.guest?.phone?.message, `${formId}-phone-error`)}
           </label>
           <label htmlFor={`${formId}-message`}>
             Messaggio (facoltativo)
-            <textarea id={`${formId}-message`} {...register("guest.message")} />
+            <textarea
+              id={`${formId}-message`}
+              aria-invalid={Boolean(errors.guest?.message)}
+              aria-describedby={
+                errors.guest?.message ? `${formId}-message-error` : undefined
+              }
+              {...register("guest.message")}
+            />
+            {fieldError(
+              errors.guest?.message?.message,
+              `${formId}-message-error`
+            )}
           </label>
           {isContribution ? (
             <label htmlFor={`${formId}-amount`}>
               Importo in euro
               <input
                 id={`${formId}-amount`}
-                type="number"
-                min="1"
-                step="0.01"
+                type="text"
                 inputMode="decimal"
-                aria-invalid={Boolean(errors.amountCents)}
-                {...register("amountCents", {
-                  setValueAs: (value) => {
-                    const euros = Number(value);
-                    return Number.isFinite(euros)
-                      ? Math.round(euros * 100)
-                      : undefined;
-                  }
-                })}
+                aria-invalid={Boolean(errors.amount)}
+                aria-describedby={
+                  errors.amount ? `${formId}-amount-error` : undefined
+                }
+                {...register("amount")}
               />
-              {error(errors.amountCents?.message)}
+              {fieldError(errors.amount?.message, `${formId}-amount-error`)}
             </label>
           ) : (
-            <fieldset>
+            <fieldset
+              id={`${formId}-method`}
+              aria-invalid={Boolean(errors.method)}
+              aria-describedby={
+                errors.method ? `${formId}-method-error` : undefined
+              }
+            >
               <legend>Come desideri procedere?</legend>
               <label>
                 <input
@@ -576,17 +722,25 @@ function GiftIntentForm({
                 />
                 Acquisto esterno
               </label>
+              {fieldError(errors.method?.message, `${formId}-method-error`)}
             </fieldset>
           )}
           <label className="privacy-check">
             <input
+              id={`${formId}-privacy`}
               type="checkbox"
               aria-invalid={Boolean(errors.privacyAccepted)}
+              aria-describedby={
+                errors.privacyAccepted ? `${formId}-privacy-error` : undefined
+              }
               {...register("privacyAccepted")}
             />
             Ho letto e accetto l’informativa privacy
           </label>
-          {error(errors.privacyAccepted?.message)}
+          {fieldError(
+            errors.privacyAccepted?.message,
+            `${formId}-privacy-error`
+          )}
           <input type="hidden" {...register("turnstileToken")} />
           <input type="hidden" {...register("privacyVersion")} />
           <input type="hidden" {...register("idempotencyKey")} />
@@ -599,15 +753,31 @@ function GiftIntentForm({
               {...register("honeypot")}
             />
           </div>
-          {!(demoMode && allowDemoSubmission) ? (
-            <TurnstileWidget
-              siteKey={turnstileSiteKey}
-              onToken={(token) =>
-                setValue("turnstileToken", token, { shouldValidate: true })
+          {!(
+            demoMode &&
+            allowDemoSubmission &&
+            process.env.NODE_ENV === "development"
+          ) ? (
+            <div
+              id={`${formId}-turnstile`}
+              aria-invalid={Boolean(errors.turnstileToken)}
+              aria-describedby={
+                errors.turnstileToken ? `${formId}-turnstile-error` : undefined
               }
-            />
+            >
+              <TurnstileWidget
+                ref={turnstileRef}
+                siteKey={turnstileSiteKey}
+                onToken={(token) =>
+                  setValue("turnstileToken", token, { shouldValidate: true })
+                }
+              />
+            </div>
           ) : null}
-          {error(errors.turnstileToken?.message)}
+          {fieldError(
+            errors.turnstileToken?.message,
+            `${formId}-turnstile-error`
+          )}
           <button
             className="primary-action"
             type="submit"

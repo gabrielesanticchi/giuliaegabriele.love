@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   contributionRequestSchema,
+  parseEuroAmountToCents,
   reserveGiftRequestSchema,
   requestActionSchema
 } from "@/lib/public-api/validation";
@@ -25,6 +26,14 @@ const common = {
 };
 
 describe("public API validation", () => {
+  it("converte importi decimali in centesimi senza arrotondare", () => {
+    expect(parseEuroAmountToCents("12.34")).toBe(1234);
+    expect(parseEuroAmountToCents("12,34")).toBe(1234);
+    expect(parseEuroAmountToCents("12.345")).toBeNull();
+    expect(parseEuroAmountToCents("1e2")).toBeNull();
+    expect(parseEuroAmountToCents("0")).toBeNull();
+  });
+
   it("normalizza il payload di prenotazione e verifica la conferma email", () => {
     const parsed = reserveGiftRequestSchema.parse({
       ...common,
