@@ -1,0 +1,217 @@
+.admin-shell {
+  min-height: 100vh;
+  background: #f2eee6;
+}
+.admin-nav {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: 17rem;
+  padding: 2rem 1.5rem;
+  color: var(--color-paper);
+  background: var(--color-deep);
+  overflow-y: auto;
+}
+.admin-brand {
+  margin: 0 0 2.5rem;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 1.55rem;
+}
+.admin-brand i {
+  color: #c59675;
+  font-weight: 400;
+}
+.admin-nav ul {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.admin-nav a {
+  display: block;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.2rem;
+  color: #e9e0d3;
+  text-decoration: none;
+}
+.admin-nav a:hover {
+  background: rgb(255 255 255 / 8%);
+}
+.admin-logout {
+  float: right;
+  border: 0;
+  padding: 0.45rem 0.75rem;
+  color: var(--color-forest);
+  background: transparent;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.admin-main {
+  margin-left: 17rem;
+  padding: clamp(2rem, 5vw, 5rem);
+}
+.admin-page-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--color-line);
+}
+.admin-page-header h1,
+.admin-login h1 {
+  font-size: clamp(3rem, 6vw, 6rem);
+  letter-spacing: -0.045em;
+}
+.admin-page-header p {
+  max-width: 45rem;
+  color: var(--color-muted);
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+.admin-card,
+.admin-editor {
+  border: 1px solid var(--color-line);
+  background: var(--color-paper);
+  box-shadow: 0 1rem 3rem rgb(20 35 29 / 5%);
+}
+.admin-card {
+  padding: 1.5rem;
+}
+.admin-card strong {
+  display: block;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: 2.5rem;
+  font-weight: 500;
+}
+.admin-editor {
+  margin-top: 2rem;
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+.admin-editor h2 {
+  font-size: clamp(2.5rem, 4vw, 4.5rem);
+}
+.admin-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 2rem;
+}
+.admin-field-grid label,
+.admin-login-form label,
+.totp-enrollment label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.admin-field-wide {
+  grid-column: 1 / -1;
+}
+.admin-field-grid input,
+.admin-field-grid textarea,
+.admin-field-grid select,
+.admin-login-form input,
+.totp-enrollment input {
+  width: 100%;
+  border: 1px solid #bcb3a7;
+  border-radius: 0.15rem;
+  padding: 0.75rem;
+  color: var(--color-ink);
+  background: #fffdf8;
+  font: inherit;
+}
+.admin-field-grid input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.admin-form-footer {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.admin-form-footer button,
+.admin-login-form button,
+.totp-enrollment button,
+.admin-action {
+  border: 0;
+  padding: 0.8rem 1.2rem;
+  color: var(--color-paper);
+  background: var(--color-forest);
+  cursor: pointer;
+  font-weight: 700;
+}
+.admin-table {
+  width: 100%;
+  margin-top: 2rem;
+  border-collapse: collapse;
+  background: var(--color-paper);
+}
+.admin-table th,
+.admin-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+}
+.admin-table th {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.admin-login {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 2rem;
+  background: var(--color-deep);
+}
+.admin-login-panel {
+  width: min(100%, 32rem);
+  padding: clamp(2rem, 6vw, 4rem);
+  background: var(--color-paper);
+}
+.admin-login-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+.totp-enrollment {
+  display: grid;
+  gap: 1.25rem;
+}
+.totp-enrollment img {
+  width: 17.5rem;
+  max-width: 100%;
+}
+.recovery-codes {
+  columns: 2;
+  padding: 1rem 1rem 1rem 2rem;
+  background: #ebe4d9;
+  font-family: ui-monospace, monospace;
+}
+@media (max-width: 800px) {
+  .admin-nav {
+    position: static;
+    width: auto;
+  }
+  .admin-nav ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .admin-main {
+    margin: 0;
+    padding: 1.25rem;
+  }
+  .admin-field-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-field-wide {
+    grid-column: auto;
+  }
+}

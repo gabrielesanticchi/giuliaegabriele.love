@@ -8,6 +8,13 @@
       "when": 1787157045045,
       "tag": "0000_thick_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787168479892,
+      "tag": "0001_aspiring_sentinels",
+      "breakpoints": true
     }
   ]
 }

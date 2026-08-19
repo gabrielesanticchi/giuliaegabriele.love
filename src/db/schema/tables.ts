@@ -51,14 +51,29 @@ export const adminUsers = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     emailHash: varchar("email_hash", { length: 64 }).notNull(),
+    emailEncrypted: text("email_encrypted").notNull(),
     passwordHash: text("password_hash").notNull(),
+    role: varchar("role", { length: 20 }).default("editor").notNull(),
+    sessionVersion: integer("session_version").default(1).notNull(),
     totpSecretEncrypted: text("totp_secret_encrypted"),
+    pendingTotpSecretEncrypted: text("pending_totp_secret_encrypted"),
+    recoveryCodeHashes: jsonb("recovery_code_hashes")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
     totpEnabled: boolean("totp_enabled").default(false).notNull(),
     disabledAt: timestamp("disabled_at", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     ...timestamps
   },
-  (table) => [uniqueIndex("admin_users_email_hash_unique").on(table.emailHash)]
+  (table) => [
+    uniqueIndex("admin_users_email_hash_unique").on(table.emailHash),
+    check("admin_users_role_valid", sql`${table.role} in ('owner', 'editor')`),
+    check(
+      "admin_users_session_version_positive",
+      sql`${table.sessionVersion} >= 1`
+    )
+  ]
 );
 
 export const siteSettings = pgTable("site_settings", {
@@ -168,6 +183,7 @@ export const gifts = pgTable(
       .notNull(),
     completed: boolean("completed").default(false).notNull(),
     published: boolean("published").default(false).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     sortOrder: integer("sort_order").default(0).notNull(),
     ...timestamps
   },
@@ -217,6 +233,8 @@ export const giftIntents = pgTable(
     }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    rejectedAt: timestamp("rejected_at", { withTimezone: true }),
+    adminNote: text("admin_note"),
     ...timestamps
   },
   (table) => [
@@ -251,6 +269,29 @@ export const giftIntents = pgTable(
     check(
       "gift_intents_applied_lte_received",
       sql`${table.receivedAmountCents} is null or ${table.appliedAmountCents} <= ${table.receivedAmountCents}`
+    )
+  ]
+);
+
+export const adminActionReceipts = pgTable(
+  "admin_action_receipts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    actorAdminId: uuid("actor_admin_id")
+      .notNull()
+      .references(() => adminUsers.id, { onDelete: "cascade" }),
+    action: varchar("action", { length: 100 }).notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+    result: jsonb("result").default({}).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull()
+  },
+  (table) => [
+    uniqueIndex("admin_action_receipts_action_key_unique").on(
+      table.actorAdminId,
+      table.action,
+      table.idempotencyKey
     )
   ]
 );
