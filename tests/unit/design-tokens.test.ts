@@ -17,4 +17,19 @@ describe("design tokens", () => {
       contrastRatio(designTokens.onClay, designTokens.clay)
     ).toBeGreaterThanOrEqual(4.5);
   });
+
+  it("mantiene visibile il focus bicolore su superfici chiare e scure", () => {
+    expect(
+      contrastRatio(designTokens.focusInner, designTokens.deep)
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      contrastRatio(designTokens.focusInner, designTokens.forest)
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      contrastRatio(designTokens.focusOuter, designTokens.paper)
+    ).toBeGreaterThanOrEqual(3);
+    expect(
+      contrastRatio(designTokens.focusOuter, designTokens.ivory)
+    ).toBeGreaterThanOrEqual(3);
+  });
 });

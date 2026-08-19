@@ -16,7 +16,8 @@ function focalPointStyle(focalPoint: { x: number; y: number }) {
 
 export function HeroMedia({ media }: HeroMediaProps) {
   const [reducedMotion, setReducedMotion] = useState(true);
-  const [paused, setPaused] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [playbackError, setPlaybackError] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -51,12 +52,16 @@ export function HeroMedia({ media }: HeroMediaProps) {
   const togglePlayback = async () => {
     const video = videoRef.current;
     if (!video) return;
-    if (paused) {
-      await video.play();
-      setPaused(false);
-    } else {
+    if (playing) {
       video.pause();
-      setPaused(true);
+      return;
+    }
+    setPlaybackError(false);
+    try {
+      await video.play();
+    } catch {
+      setPlaying(false);
+      setPlaybackError(true);
     }
   };
 
@@ -72,11 +77,30 @@ export function HeroMedia({ media }: HeroMediaProps) {
         playsInline
         autoPlay
         aria-label={media.posterAlt}
+        onPlay={() => {
+          setPlaying(true);
+          setPlaybackError(false);
+        }}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+        onError={() => {
+          setPlaying(false);
+          setPlaybackError(true);
+        }}
       />
       <button className="video-control" type="button" onClick={togglePlayback}>
-        {paused ? <Play aria-hidden="true" /> : <Pause aria-hidden="true" />}
-        {paused ? "Riprendi video" : "Pausa video"}
+        {playing ? <Pause aria-hidden="true" /> : <Play aria-hidden="true" />}
+        {playing ? "Pausa video" : "Riprendi video"}
       </button>
+      {playbackError ? (
+        <p
+          className="media-status"
+          role="status"
+          aria-label="Il video non può essere avviato"
+        >
+          Il video non può essere avviato. Il poster resta disponibile.
+        </p>
+      ) : null}
     </div>
   );
 }

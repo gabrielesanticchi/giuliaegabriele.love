@@ -1,4 +1,10 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -99,8 +105,8 @@ describe("HeroMedia", () => {
       />
     );
 
-    const pauseButton = await screen.findByRole("button", {
-      name: "Pausa video"
+    const resumeButton = await screen.findByRole("button", {
+      name: "Riprendi video"
     });
     const video = document.querySelector("video");
     expect(video).toHaveProperty("muted", true);
@@ -108,9 +114,47 @@ describe("HeroMedia", () => {
     expect(video).toHaveAttribute("playsinline");
     expect(video).toHaveAttribute("poster", "/graphics/hero-poster.jpg");
 
+    fireEvent.play(video!);
+    const pauseButton = screen.getByRole("button", { name: "Pausa video" });
     await user.click(pauseButton);
     expect(pause).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole("button", { name: "Riprendi video" }));
+    fireEvent.pause(video!);
+    expect(resumeButton).toHaveAccessibleName("Riprendi video");
+    await user.click(resumeButton);
     await waitFor(() => expect(play).toHaveBeenCalledTimes(1));
+    fireEvent.ended(video!);
+    expect(resumeButton).toHaveAccessibleName("Riprendi video");
+  });
+
+  it("mantiene uno stato coerente quando il browser blocca play", async () => {
+    setReducedMotion(false);
+    const user = userEvent.setup();
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValue(
+      new DOMException("Autoplay blocked", "NotAllowedError")
+    );
+
+    render(
+      <HeroMedia
+        media={{
+          kind: "video",
+          src: "/media/hero.mp4",
+          posterSrc: "/graphics/hero-poster.jpg",
+          posterAlt: "Sentiero nel bosco",
+          focalPoint: { x: 50, y: 40 }
+        }}
+      />
+    );
+
+    const resumeButton = await screen.findByRole("button", {
+      name: "Riprendi video"
+    });
+    await user.click(resumeButton);
+
+    expect(resumeButton).toHaveAccessibleName("Riprendi video");
+    expect(
+      await screen.findByRole("status", {
+        name: "Il video non può essere avviato"
+      })
+    ).toBeInTheDocument();
   });
 });

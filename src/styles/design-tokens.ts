@@ -6,7 +6,9 @@ export const designTokens = {
   sage: "#748476",
   clay: "#b6754e",
   clayText: "#8a4e2e",
-  onClay: "#101d18"
+  onClay: "#101d18",
+  focusInner: "#fbf8f2",
+  focusOuter: "#14231d"
 } as const;
 
 function channelToLinear(channel: number): number {
