@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { mapPublicContentSnapshot } from "@/lib/public-content/adapter";
+import {
+  loadPublicContentSafely,
+  mapPublicContentSnapshot
+} from "@/lib/public-content/adapter";
 
 describe("database public content adapter", () => {
   const snapshot = {
     published: true,
+    requiredMediaReady: true,
+    operationalReady: true,
     settings: {
       hero: { published: true, media: { kind: "art", label: "Bosco" } },
       wedding: {
@@ -98,5 +103,13 @@ describe("database public content adapter", () => {
       true
     );
     expect(content?.schedule).toHaveLength(1);
+  });
+
+  it("turns an adapter failure into the controlled unavailable state", async () => {
+    await expect(
+      loadPublicContentSafely(async () => {
+        throw new Error("database unavailable");
+      })
+    ).resolves.toBeNull();
   });
 });

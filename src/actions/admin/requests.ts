@@ -1,121 +1,31 @@
 "use server";
 
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
-import { adminActionReceipts, giftIntents, giftLocks } from "@/db/schema";
+import { giftIntents, giftLocks, gifts } from "@/db/schema";
+import { TransactionError } from "@/db/transactions/errors";
 import {
-  cancelIntent,
-  contributeToGift,
-  reserveGift,
-  verifyIntent
-} from "@/db/transactions";
+  assertCancellationAllowed,
+  assertGiftReservationAvailable,
+  getVerificationAmounts
+} from "@/db/transactions/policies";
 import { deliverVerificationNotification } from "@/lib/email";
+import { runAdminIdempotentTransaction as executeOnce } from "@/lib/admin/idempotency";
 import { encryptSecret } from "@/lib/security/crypto";
 import { hashEmail, hashFingerprint, hashToken } from "@/lib/security/hashing";
 
 import {
   type AdminActionResult,
   authorizedAdmin,
-  refreshAdmin,
-  writeAdminAudit
+  refreshAdmin
 } from "./shared";
 
 const idempotencySchema = z.string().trim().min(8).max(128);
 const intentIdSchema = z.uuid();
-
-async function executeOnce<T extends Record<string, unknown>>(input: {
-  actorAdminId: string;
-  action: string;
-  entityId: string;
-  idempotencyKey: string;
-  payload: unknown;
-  effect: () => Promise<T>;
-}): Promise<{ result: T; replayed: boolean }> {
-  const db = getDatabase();
-  const payloadHash = createHash("sha256")
-    .update(JSON.stringify(input.payload))
-    .digest("hex");
-  const inserted = await db
-    .insert(adminActionReceipts)
-    .values({
-      actorAdminId: input.actorAdminId,
-      action: input.action,
-      entityId: input.entityId,
-      idempotencyKey: input.idempotencyKey,
-      payloadHash,
-      status: "pending",
-      result: { state: "started" }
-    })
-    .onConflictDoNothing()
-    .returning({ id: adminActionReceipts.id });
-  if (!inserted[0]) {
-    const existing = await db
-      .select({
-        result: adminActionReceipts.result,
-        payloadHash: adminActionReceipts.payloadHash,
-        status: adminActionReceipts.status,
-        createdAt: adminActionReceipts.createdAt
-      })
-      .from(adminActionReceipts)
-      .where(
-        and(
-          eq(adminActionReceipts.actorAdminId, input.actorAdminId),
-          eq(adminActionReceipts.action, input.action),
-          eq(adminActionReceipts.entityId, input.entityId),
-          eq(adminActionReceipts.idempotencyKey, input.idempotencyKey)
-        )
-      )
-      .limit(1);
-    const receipt = existing[0] as
-      | {
-          result: unknown;
-          payloadHash?: string;
-          status?: string;
-          createdAt?: Date;
-        }
-      | undefined;
-    if (!receipt || receipt.payloadHash !== payloadHash)
-      throw new Error("Chiave idempotenza riutilizzata con payload diverso");
-    if (receipt.status !== "completed") {
-      if (
-        receipt.createdAt &&
-        Date.now() - receipt.createdAt.getTime() > 300_000
-      ) {
-        await db
-          .delete(adminActionReceipts)
-          .where(
-            and(
-              eq(adminActionReceipts.actorAdminId, input.actorAdminId),
-              eq(adminActionReceipts.action, input.action),
-              eq(adminActionReceipts.entityId, input.entityId),
-              eq(adminActionReceipts.idempotencyKey, input.idempotencyKey),
-              eq(adminActionReceipts.status, "pending")
-            )
-          );
-        return executeOnce(input);
-      }
-      throw new Error("Operazione già in corso");
-    }
-    return { result: receipt.result as T, replayed: true };
-  }
-  try {
-    const result = await input.effect();
-    await db
-      .update(adminActionReceipts)
-      .set({ result, status: "completed" })
-      .where(eq(adminActionReceipts.id, inserted[0].id));
-    return { result, replayed: false };
-  } catch (error) {
-    await db
-      .delete(adminActionReceipts)
-      .where(eq(adminActionReceipts.id, inserted[0].id));
-    throw error;
-  }
-}
 
 export async function verifyRequestAction(formData: FormData) {
   const admin = await authorizedAdmin("request.verify");
@@ -136,20 +46,89 @@ export async function verifyRequestAction(formData: FormData) {
     entityId: parsed.intentId,
     idempotencyKey: parsed.idempotencyKey,
     payload: { receivedAmountCents: parsed.receivedAmountCents },
-    effect: async () => {
-      const intent = await verifyIntent(getDatabase(), {
-        intentId: parsed.intentId,
-        receivedAmountCents: parsed.receivedAmountCents,
-        actorAdminId: admin.id
+    effect: async (tx) => {
+      const initial = await tx
+        .select({ giftId: giftIntents.giftId })
+        .from(giftIntents)
+        .where(eq(giftIntents.id, parsed.intentId))
+        .limit(1);
+      if (!initial[0]) throw new TransactionError("intent_not_found", 404);
+      await tx.execute(
+        sql`select id from ${gifts} where id = ${initial[0].giftId} for update`
+      );
+      const giftRows = await tx
+        .select()
+        .from(gifts)
+        .where(eq(gifts.id, initial[0].giftId))
+        .limit(1);
+      const gift = giftRows[0];
+      if (!gift) throw new TransactionError("gift_unavailable");
+      await tx.execute(
+        sql`select id from ${giftIntents} where id = ${parsed.intentId} for update`
+      );
+      const intentRows = await tx
+        .select()
+        .from(giftIntents)
+        .where(eq(giftIntents.id, parsed.intentId))
+        .limit(1);
+      const intent = intentRows[0];
+      if (!intent) throw new TransactionError("intent_not_found", 404);
+      if (intent.status !== "pending")
+        throw new TransactionError("intent_not_pending");
+      const verified = await tx
+        .select({ appliedAmountCents: giftIntents.appliedAmountCents })
+        .from(giftIntents)
+        .where(
+          and(
+            eq(giftIntents.giftId, gift.id),
+            eq(giftIntents.status, "verified")
+          )
+        );
+      const amounts = getVerificationAmounts({
+        priceCents: gift.priceCents,
+        alreadyAppliedCents: verified.reduce(
+          (sum, row) => sum + row.appliedAmountCents,
+          0
+        ),
+        intentAmountCents: intent.amountCents,
+        receivedAmountCents: parsed.receivedAmountCents
       });
-      await deliverVerificationNotification(getDatabase(), {
-        intentId: intent.id,
-        encryptionKey: required("DATA_ENCRYPTION_KEY"),
-        hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
-      });
-      return { intentId: intent.id, status: intent.status };
-    }
+      const now = new Date();
+      const updated = await tx
+        .update(giftIntents)
+        .set({
+          status: "verified",
+          receivedAmountCents: amounts.receivedAmountCents,
+          appliedAmountCents: amounts.appliedAmountCents,
+          verifiedAt: now,
+          updatedAt: now
+        })
+        .where(
+          and(eq(giftIntents.id, intent.id), eq(giftIntents.status, "pending"))
+        )
+        .returning();
+      if (!updated[0]) throw new TransactionError("intent_not_pending");
+      if (amounts.completesGift)
+        await tx
+          .update(gifts)
+          .set({ completed: true, updatedAt: now })
+          .where(eq(gifts.id, gift.id));
+      await tx.delete(giftLocks).where(eq(giftLocks.intentId, intent.id));
+      return { intentId: intent.id, status: updated[0].status };
+    },
+    audit: (result) => ({
+      action: "gift_intent.verified",
+      targetType: "gift_intent",
+      targetId: result.intentId,
+      metadata: { receivedAmountCents: parsed.receivedAmountCents }
+    })
   });
+  if (!outcome.replayed)
+    await deliverVerificationNotification(getDatabase(), {
+      intentId: outcome.result.intentId,
+      encryptionKey: required("DATA_ENCRYPTION_KEY"),
+      hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
+    });
   await refreshAdmin("/admin/richieste");
   return outcome;
 }
@@ -166,14 +145,37 @@ export async function cancelRequestAction(formData: FormData) {
     entityId: intentId,
     idempotencyKey,
     payload: {},
-    effect: async () => {
-      const intent = await cancelIntent(getDatabase(), {
-        intentId,
+    effect: async (tx) => {
+      await tx.execute(
+        sql`select id from ${giftIntents} where id = ${intentId} for update`
+      );
+      const rows = await tx
+        .select()
+        .from(giftIntents)
+        .where(eq(giftIntents.id, intentId))
+        .limit(1);
+      const intent = rows[0];
+      if (!intent) throw new TransactionError("intent_not_found", 404);
+      assertCancellationAllowed({
         actor: "admin",
-        actorAdminId: admin.id
+        status: intent.status,
+        paymentDeclaredAt: intent.paymentDeclaredAt
       });
-      return { intentId: intent.id, status: intent.status };
-    }
+      const now = new Date();
+      const updated = await tx
+        .update(giftIntents)
+        .set({ status: "cancelled", cancelledAt: now, updatedAt: now })
+        .where(eq(giftIntents.id, intentId))
+        .returning();
+      if (!updated[0]) throw new TransactionError("intent_not_found", 404);
+      await tx.delete(giftLocks).where(eq(giftLocks.intentId, intentId));
+      return { intentId, status: updated[0].status };
+    },
+    audit: () => ({
+      action: "gift_intent.cancelled",
+      targetType: "gift_intent",
+      targetId: intentId
+    })
   });
   await refreshAdmin("/admin/richieste");
   return outcome;
@@ -191,29 +193,35 @@ export async function rejectRequestAction(formData: FormData) {
     entityId: intentId,
     idempotencyKey,
     payload: {},
-    effect: async () => {
+    effect: async (tx) => {
       const now = new Date();
-      const changed = await getDatabase().transaction(async (tx) => {
-        const updated = await tx
-          .update(giftIntents)
-          .set({ status: "rejected", rejectedAt: now, updatedAt: now })
-          .where(
-            and(eq(giftIntents.id, intentId), eq(giftIntents.status, "pending"))
-          )
-          .returning({ id: giftIntents.id });
-        if (!updated[0]) return false;
-        await tx.delete(giftLocks).where(eq(giftLocks.intentId, intentId));
-        return true;
-      });
-      if (changed)
-        await writeAdminAudit({
-          actorAdminId: admin.id,
-          action: "gift_intent.rejected",
-          targetType: "gift_intent",
-          targetId: intentId
-        });
+      await tx.execute(
+        sql`select id from ${giftIntents} where id = ${intentId} for update`
+      );
+      const current = await tx
+        .select({ status: giftIntents.status })
+        .from(giftIntents)
+        .where(eq(giftIntents.id, intentId))
+        .limit(1);
+      if (!current[0]) throw new TransactionError("intent_not_found", 404);
+      if (current[0].status !== "pending")
+        throw new TransactionError("intent_not_pending");
+      const updated = await tx
+        .update(giftIntents)
+        .set({ status: "rejected", rejectedAt: now, updatedAt: now })
+        .where(
+          and(eq(giftIntents.id, intentId), eq(giftIntents.status, "pending"))
+        )
+        .returning({ id: giftIntents.id });
+      if (!updated[0]) throw new TransactionError("intent_not_pending");
+      await tx.delete(giftLocks).where(eq(giftLocks.intentId, intentId));
       return { intentId, status: "rejected" };
-    }
+    },
+    audit: () => ({
+      action: "gift_intent.rejected",
+      targetType: "gift_intent",
+      targetId: intentId
+    })
   });
   await refreshAdmin("/admin/richieste");
   return outcome;
@@ -231,18 +239,15 @@ export async function unlockRequestAction(formData: FormData) {
     entityId: intentId,
     idempotencyKey,
     payload: {},
-    effect: async () => {
-      await getDatabase()
-        .delete(giftLocks)
-        .where(eq(giftLocks.intentId, intentId));
-      await writeAdminAudit({
-        actorAdminId: admin.id,
-        action: "gift_intent.unlocked",
-        targetType: "gift_intent",
-        targetId: intentId
-      });
+    effect: async (tx) => {
+      await tx.delete(giftLocks).where(eq(giftLocks.intentId, intentId));
       return { intentId, status: "unlocked" };
-    }
+    },
+    audit: () => ({
+      action: "gift_intent.unlocked",
+      targetType: "gift_intent",
+      targetId: intentId
+    })
   });
   await refreshAdmin("/admin/richieste");
   return outcome;
@@ -269,31 +274,41 @@ export async function extendRequestAction(formData: FormData) {
     entityId: parsed.intentId,
     idempotencyKey: parsed.idempotencyKey,
     payload: { expiresAt: parsed.expiresAt.toISOString() },
-    effect: async () => {
-      await getDatabase().transaction(async (tx) => {
-        await tx
-          .update(giftIntents)
-          .set({ expiresAt: parsed.expiresAt, updatedAt: new Date() })
-          .where(
-            and(
-              eq(giftIntents.id, parsed.intentId),
-              eq(giftIntents.status, "pending")
-            )
-          );
-        await tx
-          .update(giftLocks)
-          .set({ expiresAt: parsed.expiresAt })
-          .where(eq(giftLocks.intentId, parsed.intentId));
-      });
-      await writeAdminAudit({
-        actorAdminId: admin.id,
-        action: "gift_intent.extended",
-        targetType: "gift_intent",
-        targetId: parsed.intentId,
-        metadata: { expiresAt: parsed.expiresAt }
-      });
+    effect: async (tx) => {
+      await tx.execute(
+        sql`select id from ${giftIntents} where id = ${parsed.intentId} for update`
+      );
+      const current = await tx
+        .select({ status: giftIntents.status })
+        .from(giftIntents)
+        .where(eq(giftIntents.id, parsed.intentId))
+        .limit(1);
+      if (!current[0]) throw new TransactionError("intent_not_found", 404);
+      if (current[0].status !== "pending")
+        throw new TransactionError("intent_not_pending");
+      const updated = await tx
+        .update(giftIntents)
+        .set({ expiresAt: parsed.expiresAt, updatedAt: new Date() })
+        .where(
+          and(
+            eq(giftIntents.id, parsed.intentId),
+            eq(giftIntents.status, "pending")
+          )
+        )
+        .returning({ id: giftIntents.id });
+      if (!updated[0]) throw new TransactionError("intent_not_pending");
+      await tx
+        .update(giftLocks)
+        .set({ expiresAt: parsed.expiresAt })
+        .where(eq(giftLocks.intentId, parsed.intentId));
       return { intentId: parsed.intentId, status: "extended" };
-    }
+    },
+    audit: () => ({
+      action: "gift_intent.extended",
+      targetType: "gift_intent",
+      targetId: parsed.intentId,
+      metadata: { expiresAt: parsed.expiresAt }
+    })
   });
   await refreshAdmin("/admin/richieste");
   return outcome;
@@ -321,20 +336,21 @@ export async function saveRequestNoteAction(
     entityId: parsed.data.intentId,
     idempotencyKey: parsed.data.idempotencyKey,
     payload: { note: parsed.data.note },
-    effect: async () => {
-      await getDatabase()
+    effect: async (tx) => {
+      const updated = await tx
         .update(giftIntents)
         .set({ adminNote: parsed.data.note, updatedAt: new Date() })
-        .where(eq(giftIntents.id, parsed.data.intentId));
-      await writeAdminAudit({
-        actorAdminId: admin.id,
-        action: "gift_intent.note_saved",
-        targetType: "gift_intent",
-        targetId: parsed.data.intentId,
-        metadata: { hasNote: parsed.data.note.length > 0 }
-      });
+        .where(eq(giftIntents.id, parsed.data.intentId))
+        .returning({ id: giftIntents.id });
+      if (!updated[0]) throw new TransactionError("intent_not_found", 404);
       return { intentId: parsed.data.intentId, status: "noted" };
-    }
+    },
+    audit: () => ({
+      action: "gift_intent.note_saved",
+      targetType: "gift_intent",
+      targetId: parsed.data.intentId,
+      metadata: { hasNote: parsed.data.note.length > 0 }
+    })
   });
   await refreshAdmin("/admin/richieste");
   return { ok: true, message: "Nota salvata" };
@@ -390,25 +406,92 @@ export async function createManualRequestAction(
       kind: parsed.data.kind,
       method: parsed.data.method,
       amountCents: parsed.data.amountCents,
-      emailHash: hashEmail(parsed.data.email, pepper)
+      identityHash: hashFingerprint(
+        JSON.stringify({
+          firstName: parsed.data.firstName,
+          lastName: parsed.data.lastName,
+          email: parsed.data.email.trim().toLowerCase()
+        }),
+        pepper
+      )
     },
-    effect: async () => {
-      const created =
-        parsed.data.kind === "full_gift"
-          ? await reserveGift(getDatabase(), mutationInput)
-          : await contributeToGift(getDatabase(), mutationInput);
-      await writeAdminAudit({
-        actorAdminId: admin.id,
-        action: "gift_intent.manual_created",
-        targetType: "gift_intent",
-        targetId: created.id,
-        metadata: {
+    effect: async (tx) => {
+      await tx.execute(
+        sql`select id from ${gifts} where id = ${parsed.data.giftId} for update`
+      );
+      const giftRows = await tx
+        .select()
+        .from(gifts)
+        .where(eq(gifts.id, parsed.data.giftId))
+        .limit(1);
+      const gift = giftRows[0];
+      if (!gift || gift.completed || !gift.published || gift.archivedAt)
+        throw new TransactionError("gift_unavailable");
+      const commitments = await tx
+        .select({
+          kind: giftIntents.kind,
+          status: giftIntents.status,
+          amountCents: giftIntents.amountCents,
+          appliedAmountCents: giftIntents.appliedAmountCents,
+          expiresAt: giftIntents.expiresAt
+        })
+        .from(giftIntents)
+        .where(eq(giftIntents.giftId, gift.id));
+      if (parsed.data.kind === "full_gift") {
+        if (parsed.data.amountCents !== gift.priceCents)
+          throw new TransactionError("gift_unavailable");
+        assertGiftReservationAvailable({
+          now: new Date(),
+          contributions: commitments
+        });
+      } else {
+        const fullLock = await tx
+          .select({ id: giftLocks.giftId })
+          .from(giftLocks)
+          .where(eq(giftLocks.giftId, gift.id))
+          .limit(1);
+        if (fullLock[0]) throw new TransactionError("gift_unavailable");
+        const now = new Date();
+        const verifiedCents = commitments
+          .filter((item) => item.status === "verified")
+          .reduce((sum, item) => sum + item.appliedAmountCents, 0);
+        const pendingCents = commitments
+          .filter(
+            (item) =>
+              item.kind === "contribution" &&
+              item.status === "pending" &&
+              item.expiresAt > now
+          )
+          .reduce((sum, item) => sum + item.amountCents, 0);
+        if (
+          parsed.data.amountCents >
+          Math.max(0, gift.priceCents - verifiedCents - pendingCents)
+        )
+          throw new TransactionError("amount_unavailable");
+      }
+      const inserted = await tx
+        .insert(giftIntents)
+        .values({
+          ...mutationInput,
           kind: parsed.data.kind,
-          amountCents: parsed.data.amountCents
-        }
-      });
-      return { intentId: created.id, status: created.status };
-    }
+          status: "pending"
+        })
+        .returning();
+      if (!inserted[0]) throw new Error("Intent non creato");
+      if (parsed.data.kind === "full_gift")
+        await tx.insert(giftLocks).values({
+          giftId: gift.id,
+          intentId: inserted[0].id,
+          expiresAt: mutationInput.expiresAt
+        });
+      return { intentId: inserted[0].id, status: inserted[0].status };
+    },
+    audit: (result) => ({
+      action: "gift_intent.manual_created",
+      targetType: "gift_intent",
+      targetId: result.intentId,
+      metadata: { kind: parsed.data.kind, amountCents: parsed.data.amountCents }
+    })
   });
   await refreshAdmin("/admin/richieste");
   return { ok: true, message: "Richiesta inserita" };
@@ -432,14 +515,13 @@ export async function resendRequestEmailAction(formData: FormData) {
         encryptionKey: required("DATA_ENCRYPTION_KEY"),
         hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
       });
-      await writeAdminAudit({
-        actorAdminId: admin.id,
-        action: "gift_intent.email_resent",
-        targetType: "gift_intent",
-        targetId: intentId
-      });
       return { intentId, status: "sent" };
-    }
+    },
+    audit: () => ({
+      action: "gift_intent.email_resent",
+      targetType: "gift_intent",
+      targetId: intentId
+    })
   });
 }
 

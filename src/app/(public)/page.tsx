@@ -1,12 +1,12 @@
 import { PublicHome } from "@/components/sections/public-home";
 import { WaitingPage } from "@/components/sections/waiting-page";
 import { getDemoPublicContent } from "@/data/demo-content";
-import { loadPublicContent } from "@/lib/public-content/adapter";
+import { loadPublicContentSafely } from "@/lib/public-content/adapter";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const databaseContent = await loadPublicContent();
+  const databaseContent = await loadPublicContentSafely();
   const content = databaseContent ?? getDemoPublicContent();
 
   if (!content) return <WaitingPage />;

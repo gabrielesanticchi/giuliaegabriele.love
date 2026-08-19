@@ -8,6 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDatabase, type WeddingDatabase } from "@/db";
 import { rateLimitBuckets } from "@/db/schema";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
+import { authenticateAdmin } from "@/lib/auth/repository";
+import { hashEmail, hashFingerprint } from "@/lib/security/hashing";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -90,6 +92,36 @@ integration(
         .from(rateLimitBuckets)
         .where(eq(rateLimitBuckets.fingerprintHash, fingerprintHash));
       expect(rows).toEqual([{ count: 20 }]);
+    });
+
+    it("claims both login buckets before credentials and blocks attempt seven", async () => {
+      const pepper = randomBytes(32).toString("hex");
+      process.env.AUTH_HMAC_PEPPER = pepper;
+      process.env.AUTH_ENCRYPTION_KEY = randomBytes(32).toString("base64");
+      process.env.AUTH_RECOVERY_PEPPER = randomBytes(32).toString("hex");
+      const email = `missing-${randomUUID()}@example.test`;
+      const identity = `integration-ip-${randomUUID()}`;
+      const ipHash = hashFingerprint(identity, pepper);
+      const emailHash = hashEmail(email, pepper);
+      fingerprints.push(ipHash, emailHash);
+
+      const results = await Promise.all(
+        Array.from({ length: 7 }, () =>
+          authenticateAdmin({
+            email,
+            password: "invalid",
+            clientIdentity: identity,
+            db
+          })
+        )
+      );
+      expect(results).toEqual(Array.from({ length: 7 }, () => null));
+      const buckets = await db
+        .select()
+        .from(rateLimitBuckets)
+        .where(inArray(rateLimitBuckets.fingerprintHash, [ipHash, emailHash]));
+      expect(buckets).toHaveLength(2);
+      expect(buckets.map((bucket) => bucket.count).sort()).toEqual([7, 7]);
     });
 
     it("starts a fresh counter after the fixed window expires", async () => {

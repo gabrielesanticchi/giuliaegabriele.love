@@ -90,6 +90,7 @@ integration(
         id: giftId,
         publicReference: `G-${giftId}`,
         title: "Regalo bootstrap",
+        published: true,
         priceCents: 10_000
       });
       const input = {

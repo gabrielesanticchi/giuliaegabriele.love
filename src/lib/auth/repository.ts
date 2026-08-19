@@ -4,10 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { getDatabase, type WeddingDatabase } from "@/db";
 import { adminUsers, rateLimitBuckets } from "@/db/schema";
-import {
-  consumeRateLimit,
-  getRateLimitDecision
-} from "@/lib/security/rate-limit";
+import { consumeRateLimit } from "@/lib/security/rate-limit";
 import { hashEmail, hashFingerprint } from "@/lib/security/hashing";
 
 import type { AdminPrincipal, AdminRole } from "./authorization";
@@ -93,34 +90,19 @@ export async function authenticateAdmin(input: {
     [fingerprintHash, "admin-login:ip"],
     [emailHash, "admin-login:email"]
   ] as const;
-  const existingBuckets = await Promise.all(
+  // Claim both buckets atomically before doing any expensive credential work.
+  // Attempts 1..6 are allowed; the seventh is rejected even under concurrency.
+  const claims = await Promise.all(
     bucketPairs.map(([hash, key]) =>
-      db
-        .select()
-        .from(rateLimitBuckets)
-        .where(
-          and(
-            eq(rateLimitBuckets.fingerprintHash, hash),
-            eq(rateLimitBuckets.bucketKey, key)
-          )
-        )
-        .limit(1)
+      consumeRateLimit(db, {
+        fingerprintHash: hash,
+        bucketKey: key,
+        limit: 6,
+        windowMs: 15 * 60_000
+      })
     )
   );
-  const now = new Date();
-  if (
-    existingBuckets.some(
-      (rows) =>
-        rows[0] &&
-        !getRateLimitDecision({
-          count: rows[0].count,
-          limit: 6,
-          now,
-          expiresAt: rows[0].expiresAt
-        }).allowed
-    )
-  )
-    return null;
+  if (claims.some((claim) => !claim.allowed)) return null;
 
   const rows = await db
     .select()
@@ -133,31 +115,11 @@ export async function authenticateAdmin(input: {
     row.disabledAt ||
     !(await verifyAdminPassword(input.password, row.passwordHash))
   ) {
-    await Promise.all(
-      bucketPairs.map(([hash, key]) =>
-        consumeRateLimit(db, {
-          fingerprintHash: hash,
-          bucketKey: key,
-          limit: 6,
-          windowMs: 15 * 60_000
-        })
-      )
-    );
     return null;
   }
 
   if (row.totpEnabled) {
     if (!input.code) {
-      await Promise.all(
-        bucketPairs.map(([hash, key]) =>
-          consumeRateLimit(db, {
-            fingerprintHash: hash,
-            bucketKey: key,
-            limit: 6,
-            windowMs: 15 * 60_000
-          })
-        )
-      );
       return null;
     }
     const validTotp = row.totpSecretEncrypted
@@ -171,16 +133,6 @@ export async function authenticateAdmin(input: {
       !validTotp &&
       !(await consumeRecoveryCode(db, row, input.code, secrets.recoveryPepper))
     ) {
-      await Promise.all(
-        bucketPairs.map(([hash, key]) =>
-          consumeRateLimit(db, {
-            fingerprintHash: hash,
-            bucketKey: key,
-            limit: 6,
-            windowMs: 15 * 60_000
-          })
-        )
-      );
       return null;
     }
   }

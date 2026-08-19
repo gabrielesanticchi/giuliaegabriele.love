@@ -84,6 +84,8 @@ function fakeDatabase(options: {
             {
               id: options.mutationInput.giftId,
               completed: false,
+              published: true,
+              archivedAt: null,
               priceCents: options.mutationInput.amountCents
             }
           ],
@@ -95,6 +97,8 @@ function fakeDatabase(options: {
             {
               id: options.mutationInput.giftId,
               completed: false,
+              published: true,
+              archivedAt: null,
               priceCents: options.mutationInput.amountCents
             }
           ],

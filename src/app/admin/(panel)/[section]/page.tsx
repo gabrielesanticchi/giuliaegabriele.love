@@ -4,6 +4,10 @@ import { asc, desc, eq, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import {
+  deleteDressColorAction,
+  deleteMediaMetadataAction,
+  deleteScheduleItemAction,
+  deleteStoryMomentAction,
   saveDressColorAction,
   saveMediaMetadataAction,
   saveScheduleItemAction,
@@ -12,6 +16,7 @@ import {
 } from "@/actions/admin/content";
 import {
   archiveGiftAction,
+  archiveGiftCategoryAction,
   duplicateGiftAction,
   saveGiftAction,
   saveGiftCategoryAction,
@@ -182,6 +187,7 @@ export default async function AdminSectionPage({
     const rows = await db
       .select()
       .from(scheduleItems)
+      .where(isNull(scheduleItems.archivedAt))
       .orderBy(asc(scheduleItems.sortOrder));
     return (
       <>
@@ -218,6 +224,66 @@ export default async function AdminSectionPage({
             row.published ? "Pubblicato" : "Bozza"
           ])}
         />
+        {rows.map((row) => (
+          <details key={`edit-${row.id}`} className="admin-editor">
+            <summary>Modifica / riordina / archivia: {row.title}</summary>
+            <StructuredEditor
+              title={row.title}
+              description="Modifica contenuto, ordine e pubblicazione."
+              action={saveScheduleItemAction}
+              hidden={{ id: row.id }}
+              fields={[
+                {
+                  name: "title",
+                  label: "Titolo",
+                  type: "text",
+                  required: true,
+                  defaultValue: row.title
+                },
+                {
+                  name: "locationName",
+                  label: "Luogo",
+                  type: "text",
+                  defaultValue: row.locationName ?? ""
+                },
+                {
+                  name: "startsAt",
+                  label: "Inizio",
+                  type: "datetime-local",
+                  required: true,
+                  defaultValue: row.startsAt.toISOString().slice(0, 16)
+                },
+                {
+                  name: "endsAt",
+                  label: "Fine",
+                  type: "datetime-local",
+                  defaultValue: row.endsAt?.toISOString().slice(0, 16) ?? ""
+                },
+                {
+                  name: "sortOrder",
+                  label: "Ordine",
+                  type: "number",
+                  defaultValue: row.sortOrder
+                },
+                {
+                  name: "published",
+                  label: "Pubblicato",
+                  type: "checkbox",
+                  defaultValue: row.published
+                },
+                {
+                  name: "description",
+                  label: "Descrizione",
+                  type: "textarea",
+                  defaultValue: row.description ?? ""
+                }
+              ]}
+            />
+            <form action={deleteScheduleItemAction.bind(null, row.id)}>
+              <button type="submit">Elimina</button>
+            </form>
+          </details>
+        ))}
       </>
     );
   }
@@ -226,6 +292,7 @@ export default async function AdminSectionPage({
     const rows = await db
       .select()
       .from(storyMoments)
+      .where(isNull(storyMoments.archivedAt))
       .orderBy(asc(storyMoments.sortOrder));
     return (
       <>
@@ -260,15 +327,76 @@ export default async function AdminSectionPage({
             row.published ? "Pubblicato" : "Bozza"
           ])}
         />
+        {rows.map((row) => (
+          <details key={`edit-${row.id}`} className="admin-editor">
+            <summary>Modifica / riordina / archivia: {row.title}</summary>
+            <StructuredEditor
+              title={row.title}
+              description="Modifica contenuto, ordine e pubblicazione."
+              action={saveStoryMomentAction}
+              hidden={{ id: row.id }}
+              fields={[
+                {
+                  name: "title",
+                  label: "Titolo",
+                  type: "text",
+                  required: true,
+                  defaultValue: row.title
+                },
+                {
+                  name: "occurredOn",
+                  label: "Data",
+                  type: "date",
+                  defaultValue: row.occurredOn?.toISOString().slice(0, 10) ?? ""
+                },
+                {
+                  name: "sortOrder",
+                  label: "Ordine",
+                  type: "number",
+                  defaultValue: row.sortOrder
+                },
+                {
+                  name: "published",
+                  label: "Pubblicato",
+                  type: "checkbox",
+                  defaultValue: row.published
+                },
+                {
+                  name: "body",
+                  label: "Racconto",
+                  type: "textarea",
+                  required: true,
+                  defaultValue: row.body
+                }
+              ]}
+            />
+            <form action={deleteStoryMomentAction.bind(null, row.id)}>
+              <button type="submit">Elimina</button>
+            </form>
+          </details>
+        ))}
       </>
     );
   }
 
   if (section === "dress-code") {
-    const rows = await db
-      .select()
-      .from(dressCodeColors)
-      .orderBy(asc(dressCodeColors.sortOrder));
+    const [rows, dressRows] = await Promise.all([
+      db
+        .select()
+        .from(dressCodeColors)
+        .where(isNull(dressCodeColors.archivedAt))
+        .orderBy(asc(dressCodeColors.sortOrder)),
+      db
+        .select({ value: siteSettings.value })
+        .from(siteSettings)
+        .where(eq(siteSettings.key, "dress_code"))
+        .limit(1)
+    ]);
+    const dress = (dressRows[0]?.value ?? {}) as {
+      title?: string;
+      description?: string;
+      published?: boolean;
+    };
     return (
       <>
         <PageHeader section={section} />
@@ -278,9 +406,25 @@ export default async function AdminSectionPage({
           action={saveStructuredContentAction}
           hidden={{ key: "dress_code" }}
           fields={[
-            { name: "title", label: "Titolo", type: "text", required: true },
-            { name: "description", label: "Descrizione", type: "textarea" },
-            { name: "published", label: "Pubblicato", type: "checkbox" }
+            {
+              name: "title",
+              label: "Titolo",
+              type: "text",
+              required: true,
+              defaultValue: dress.title ?? ""
+            },
+            {
+              name: "description",
+              label: "Descrizione",
+              type: "textarea",
+              defaultValue: dress.description ?? ""
+            },
+            {
+              name: "published",
+              label: "Pubblicato",
+              type: "checkbox",
+              defaultValue: dress.published === true
+            }
           ]}
         />
         <StructuredEditor
@@ -308,13 +452,53 @@ export default async function AdminSectionPage({
           headers={["Nome", "Colore", "Ordine"]}
           rows={rows.map((row) => [row.name, row.hexColor, row.sortOrder])}
         />
+        {rows.map((row) => (
+          <details key={`edit-${row.id}`} className="admin-editor">
+            <summary>Modifica / riordina: {row.name}</summary>
+            <StructuredEditor
+              title={row.name}
+              description="Aggiorna colore e ordine."
+              action={saveDressColorAction}
+              hidden={{ id: row.id }}
+              fields={[
+                {
+                  name: "name",
+                  label: "Nome",
+                  type: "text",
+                  required: true,
+                  defaultValue: row.name
+                },
+                {
+                  name: "hexColor",
+                  label: "Colore",
+                  type: "color",
+                  required: true,
+                  defaultValue: row.hexColor
+                },
+                {
+                  name: "sortOrder",
+                  label: "Ordine",
+                  type: "number",
+                  defaultValue: row.sortOrder
+                }
+              ]}
+            />
+            <form action={deleteDressColorAction.bind(null, row.id)}>
+              <button type="submit">Elimina</button>
+            </form>
+          </details>
+        ))}
       </>
     );
   }
 
   if (section === "regali") {
     const [categories, giftRows] = await Promise.all([
-      db.select().from(giftCategories).orderBy(asc(giftCategories.sortOrder)),
+      db
+        .select()
+        .from(giftCategories)
+        .where(isNull(giftCategories.archivedAt))
+        .orderBy(asc(giftCategories.sortOrder)),
       db
         .select()
         .from(gifts)
@@ -391,6 +575,42 @@ export default async function AdminSectionPage({
             { name: "description", label: "Descrizione", type: "textarea" }
           ]}
         />
+        {categories.map((category) => (
+          <details key={`category-${category.id}`} className="admin-editor">
+            <summary>Modifica / riordina categoria: {category.name}</summary>
+            <StructuredEditor
+              title={category.name}
+              description="Aggiorna nome, slug e ordine."
+              action={saveGiftCategoryAction}
+              hidden={{ id: category.id }}
+              fields={[
+                {
+                  name: "name",
+                  label: "Nome",
+                  type: "text",
+                  required: true,
+                  defaultValue: category.name
+                },
+                {
+                  name: "slug",
+                  label: "Slug",
+                  type: "text",
+                  required: true,
+                  defaultValue: category.slug
+                },
+                {
+                  name: "sortOrder",
+                  label: "Ordine",
+                  type: "number",
+                  defaultValue: category.sortOrder
+                }
+              ]}
+            />
+            <form action={archiveGiftCategoryAction.bind(null, category.id)}>
+              <button type="submit">Archivia categoria</button>
+            </form>
+          </details>
+        ))}
         <table className="admin-table">
           <thead>
             <tr>
@@ -407,6 +627,80 @@ export default async function AdminSectionPage({
                 <td>{formatCurrency(row.priceCents)}</td>
                 <td>{row.published ? "Pubblicato" : "Nascosto"}</td>
                 <td>
+                  <details>
+                    <summary>Modifica / riordina</summary>
+                    <StructuredEditor
+                      title={row.title}
+                      description="Aggiorna regalo, categoria, importo e ordine."
+                      action={saveGiftAction}
+                      hidden={{ id: row.id }}
+                      fields={[
+                        {
+                          name: "publicReference",
+                          label: "Riferimento pubblico",
+                          type: "text",
+                          required: true,
+                          defaultValue: row.publicReference
+                        },
+                        {
+                          name: "title",
+                          label: "Titolo",
+                          type: "text",
+                          required: true,
+                          defaultValue: row.title
+                        },
+                        {
+                          name: "categoryId",
+                          label: "Categoria",
+                          type: "select",
+                          defaultValue: row.categoryId ?? "",
+                          options: [
+                            { label: "Nessuna", value: "" },
+                            ...categories.map((item) => ({
+                              label: item.name,
+                              value: item.id
+                            }))
+                          ]
+                        },
+                        {
+                          name: "priceCents",
+                          label: "Prezzo (centesimi)",
+                          type: "number",
+                          required: true,
+                          defaultValue: row.priceCents
+                        },
+                        {
+                          name: "progressMode",
+                          label: "Progresso",
+                          type: "select",
+                          defaultValue: row.progressMode,
+                          options: [
+                            { label: "Discreto", value: "discreet" },
+                            { label: "Esatto", value: "exact" },
+                            { label: "Nascosto", value: "hidden" }
+                          ]
+                        },
+                        {
+                          name: "sortOrder",
+                          label: "Ordine",
+                          type: "number",
+                          defaultValue: row.sortOrder
+                        },
+                        {
+                          name: "published",
+                          label: "Pubblicato",
+                          type: "checkbox",
+                          defaultValue: row.published
+                        },
+                        {
+                          name: "description",
+                          label: "Descrizione",
+                          type: "textarea",
+                          defaultValue: row.description ?? ""
+                        }
+                      ]}
+                    />
+                  </details>
                   <form
                     action={async () => {
                       "use server";
@@ -529,9 +823,12 @@ export default async function AdminSectionPage({
                   >
                     <input type="hidden" name="intentId" value={row.id} />
                     <input
-                      type="hidden"
+                      type="number"
                       name="receivedAmountCents"
-                      value={row.amountCents}
+                      defaultValue={row.receivedAmountCents ?? row.amountCents}
+                      min={0}
+                      aria-label={`Importo ricevuto ${row.publicReference}`}
+                      required
                     />
                     <input
                       type="hidden"
@@ -564,6 +861,11 @@ export default async function AdminSectionPage({
                   >
                     <input type="hidden" name="intentId" value={row.id} />
                     <input
+                      type="hidden"
+                      name="idempotencyKey"
+                      value={randomUUID()}
+                    />
+                    <input
                       type="datetime-local"
                       name="expiresAt"
                       aria-label={`Nuova scadenza ${row.publicReference}`}
@@ -583,11 +885,6 @@ export default async function AdminSectionPage({
                       name="idempotencyKey"
                       value={randomUUID()}
                     />
-                    <input
-                      type="hidden"
-                      name="idempotencyKey"
-                      value={randomUUID()}
-                    />
                     <button type="submit">Reinvia email</button>
                   </form>
                   <form
@@ -597,11 +894,6 @@ export default async function AdminSectionPage({
                     }}
                   >
                     <input type="hidden" name="intentId" value={row.id} />
-                    <input
-                      type="hidden"
-                      name="idempotencyKey"
-                      value={randomUUID()}
-                    />
                     <input
                       type="hidden"
                       name="idempotencyKey"
@@ -655,10 +947,21 @@ export default async function AdminSectionPage({
   }
 
   if (section === "media") {
-    const rows = await db
-      .select()
-      .from(mediaAssets)
-      .orderBy(desc(mediaAssets.createdAt));
+    const [rows, mediaSettingRows] = await Promise.all([
+      db
+        .select()
+        .from(mediaAssets)
+        .where(isNull(mediaAssets.archivedAt))
+        .orderBy(desc(mediaAssets.createdAt)),
+      db
+        .select({ value: siteSettings.value })
+        .from(siteSettings)
+        .where(eq(siteSettings.key, "media_settings"))
+        .limit(1)
+    ]);
+    const mediaSettings = (mediaSettingRows[0]?.value ?? {}) as {
+      requiredMediaIds?: string[];
+    };
     return (
       <>
         <PageHeader section={section} />
@@ -698,10 +1001,84 @@ export default async function AdminSectionPage({
             }
           ]}
         />
+        <StructuredEditor
+          title="Media obbligatori"
+          description="ID media referenziati che devono esistere prima della pubblicazione."
+          action={saveStructuredContentAction}
+          hidden={{
+            key: "media_settings",
+            title: "Media obbligatori",
+            description: ""
+          }}
+          fields={[
+            {
+              name: "requiredMediaIds",
+              label: "ID separati da virgola",
+              type: "text",
+              required: true,
+              defaultValue: mediaSettings.requiredMediaIds?.join(", ") ?? ""
+            },
+            {
+              name: "published",
+              label: "Configurazione verificata",
+              type: "checkbox",
+              defaultValue: true
+            }
+          ]}
+        />
         <SimpleTable
           headers={["Percorso", "Tipo", "Alt"]}
           rows={rows.map((row) => [row.pathname, row.contentType, row.altText])}
         />
+        {rows.map((row) => (
+          <details key={`edit-${row.id}`} className="admin-editor">
+            <summary>Modifica / elimina: {row.pathname}</summary>
+            <StructuredEditor
+              title={row.pathname}
+              description="Aggiorna metadati e testo alternativo."
+              action={saveMediaMetadataAction}
+              hidden={{ id: row.id }}
+              fields={[
+                {
+                  name: "pathname",
+                  label: "Percorso",
+                  type: "text",
+                  required: true,
+                  defaultValue: row.pathname
+                },
+                {
+                  name: "contentType",
+                  label: "Tipo",
+                  type: "select",
+                  defaultValue: row.contentType,
+                  options: [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp",
+                    "video/mp4"
+                  ].map((value) => ({ label: value, value }))
+                },
+                {
+                  name: "sizeBytes",
+                  label: "Dimensione (byte)",
+                  type: "number",
+                  required: true,
+                  defaultValue: row.sizeBytes
+                },
+                {
+                  name: "altText",
+                  label: "Testo alternativo",
+                  type: "textarea",
+                  required: true,
+                  defaultValue: row.altText
+                }
+              ]}
+            />
+            <form action={deleteMediaMetadataAction.bind(null, row.id)}>
+              <button type="submit">Elimina</button>
+            </form>
+          </details>
+        ))}
       </>
     );
   }

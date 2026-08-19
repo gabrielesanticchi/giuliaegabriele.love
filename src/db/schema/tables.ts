@@ -95,6 +95,7 @@ export const mediaAssets = pgTable(
     contentType: varchar("content_type", { length: 127 }).notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     altText: text("alt_text").default("").notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps
   },
   (table) => [
@@ -114,6 +115,7 @@ export const scheduleItems = pgTable(
     endsAt: timestamp("ends_at", { withTimezone: true }),
     sortOrder: integer("sort_order").default(0).notNull(),
     published: boolean("published").default(false).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps
   },
   (table) => [index("schedule_items_starts_at_idx").on(table.startsAt)]
@@ -134,6 +136,7 @@ export const storyMoments = pgTable(
     }),
     sortOrder: integer("sort_order").default(0).notNull(),
     published: boolean("published").default(false).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps
   },
   (table) => [index("story_moments_sort_order_idx").on(table.sortOrder)]
@@ -146,6 +149,7 @@ export const dressCodeColors = pgTable(
     name: varchar("name", { length: 80 }).notNull(),
     hexColor: varchar("hex_color", { length: 7 }).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps
   },
   (table) => [
@@ -163,6 +167,7 @@ export const giftCategories = pgTable(
     slug: varchar("slug", { length: 100 }).notNull(),
     name: varchar("name", { length: 150 }).notNull(),
     sortOrder: integer("sort_order").default(0).notNull(),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     ...timestamps
   },
   (table) => [uniqueIndex("gift_categories_slug_unique").on(table.slug)]

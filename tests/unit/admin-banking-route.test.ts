@@ -25,6 +25,18 @@ describe("admin banking route boundary", () => {
     expect(getBankingAction).not.toHaveBeenCalled();
   });
 
+  it("rejects a malformed Origin instead of throwing", async () => {
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://example.test");
+    const response = await POST(
+      new Request("https://example.test/api/admin/banking", {
+        method: "POST",
+        headers: { origin: "not a URL" }
+      })
+    );
+    expect(response.status).toBe(403);
+    expect(getBankingAction).not.toHaveBeenCalled();
+  });
+
   it("delegates same-origin requests to the authenticated server action", async () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://example.test");
     const response = await POST(

@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { getDatabase } from "@/db";
 import {
   dressCodeColors,
   mediaAssets,
@@ -18,7 +17,7 @@ import {
   type AdminActionResult,
   authorizedAdmin,
   refreshAdmin,
-  writeAdminAudit
+  runAuditedAdminMutation
 } from "./shared";
 
 const settingSchema = z.object({
@@ -34,6 +33,7 @@ const settingSchema = z.object({
   weddingDate: z.string().datetime({ offset: true }).optional(),
   displayDate: z.string().trim().max(100).optional(),
   place: z.string().trim().max(200).optional(),
+  requiredMediaIds: z.array(z.uuid()).max(100).optional(),
   published: z.boolean()
 });
 
@@ -91,36 +91,45 @@ export async function saveStructuredContentAction(
     weddingDate: formData.get("weddingDate") || undefined,
     displayDate: formData.get("displayDate") || undefined,
     place: formData.get("place") || undefined,
+    requiredMediaIds: String(formData.get("requiredMediaIds") ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
     published: bool(formData.get("published"))
   });
   if (!parsed.success) return { ok: false, message: "Contenuto non valido" };
-  await getDatabase()
-    .insert(siteSettings)
-    .values({
-      key: parsed.data.key,
-      value:
-        parsed.data.key === "hero"
-          ? { ...parsed.data, media: { kind: "art", label: parsed.data.title } }
-          : parsed.data
-    })
-    .onConflictDoUpdate({
-      target: siteSettings.key,
-      set: {
-        value:
-          parsed.data.key === "hero"
-            ? {
-                ...parsed.data,
-                media: { kind: "art", label: parsed.data.title }
-              }
-            : parsed.data,
-        updatedAt: new Date()
-      }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "content.saved",
     targetType: "site_setting",
-    metadata: { key: parsed.data.key, published: parsed.data.published }
+    metadata: { key: parsed.data.key, published: parsed.data.published },
+    mutation: async (tx) => {
+      await tx
+        .insert(siteSettings)
+        .values({
+          key: parsed.data.key,
+          value:
+            parsed.data.key === "hero"
+              ? {
+                  ...parsed.data,
+                  media: { kind: "art", label: parsed.data.title }
+                }
+              : parsed.data
+        })
+        .onConflictDoUpdate({
+          target: siteSettings.key,
+          set: {
+            value:
+              parsed.data.key === "hero"
+                ? {
+                    ...parsed.data,
+                    media: { kind: "art", label: parsed.data.title }
+                  }
+                : parsed.data,
+            updatedAt: new Date()
+          }
+        });
+    }
   });
   await refreshAdmin("/admin");
   return { ok: true, message: "Contenuto salvato" };
@@ -142,19 +151,21 @@ export async function saveScheduleItemAction(
   });
   if (!parsed.success) return { ok: false, message: "Evento non valido" };
   const { id = randomUUID(), ...values } = parsed.data;
-  await getDatabase()
-    .insert(scheduleItems)
-    .values({ id, ...values })
-    .onConflictDoUpdate({
-      target: scheduleItems.id,
-      set: { ...values, updatedAt: new Date() }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "schedule.saved",
     targetType: "schedule_item",
     targetId: id,
-    metadata: { published: values.published, sortOrder: values.sortOrder }
+    metadata: { published: values.published, sortOrder: values.sortOrder },
+    mutation: async (tx) => {
+      await tx
+        .insert(scheduleItems)
+        .values({ id, ...values })
+        .onConflictDoUpdate({
+          target: scheduleItems.id,
+          set: { ...values, updatedAt: new Date() }
+        });
+    }
   });
   await refreshAdmin("/admin/programma");
   return { ok: true, message: "Evento salvato" };
@@ -163,14 +174,21 @@ export async function saveScheduleItemAction(
 export async function deleteScheduleItemAction(id: string) {
   const admin = await authorizedAdmin("schedule.delete");
   const parsedId = z.uuid().parse(id);
-  await getDatabase()
-    .delete(scheduleItems)
-    .where(eq(scheduleItems.id, parsedId));
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "schedule.deleted",
     targetType: "schedule_item",
-    targetId: parsedId
+    targetId: parsedId,
+    mutation: async (tx) => {
+      await tx
+        .update(scheduleItems)
+        .set({
+          archivedAt: new Date(),
+          published: false,
+          updatedAt: new Date()
+        })
+        .where(eq(scheduleItems.id, parsedId));
+    }
   });
   await refreshAdmin("/admin/programma");
 }
@@ -189,19 +207,21 @@ export async function saveStoryMomentAction(
   });
   if (!parsed.success) return { ok: false, message: "Momento non valido" };
   const { id = randomUUID(), ...values } = parsed.data;
-  await getDatabase()
-    .insert(storyMoments)
-    .values({ id, ...values })
-    .onConflictDoUpdate({
-      target: storyMoments.id,
-      set: { ...values, updatedAt: new Date() }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "story.saved",
     targetType: "story_moment",
     targetId: id,
-    metadata: { published: values.published, sortOrder: values.sortOrder }
+    metadata: { published: values.published, sortOrder: values.sortOrder },
+    mutation: async (tx) => {
+      await tx
+        .insert(storyMoments)
+        .values({ id, ...values })
+        .onConflictDoUpdate({
+          target: storyMoments.id,
+          set: { ...values, updatedAt: new Date() }
+        });
+    }
   });
   await refreshAdmin("/admin/storia");
   return { ok: true, message: "Momento salvato" };
@@ -210,12 +230,21 @@ export async function saveStoryMomentAction(
 export async function deleteStoryMomentAction(id: string) {
   const admin = await authorizedAdmin("story.delete");
   const parsedId = z.uuid().parse(id);
-  await getDatabase().delete(storyMoments).where(eq(storyMoments.id, parsedId));
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "story.deleted",
     targetType: "story_moment",
-    targetId: parsedId
+    targetId: parsedId,
+    mutation: async (tx) => {
+      await tx
+        .update(storyMoments)
+        .set({
+          archivedAt: new Date(),
+          published: false,
+          updatedAt: new Date()
+        })
+        .where(eq(storyMoments.id, parsedId));
+    }
   });
   await refreshAdmin("/admin/storia");
 }
@@ -232,22 +261,42 @@ export async function saveDressColorAction(
   });
   if (!parsed.success) return { ok: false, message: "Colore non valido" };
   const { id = randomUUID(), ...values } = parsed.data;
-  await getDatabase()
-    .insert(dressCodeColors)
-    .values({ id, ...values })
-    .onConflictDoUpdate({
-      target: dressCodeColors.id,
-      set: { ...values, updatedAt: new Date() }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "dress_code.saved",
     targetType: "dress_code_color",
     targetId: id,
-    metadata: { name: values.name, sortOrder: values.sortOrder }
+    metadata: { name: values.name, sortOrder: values.sortOrder },
+    mutation: async (tx) => {
+      await tx
+        .insert(dressCodeColors)
+        .values({ id, ...values })
+        .onConflictDoUpdate({
+          target: dressCodeColors.id,
+          set: { ...values, updatedAt: new Date() }
+        });
+    }
   });
   await refreshAdmin("/admin/dress-code");
   return { ok: true, message: "Colore salvato" };
+}
+
+export async function deleteDressColorAction(id: string) {
+  const admin = await authorizedAdmin("dress-code.save");
+  const parsedId = z.uuid().parse(id);
+  await runAuditedAdminMutation({
+    actorAdminId: admin.id,
+    action: "dress_code.deleted",
+    targetType: "dress_code_color",
+    targetId: parsedId,
+    mutation: async (tx) => {
+      await tx
+        .update(dressCodeColors)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
+        .where(eq(dressCodeColors.id, parsedId));
+    }
+  });
+  await refreshAdmin("/admin/dress-code");
 }
 
 export async function saveMediaMetadataAction(
@@ -263,14 +312,7 @@ export async function saveMediaMetadataAction(
   });
   if (!parsed.success) return { ok: false, message: "Media non valido" };
   const { id = randomUUID(), ...values } = parsed.data;
-  await getDatabase()
-    .insert(mediaAssets)
-    .values({ id, ...values })
-    .onConflictDoUpdate({
-      target: mediaAssets.id,
-      set: { ...values, updatedAt: new Date() }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "media.metadata_saved",
     targetType: "media_asset",
@@ -278,8 +320,35 @@ export async function saveMediaMetadataAction(
     metadata: {
       contentType: values.contentType,
       sizeBytes: values.sizeBytes
+    },
+    mutation: async (tx) => {
+      await tx
+        .insert(mediaAssets)
+        .values({ id, ...values })
+        .onConflictDoUpdate({
+          target: mediaAssets.id,
+          set: { ...values, updatedAt: new Date() }
+        });
     }
   });
   await refreshAdmin("/admin/media");
   return { ok: true, message: "Media salvato" };
+}
+
+export async function deleteMediaMetadataAction(id: string) {
+  const admin = await authorizedAdmin("media.save");
+  const parsedId = z.uuid().parse(id);
+  await runAuditedAdminMutation({
+    actorAdminId: admin.id,
+    action: "media.deleted",
+    targetType: "media_asset",
+    targetId: parsedId,
+    mutation: async (tx) => {
+      await tx
+        .update(mediaAssets)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
+        .where(eq(mediaAssets.id, parsedId));
+    }
+  });
+  await refreshAdmin("/admin/media");
 }

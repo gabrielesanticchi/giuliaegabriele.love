@@ -51,6 +51,7 @@ CREATE TABLE "dress_code_colors" (
 	"name" varchar(80) NOT NULL,
 	"hex_color" varchar(7) NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "dress_code_colors_hex_format" CHECK ("dress_code_colors"."hex_color" ~ '^#[0-9A-Fa-f]{6}$')
@@ -73,6 +74,7 @@ CREATE TABLE "gift_categories" (
 	"slug" varchar(100) NOT NULL,
 	"name" varchar(150) NOT NULL,
 	"sort_order" integer DEFAULT 0 NOT NULL,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -141,6 +143,7 @@ CREATE TABLE "media_assets" (
 	"content_type" varchar(127) NOT NULL,
 	"size_bytes" integer NOT NULL,
 	"alt_text" text DEFAULT '' NOT NULL,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "media_assets_size_nonnegative" CHECK ("media_assets"."size_bytes" >= 0)
@@ -166,6 +169,7 @@ CREATE TABLE "schedule_items" (
 	"ends_at" timestamp with time zone,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"published" boolean DEFAULT false NOT NULL,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
@@ -186,6 +190,7 @@ CREATE TABLE "story_moments" (
 	"media_asset_id" uuid,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"published" boolean DEFAULT false NOT NULL,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import type { PublicContent } from "@/data/demo-content";
 import { getDatabase } from "@/db";
 import {
@@ -9,6 +9,7 @@ import {
   giftIntents,
   giftLocks,
   gifts,
+  mediaAssets,
   scheduleItems,
   siteSettings,
   storyMoments
@@ -17,6 +18,8 @@ import { getPublicGiftStatus } from "@/lib/domain/gifts";
 
 type Snapshot = {
   published: boolean;
+  requiredMediaReady: boolean;
+  operationalReady: boolean;
   settings: Record<string, unknown>;
   schedule: Array<{
     id: string;
@@ -70,7 +73,17 @@ export function mapPublicContentSnapshot(
       (hero.published !== true ||
         wedding.published !== true ||
         dress.published !== true)) ||
-    !wedding.weddingDate
+    !wedding.weddingDate ||
+    (!includeDrafts &&
+      (!snapshot.requiredMediaReady ||
+        !snapshot.operationalReady ||
+        snapshot.schedule.every((item) => !item.published) ||
+        snapshot.story.every((item) => !item.published) ||
+        snapshot.colors.length === 0 ||
+        snapshot.gifts.every(
+          (gift) =>
+            !gift.published || gift.archivedAt !== null || gift.completed
+        )))
   )
     return null;
   const media = object(hero.media);
@@ -163,9 +176,21 @@ export async function loadPublicContent(
     intentRows
   ] = await Promise.all([
     db.select().from(siteSettings),
-    db.select().from(scheduleItems).orderBy(asc(scheduleItems.sortOrder)),
-    db.select().from(storyMoments).orderBy(asc(storyMoments.sortOrder)),
-    db.select().from(dressCodeColors).orderBy(asc(dressCodeColors.sortOrder)),
+    db
+      .select()
+      .from(scheduleItems)
+      .where(isNull(scheduleItems.archivedAt))
+      .orderBy(asc(scheduleItems.sortOrder)),
+    db
+      .select()
+      .from(storyMoments)
+      .where(isNull(storyMoments.archivedAt))
+      .orderBy(asc(storyMoments.sortOrder)),
+    db
+      .select()
+      .from(dressCodeColors)
+      .where(isNull(dressCodeColors.archivedAt))
+      .orderBy(asc(dressCodeColors.sortOrder)),
     db
       .select({
         id: gifts.id,
@@ -180,7 +205,13 @@ export async function loadPublicContent(
         categoryName: giftCategories.name
       })
       .from(gifts)
-      .leftJoin(giftCategories, eq(gifts.categoryId, giftCategories.id))
+      .leftJoin(
+        giftCategories,
+        and(
+          eq(gifts.categoryId, giftCategories.id),
+          isNull(giftCategories.archivedAt)
+        )
+      )
       .orderBy(asc(gifts.sortOrder)),
     db.select().from(giftLocks),
     db
@@ -198,6 +229,18 @@ export async function loadPublicContent(
     settingsRows.map((row) => [row.key, row.value])
   );
   const publication = object(settings.site_publication);
+  const adminSettings = object(settings.admin_settings);
+  const mediaSettings = object(settings.media_settings);
+  const requiredMediaIds = Array.isArray(mediaSettings.requiredMediaIds)
+    ? mediaSettings.requiredMediaIds.filter(
+        (id): id is string => typeof id === "string"
+      )
+    : [];
+  const mediaIdRows = await db
+    .select({ id: mediaAssets.id })
+    .from(mediaAssets)
+    .where(isNull(mediaAssets.archivedAt));
+  const knownMediaIds = new Set(mediaIdRows.map((row) => row.id));
   const now = new Date();
   const mappedGifts = giftRows.map((gift) => {
     const intents = intentRows.filter((intent) => intent.giftId === gift.id);
@@ -222,6 +265,15 @@ export async function loadPublicContent(
   return mapPublicContentSnapshot(
     {
       published: publication.published === true,
+      requiredMediaReady:
+        requiredMediaIds.length > 0 &&
+        requiredMediaIds.every((id) => knownMediaIds.has(id)),
+      operationalReady:
+        adminSettings.privacyReviewed === true &&
+        settingsRows.some(
+          (row) =>
+            row.key === "banking_instructions" && Boolean(row.encryptedValue)
+        ),
       settings,
       schedule,
       story,
@@ -230,4 +282,15 @@ export async function loadPublicContent(
     },
     options.includeDrafts === true
   );
+}
+
+/** Fail closed at the public boundary: an unavailable database is unpublished. */
+export async function loadPublicContentSafely(
+  loader: () => Promise<PublicContent | null> = loadPublicContent
+): Promise<PublicContent | null> {
+  try {
+    return await loader();
+  } catch {
+    return null;
+  }
 }

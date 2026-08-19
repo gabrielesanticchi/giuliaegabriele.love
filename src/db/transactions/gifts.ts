@@ -153,7 +153,13 @@ export async function reserveGift(
       }
 
       const gift = await lockAndReadGift(tx, input.giftId);
-      if (!gift || gift.completed || input.amountCents !== gift.priceCents) {
+      if (
+        !gift ||
+        gift.completed ||
+        !gift.published ||
+        gift.archivedAt !== null ||
+        input.amountCents !== gift.priceCents
+      ) {
         throw new TransactionError("gift_unavailable");
       }
 
@@ -235,7 +241,12 @@ export async function contributeToGift(
       }
 
       const gift = await lockAndReadGift(tx, input.giftId);
-      if (!gift || gift.completed) {
+      if (
+        !gift ||
+        gift.completed ||
+        !gift.published ||
+        gift.archivedAt !== null
+      ) {
         throw new TransactionError("gift_unavailable");
       }
 

@@ -1,10 +1,11 @@
 "use server";
 
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
 import {
+  auditLogs,
   dressCodeColors,
   gifts,
   mediaAssets,
@@ -19,7 +20,7 @@ import {
   type AdminActionResult,
   authorizedAdmin,
   refreshAdmin,
-  writeAdminAudit
+  runAuditedAdminMutation
 } from "./shared";
 
 const bankingSchema = z.object({
@@ -53,32 +54,32 @@ export async function saveBankingAction(
   if (!parsed.success) {
     return { ok: false, message: "Coordinate bancarie non valide" };
   }
-  await getDatabase()
-    .insert(siteSettings)
-    .values({
-      key: "banking_instructions",
-      value: { configured: true },
-      encryptedValue: encryptSecret(
-        JSON.stringify(parsed.data),
-        encryptionKey()
-      )
-    })
-    .onConflictDoUpdate({
-      target: siteSettings.key,
-      set: {
-        value: { configured: true },
-        encryptedValue: encryptSecret(
-          JSON.stringify(parsed.data),
-          encryptionKey()
-        ),
-        updatedAt: new Date()
-      }
-    });
-  await writeAdminAudit({
+  const encryptedValue = encryptSecret(
+    JSON.stringify(parsed.data),
+    encryptionKey()
+  );
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "banking.updated",
     targetType: "site_setting",
-    metadata: { configured: true }
+    metadata: { configured: true },
+    mutation: async (tx) => {
+      await tx
+        .insert(siteSettings)
+        .values({
+          key: "banking_instructions",
+          value: { configured: true },
+          encryptedValue
+        })
+        .onConflictDoUpdate({
+          target: siteSettings.key,
+          set: {
+            value: { configured: true },
+            encryptedValue,
+            updatedAt: new Date()
+          }
+        });
+    }
   });
   await refreshAdmin("/admin/impostazioni");
   return { ok: true, message: "Coordinate salvate" };
@@ -107,20 +108,22 @@ export async function saveAdminSettingsAction(
     publicContactLabel: formData.get("publicContactLabel") || undefined
   });
   if (!parsed.success) return { ok: false, message: "Impostazioni non valide" };
-  await getDatabase()
-    .insert(siteSettings)
-    .values({ key: "admin_settings", value: parsed.data })
-    .onConflictDoUpdate({
-      target: siteSettings.key,
-      set: { value: parsed.data, updatedAt: new Date() }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "settings.updated",
     targetType: "site_setting",
     metadata: {
       privacyReviewed: parsed.data.privacyReviewed,
       requestHoldHours: parsed.data.requestHoldHours
+    },
+    mutation: async (tx) => {
+      await tx
+        .insert(siteSettings)
+        .values({ key: "admin_settings", value: parsed.data })
+        .onConflictDoUpdate({
+          target: siteSettings.key,
+          set: { value: parsed.data, updatedAt: new Date() }
+        });
     }
   });
   await refreshAdmin("/admin/impostazioni");
@@ -137,18 +140,25 @@ export async function loadReadiness() {
     colorCount,
     giftCount,
     banking,
-    mediaCount
+    mediaRows
   ] = await Promise.all([
     db.select().from(siteSettings),
     db
       .select({ count: count() })
       .from(scheduleItems)
-      .where(eq(scheduleItems.published, true)),
+      .where(
+        and(eq(scheduleItems.published, true), isNull(scheduleItems.archivedAt))
+      ),
     db
       .select({ count: count() })
       .from(storyMoments)
-      .where(eq(storyMoments.published, true)),
-    db.select({ count: count() }).from(dressCodeColors),
+      .where(
+        and(eq(storyMoments.published, true), isNull(storyMoments.archivedAt))
+      ),
+    db
+      .select({ count: count() })
+      .from(dressCodeColors)
+      .where(isNull(dressCodeColors.archivedAt)),
     db
       .select({ count: count() })
       .from(gifts)
@@ -164,7 +174,10 @@ export async function loadReadiness() {
       .from(siteSettings)
       .where(eq(siteSettings.key, "banking_instructions"))
       .limit(1),
-    db.select({ count: count() }).from(mediaAssets)
+    db
+      .select({ id: mediaAssets.id })
+      .from(mediaAssets)
+      .where(isNull(mediaAssets.archivedAt))
   ]);
   const byKey = new Map(
     settings.map((setting) => [setting.key, setting.value])
@@ -172,18 +185,32 @@ export async function loadReadiness() {
   const adminSettings = byKey.get("admin_settings") as
     { privacyReviewed?: boolean } | undefined;
   const hero = byKey.get("hero") as { published?: boolean } | undefined;
-  const wedding = byKey.get("wedding") as { published?: boolean } | undefined;
+  const wedding = byKey.get("wedding") as
+    { published?: boolean; weddingDate?: string } | undefined;
+  const dress = byKey.get("dress_code") as { published?: boolean } | undefined;
+  const mediaSettings = byKey.get("media_settings") as
+    { requiredMediaIds?: unknown } | undefined;
+  const requiredMediaIds = Array.isArray(mediaSettings?.requiredMediaIds)
+    ? mediaSettings.requiredMediaIds.filter(
+        (id): id is string => typeof id === "string"
+      )
+    : [];
+  const knownMediaIds = new Set(mediaRows.map((row) => row.id));
   return getReadinessChecklist({
     heroConfigured: byKey.has("hero"),
     heroPublished: hero?.published === true,
     weddingConfigured: byKey.has("wedding"),
     weddingPublished: wedding?.published === true,
+    weddingDateConfigured: Boolean(wedding?.weddingDate),
     schedulePublishedCount: scheduleCount[0]?.count ?? 0,
     storyPublishedCount: storyCount[0]?.count ?? 0,
     dressColorCount: colorCount[0]?.count ?? 0,
+    dressPublished: dress?.published === true,
     publishedGiftCount: giftCount[0]?.count ?? 0,
     bankingConfigured: Boolean(banking[0]?.encryptedValue),
-    requiredMediaCount: mediaCount[0]?.count ?? 0,
+    requiredMediaReady:
+      requiredMediaIds.length > 0 &&
+      requiredMediaIds.every((id) => knownMediaIds.has(id)),
     privacyReviewed: adminSettings?.privacyReviewed === true
   });
 }
@@ -197,63 +224,89 @@ export async function publishSiteAction(
   }
   const checklist = await loadReadiness();
   assertSiteReady(checklist);
-  const current = await getDatabase()
-    .select({ value: siteSettings.value })
-    .from(siteSettings)
-    .where(eq(siteSettings.key, "site_publication"))
-    .limit(1);
-  if (
-    (current[0]?.value as { published?: boolean } | undefined)?.published ===
-    true
-  )
-    return { ok: true, message: "Sito già pubblicato" };
-  await getDatabase()
-    .insert(siteSettings)
-    .values({
-      key: "site_publication",
-      value: { published: true, publishedAt: new Date().toISOString() }
-    })
-    .onConflictDoUpdate({
-      target: siteSettings.key,
-      set: {
-        value: { published: true, publishedAt: new Date().toISOString() },
-        updatedAt: new Date()
+  const published = await getDatabase().transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext('site_publication'))`
+    );
+    const current = await tx
+      .select({ value: siteSettings.value })
+      .from(siteSettings)
+      .where(eq(siteSettings.key, "site_publication"))
+      .limit(1);
+    if (
+      (current[0]?.value as { published?: boolean } | undefined)?.published ===
+      true
+    )
+      return false;
+    const now = new Date();
+    await tx
+      .insert(siteSettings)
+      .values({
+        key: "site_publication",
+        value: { published: true, publishedAt: now.toISOString() }
+      })
+      .onConflictDoUpdate({
+        target: siteSettings.key,
+        set: {
+          value: { published: true, publishedAt: now.toISOString() },
+          updatedAt: now
+        }
+      });
+    await tx.insert(auditLogs).values({
+      actorAdminId: admin.id,
+      actorType: "admin",
+      action: "site.published",
+      targetType: "site_publication",
+      metadata: {
+        readiness: checklist.map(({ key, ready }) => ({ key, ready }))
       }
     });
-  await writeAdminAudit({
-    actorAdminId: admin.id,
-    action: "site.published",
-    targetType: "site_publication",
-    metadata: { readiness: checklist.map(({ key, ready }) => ({ key, ready })) }
+    return true;
   });
   await refreshAdmin("/admin");
-  return { ok: true, message: "Sito pubblicato" };
+  return {
+    ok: true,
+    message: published ? "Sito pubblicato" : "Sito già pubblicato"
+  };
 }
 
 export async function unpublishSiteAction(): Promise<AdminActionResult> {
   const admin = await authorizedAdmin("site.unpublish");
-  const current = await getDatabase()
-    .select({ value: siteSettings.value })
-    .from(siteSettings)
-    .where(eq(siteSettings.key, "site_publication"))
-    .limit(1);
-  if (
-    (current[0]?.value as { published?: boolean } | undefined)?.published ===
-    false
-  )
-    return { ok: true, message: "Pubblicazione già revocata" };
-  await getDatabase()
-    .insert(siteSettings)
-    .values({ key: "site_publication", value: { published: false } })
-    .onConflictDoUpdate({
-      target: siteSettings.key,
-      set: { value: { published: false }, updatedAt: new Date() }
+  const unpublished = await getDatabase().transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext('site_publication'))`
+    );
+    const current = await tx
+      .select({ value: siteSettings.value })
+      .from(siteSettings)
+      .where(eq(siteSettings.key, "site_publication"))
+      .limit(1);
+    if (
+      (current[0]?.value as { published?: boolean } | undefined)?.published ===
+      false
+    )
+      return false;
+    await tx
+      .insert(siteSettings)
+      .values({ key: "site_publication", value: { published: false } })
+      .onConflictDoUpdate({
+        target: siteSettings.key,
+        set: { value: { published: false }, updatedAt: new Date() }
+      });
+    await tx.insert(auditLogs).values({
+      actorAdminId: admin.id,
+      actorType: "admin",
+      action: "site.unpublished",
+      targetType: "site_publication",
+      metadata: {}
     });
-  await writeAdminAudit({
-    actorAdminId: admin.id,
-    action: "site.unpublished",
-    targetType: "site_publication"
+    return true;
   });
   await refreshAdmin("/admin");
-  return { ok: true, message: "Pubblicazione revocata" };
+  return {
+    ok: true,
+    message: unpublished
+      ? "Pubblicazione revocata"
+      : "Pubblicazione già revocata"
+  };
 }

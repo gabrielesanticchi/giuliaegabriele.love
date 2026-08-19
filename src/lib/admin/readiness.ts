@@ -5,12 +5,14 @@ export type ReadinessInput = {
   heroPublished: boolean;
   weddingConfigured: boolean;
   weddingPublished: boolean;
+  weddingDateConfigured: boolean;
   schedulePublishedCount: number;
   storyPublishedCount: number;
   dressColorCount: number;
+  dressPublished: boolean;
   publishedGiftCount: number;
   bankingConfigured: boolean;
-  requiredMediaCount: number;
+  requiredMediaReady: boolean;
   privacyReviewed: boolean;
 };
 
@@ -30,12 +32,15 @@ export function getReadinessChecklist(input: ReadinessInput): ReadinessItem[] {
     {
       key: "wedding",
       label: "Dettagli del matrimonio completi",
-      ready: input.weddingConfigured && input.weddingPublished
+      ready:
+        input.weddingConfigured &&
+        input.weddingPublished &&
+        input.weddingDateConfigured
     },
     {
       key: "media",
       label: "Media obbligatori verificati",
-      ready: input.requiredMediaCount > 0
+      ready: input.requiredMediaReady
     },
     {
       key: "schedule",
@@ -50,7 +55,7 @@ export function getReadinessChecklist(input: ReadinessInput): ReadinessItem[] {
     {
       key: "dress-code",
       label: "Dress code configurato",
-      ready: input.dressColorCount > 0
+      ready: input.dressPublished && input.dressColorCount > 0
     },
     {
       key: "gifts",

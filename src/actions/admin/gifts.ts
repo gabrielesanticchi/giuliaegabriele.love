@@ -12,7 +12,7 @@ import {
   type AdminActionResult,
   authorizedAdmin,
   refreshAdmin,
-  writeAdminAudit
+  runAuditedAdminMutation
 } from "./shared";
 
 const categorySchema = z.object({
@@ -50,22 +50,42 @@ export async function saveGiftCategoryAction(
   });
   if (!parsed.success) return { ok: false, message: "Categoria non valida" };
   const { id = randomUUID(), ...values } = parsed.data;
-  await getDatabase()
-    .insert(giftCategories)
-    .values({ id, ...values })
-    .onConflictDoUpdate({
-      target: giftCategories.id,
-      set: { ...values, updatedAt: new Date() }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "gift_category.saved",
     targetType: "gift_category",
     targetId: id,
-    metadata: { slug: values.slug, sortOrder: values.sortOrder }
+    metadata: { slug: values.slug, sortOrder: values.sortOrder },
+    mutation: async (tx) => {
+      await tx
+        .insert(giftCategories)
+        .values({ id, ...values })
+        .onConflictDoUpdate({
+          target: giftCategories.id,
+          set: { ...values, updatedAt: new Date() }
+        });
+    }
   });
   await refreshAdmin("/admin/regali");
   return { ok: true, message: "Categoria salvata" };
+}
+
+export async function archiveGiftCategoryAction(id: string) {
+  const admin = await authorizedAdmin("gift-category.save");
+  const categoryId = z.uuid().parse(id);
+  await runAuditedAdminMutation({
+    actorAdminId: admin.id,
+    action: "gift_category.archived",
+    targetType: "gift_category",
+    targetId: categoryId,
+    mutation: async (tx) => {
+      await tx
+        .update(giftCategories)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
+        .where(eq(giftCategories.id, categoryId));
+    }
+  });
+  await refreshAdmin("/admin/regali");
 }
 
 export async function saveGiftAction(
@@ -85,14 +105,7 @@ export async function saveGiftAction(
   });
   if (!parsed.success) return { ok: false, message: "Regalo non valido" };
   const { id = randomUUID(), ...values } = parsed.data;
-  await getDatabase()
-    .insert(gifts)
-    .values({ id, ...values })
-    .onConflictDoUpdate({
-      target: gifts.id,
-      set: { ...values, updatedAt: new Date() }
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "gift.saved",
     targetType: "gift",
@@ -101,6 +114,15 @@ export async function saveGiftAction(
       priceCents: values.priceCents,
       published: values.published,
       sortOrder: values.sortOrder
+    },
+    mutation: async (tx) => {
+      await tx
+        .insert(gifts)
+        .values({ id, ...values })
+        .onConflictDoUpdate({
+          target: gifts.id,
+          set: { ...values, updatedAt: new Date() }
+        });
     }
   });
   await refreshAdmin("/admin/regali");
@@ -117,25 +139,25 @@ export async function duplicateGiftAction(id: string) {
     .limit(1);
   if (!source[0]) throw new Error("Regalo non trovato");
   const duplicateId = randomUUID();
-  await getDatabase()
-    .insert(gifts)
-    .values({
-      ...source[0],
-      id: duplicateId,
-      publicReference: `G-${randomUUID()}`,
-      title: `${source[0].title} (copia)`,
-      published: false,
-      completed: false,
-      archivedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "gift.duplicated",
     targetType: "gift",
     targetId: duplicateId,
-    metadata: { sourceId: giftId }
+    metadata: { sourceId: giftId },
+    mutation: async (tx) => {
+      await tx.insert(gifts).values({
+        ...source[0],
+        id: duplicateId,
+        publicReference: `G-${randomUUID()}`,
+        title: `${source[0].title} (copia)`,
+        published: false,
+        completed: false,
+        archivedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+    }
   });
   await refreshAdmin("/admin/regali");
 }
@@ -143,15 +165,21 @@ export async function duplicateGiftAction(id: string) {
 export async function archiveGiftAction(id: string) {
   const admin = await authorizedAdmin("gift.archive");
   const giftId = z.uuid().parse(id);
-  await getDatabase()
-    .update(gifts)
-    .set({ archivedAt: new Date(), published: false, updatedAt: new Date() })
-    .where(eq(gifts.id, giftId));
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "gift.archived",
     targetType: "gift",
-    targetId: giftId
+    targetId: giftId,
+    mutation: async (tx) => {
+      await tx
+        .update(gifts)
+        .set({
+          archivedAt: new Date(),
+          published: false,
+          updatedAt: new Date()
+        })
+        .where(eq(gifts.id, giftId));
+    }
   });
   await refreshAdmin("/admin/regali");
 }
@@ -159,15 +187,17 @@ export async function archiveGiftAction(id: string) {
 export async function setGiftPublishedAction(id: string, published: boolean) {
   const admin = await authorizedAdmin(published ? "gift.publish" : "gift.hide");
   const giftId = z.uuid().parse(id);
-  await getDatabase()
-    .update(gifts)
-    .set({ published, archivedAt: null, updatedAt: new Date() })
-    .where(eq(gifts.id, giftId));
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: published ? "gift.published" : "gift.hidden",
     targetType: "gift",
-    targetId: giftId
+    targetId: giftId,
+    mutation: async (tx) => {
+      await tx
+        .update(gifts)
+        .set({ published, archivedAt: null, updatedAt: new Date() })
+        .where(eq(gifts.id, giftId));
+    }
   });
   await refreshAdmin("/admin/regali");
 }
@@ -175,19 +205,19 @@ export async function setGiftPublishedAction(id: string, published: boolean) {
 export async function reorderGiftsAction(orderedIds: string[]) {
   const admin = await authorizedAdmin("gift.reorder");
   const ids = z.array(z.uuid()).min(1).max(500).parse(orderedIds);
-  await getDatabase().transaction(async (tx) => {
-    for (const [sortOrder, id] of ids.entries()) {
-      await tx
-        .update(gifts)
-        .set({ sortOrder, updatedAt: new Date() })
-        .where(eq(gifts.id, id));
-    }
-  });
-  await writeAdminAudit({
+  await runAuditedAdminMutation({
     actorAdminId: admin.id,
     action: "gift.reordered",
     targetType: "gift_collection",
-    metadata: { count: ids.length }
+    metadata: { count: ids.length },
+    mutation: async (tx) => {
+      for (const [sortOrder, id] of ids.entries()) {
+        await tx
+          .update(gifts)
+          .set({ sortOrder, updatedAt: new Date() })
+          .where(eq(gifts.id, id));
+      }
+    }
   });
   await refreshAdmin("/admin/regali");
 }

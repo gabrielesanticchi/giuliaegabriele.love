@@ -2,7 +2,7 @@ import "server-only";
 
 import { revalidatePath, revalidateTag } from "next/cache";
 
-import { getDatabase } from "@/db";
+import { getDatabase, type WeddingDatabase } from "@/db";
 import { auditLogs } from "@/db/schema";
 import {
   authorizeAdminAction,
@@ -17,16 +17,21 @@ export async function authorizedAdmin(action: AdminActionName) {
   return principal;
 }
 
-export async function writeAdminAudit(input: {
+type AdminTransaction = Parameters<
+  Parameters<WeddingDatabase["transaction"]>[0]
+>[0];
+
+export async function runAuditedAdminMutation<T>(input: {
   actorAdminId: string;
   action: string;
   targetType: string;
   targetId?: string;
   metadata?: Record<string, unknown>;
-}) {
-  await getDatabase()
-    .insert(auditLogs)
-    .values({
+  mutation: (tx: AdminTransaction) => Promise<T>;
+}): Promise<T> {
+  return getDatabase().transaction(async (tx) => {
+    const result = await input.mutation(tx);
+    await tx.insert(auditLogs).values({
       actorAdminId: input.actorAdminId,
       actorType: "admin",
       action: input.action,
@@ -37,6 +42,8 @@ export async function writeAdminAudit(input: {
         unknown
       >
     });
+    return result;
+  });
 }
 
 export function refreshAdmin(path: string) {

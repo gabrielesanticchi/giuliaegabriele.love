@@ -53,12 +53,14 @@ describe("readiness and publishing", () => {
     heroPublished: true,
     weddingConfigured: true,
     weddingPublished: true,
+    weddingDateConfigured: true,
     schedulePublishedCount: 2,
     storyPublishedCount: 1,
     dressColorCount: 3,
+    dressPublished: true,
     publishedGiftCount: 1,
     bankingConfigured: true,
-    requiredMediaCount: 1,
+    requiredMediaReady: true,
     privacyReviewed: true
   };
 

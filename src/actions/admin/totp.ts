@@ -128,47 +128,65 @@ export async function resetTotpEnrollmentAction(
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success)
     return { ok: false, message: "Verifica recente non valida" };
-  const rows = await getDatabase()
-    .select()
-    .from(adminUsers)
-    .where(eq(adminUsers.id, admin.id))
-    .limit(1);
-  const row = rows[0];
-  if (
-    !row?.totpEnabled ||
-    !(await verifyAdminPassword(parsed.data.password, row.passwordHash))
-  )
-    return { ok: false, message: "Verifica recente non valida" };
   const secrets = authSecrets();
-  const validTotp = row.totpSecretEncrypted
-    ? await verifyTotpCode({
-        code: parsed.data.code,
-        secretEncrypted: row.totpSecretEncrypted,
-        encryptionKey: secrets.encryptionKey
+  const enrollment = await getDatabase().transaction(async (tx) => {
+    await tx.execute(
+      sql`select id from ${adminUsers} where id = ${admin.id} for update`
+    );
+    const rows = await tx
+      .select()
+      .from(adminUsers)
+      .where(eq(adminUsers.id, admin.id))
+      .limit(1);
+    const row = rows[0];
+    if (
+      !row?.totpEnabled ||
+      !(await verifyAdminPassword(parsed.data.password, row.passwordHash))
+    )
+      return null;
+    const validTotp = row.totpSecretEncrypted
+      ? await verifyTotpCode({
+          code: parsed.data.code,
+          secretEncrypted: row.totpSecretEncrypted,
+          encryptionKey: secrets.encryptionKey
+        })
+      : false;
+    const recovery = verifyRecoveryCode({
+      code: parsed.data.code,
+      recoveryCodeHashes: row.recoveryCodeHashes,
+      recoveryPepper: secrets.recoveryPepper
+    });
+    if (!validTotp && !recovery.valid) return null;
+    const created = createTotpEnrollment({
+      email: decryptSecret(row.emailEncrypted, secrets.encryptionKey),
+      encryptionKey: secrets.encryptionKey,
+      recoveryPepper: secrets.recoveryPepper
+    });
+    const updated = await tx
+      .update(adminUsers)
+      .set({
+        pendingTotpSecretEncrypted: created.secretEncrypted,
+        pendingRecoveryCodeHashes: created.recoveryCodeHashes,
+        // A recovery code is consumed under the same row lock as the reset.
+        recoveryCodeHashes: validTotp
+          ? row.recoveryCodeHashes
+          : (recovery.hashes ?? row.recoveryCodeHashes),
+        updatedAt: new Date()
       })
-    : false;
-  const recovery = verifyRecoveryCode({
-    code: parsed.data.code,
-    recoveryCodeHashes: row.recoveryCodeHashes,
-    recoveryPepper: secrets.recoveryPepper
+      .where(eq(adminUsers.id, admin.id))
+      .returning({ id: adminUsers.id });
+    if (!updated[0]) throw new Error("Account non aggiornato");
+    await tx.insert(auditLogs).values({
+      actorAdminId: admin.id,
+      actorType: "admin",
+      action: "admin.totp_reset_started",
+      targetType: "admin_user",
+      targetId: admin.id,
+      metadata: { recoveryCodeUsed: !validTotp }
+    });
+    return created;
   });
-  if (!validTotp && !recovery.valid)
-    return { ok: false, message: "Verifica recente non valida" };
-  const email = decryptSecret(row.emailEncrypted, secrets.encryptionKey);
-  const enrollment = createTotpEnrollment({
-    email,
-    encryptionKey: secrets.encryptionKey,
-    recoveryPepper: secrets.recoveryPepper
-  });
-  await getDatabase()
-    .update(adminUsers)
-    .set({
-      pendingTotpSecretEncrypted: enrollment.secretEncrypted,
-      pendingRecoveryCodeHashes: enrollment.recoveryCodeHashes,
-      recoveryCodeHashes: recovery.hashes ?? row.recoveryCodeHashes,
-      updatedAt: new Date()
-    })
-    .where(eq(adminUsers.id, admin.id));
+  if (!enrollment) return { ok: false, message: "Verifica recente non valida" };
   return {
     ok: true,
     message: "Nuova configurazione pronta",

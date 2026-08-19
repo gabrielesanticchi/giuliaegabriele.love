@@ -47,6 +47,7 @@ integration(
         id,
         publicReference: `G-${id}`,
         title: "Regalo integrazione",
+        published: true,
         priceCents
       });
       return id;
