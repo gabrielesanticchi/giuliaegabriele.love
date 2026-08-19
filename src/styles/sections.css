@@ -206,6 +206,12 @@
   color: var(--color-paper);
   background: var(--color-moss);
 }
+.story-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .story-list h3 {
   margin-bottom: 1rem;
 }

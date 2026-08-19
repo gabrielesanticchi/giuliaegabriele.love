@@ -49,6 +49,11 @@ export async function consumeRateLimit(
 
   const now = input.now ?? new Date();
   const expiresAt = new Date(now.getTime() + input.windowMs);
+  // Raw `Date` objects interpolated into `sql` fragments are not encoded by the
+  // postgres-js driver (only column-mapped values are), so bind ISO strings and
+  // cast them to timestamptz explicitly to keep the prepared plan unambiguous.
+  const nowIso = sql`${now.toISOString()}::timestamptz`;
+  const expiresAtIso = sql`${expiresAt.toISOString()}::timestamptz`;
   const result = await db
     .insert(rateLimitBuckets)
     .values({
@@ -62,9 +67,9 @@ export async function consumeRateLimit(
     .onConflictDoUpdate({
       target: [rateLimitBuckets.fingerprintHash, rateLimitBuckets.bucketKey],
       set: {
-        count: sql`case when ${rateLimitBuckets.expiresAt} <= ${now} then 1 else ${rateLimitBuckets.count} + 1 end`,
-        windowStartedAt: sql`case when ${rateLimitBuckets.expiresAt} <= ${now} then ${now} else ${rateLimitBuckets.windowStartedAt} end`,
-        expiresAt: sql`case when ${rateLimitBuckets.expiresAt} <= ${now} then ${expiresAt} else ${rateLimitBuckets.expiresAt} end`,
+        count: sql`case when ${rateLimitBuckets.expiresAt} <= ${nowIso} then 1 else ${rateLimitBuckets.count} + 1 end`,
+        windowStartedAt: sql`case when ${rateLimitBuckets.expiresAt} <= ${nowIso} then ${nowIso} else ${rateLimitBuckets.windowStartedAt} end`,
+        expiresAt: sql`case when ${rateLimitBuckets.expiresAt} <= ${nowIso} then ${expiresAtIso} else ${rateLimitBuckets.expiresAt} end`,
         updatedAt: now
       }
     })

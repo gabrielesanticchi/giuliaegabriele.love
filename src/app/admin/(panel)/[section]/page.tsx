@@ -26,6 +26,7 @@ import {
   cancelRequestAction,
   createManualRequestAction,
   extendRequestAction,
+  processPendingEmailDeliveriesAction,
   rejectRequestAction,
   resendRequestEmailAction,
   saveRequestNoteAction,
@@ -1021,6 +1022,22 @@ export default async function AdminSectionPage({
             ))}
           </tbody>
         </table>
+        <div className="admin-outbox">
+          <form
+            action={async () => {
+              "use server";
+              await processPendingEmailDeliveriesAction();
+            }}
+          >
+            <button className="admin-action" type="submit">
+              Invia email in attesa
+            </button>
+          </form>
+          <p className="admin-hint">
+            Elabora in batch le notifiche email in attesa o non riuscite,
+            riutilizzando la stessa chiave di idempotenza del provider.
+          </p>
+        </div>
         <a className="admin-action" href="/api/admin/requests/export">
           Esporta CSV sicuro
         </a>

@@ -196,6 +196,25 @@
   background: #ebe4d9;
   font-family: ui-monospace, monospace;
 }
+.totp-enrollment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+.totp-restart {
+  background: transparent;
+  border: 1px solid currentColor;
+}
+.admin-outbox {
+  display: grid;
+  gap: 0.4rem;
+  margin: 1.5rem 0;
+}
+.admin-hint {
+  max-width: 48ch;
+  font-size: 0.85rem;
+  color: var(--color-muted, #6b6257);
+}
 @media (max-width: 800px) {
   .admin-nav {
     position: static;

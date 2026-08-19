@@ -28,6 +28,7 @@ export const ADMIN_ACTION_POLICIES = {
   "request.note": "owner",
   "request.manual": "owner",
   "request.resend-email": "owner",
+  "request.process-pending-emails": "owner",
   "request.export": "owner",
   "media.save": "editor",
   "settings.save": "owner",

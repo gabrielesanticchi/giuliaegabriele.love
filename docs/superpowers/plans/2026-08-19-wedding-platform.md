@@ -16,14 +16,18 @@
 - Task 2: **complete**, review PASS (`dd3d929`, `aa16330`, `0ce1834`).
 - Task 3: **complete**, review PASS (`76e74b9`, `92469c5`, `0a1e552`, `04f04e1`).
 - Task 4: **complete**, security review PASS (`cde0076`, `44eaf04`, `da18e59`, `a8cc59d`, `892b7a4`).
-- Task 5: **in progress**. Core landed through `30582ba`; complete the four residual findings documented in `docs/HANDOFF_CLAUDE.md` before marking complete.
-- Task 6: **pending**.
+- Task 5: **complete**. Fix round 4 landed all four residual findings; scoped
+  code + security review PASS (0 CRITICAL/HIGH; MEDIUM items resolved or
+  documented).
+- Task 6: **in progress**.
 - Task 7: **pending**.
 
-Latest reported verification at `30582ba`: 208 unit tests passed; typecheck,
-ESLint, Prettier, Drizzle check/generate and Next production build passed. The
-22 real PostgreSQL integration tests were skipped because `TEST_DATABASE_URL`
-was absent; they must be executed before final completion.
+Latest verification (fix round 4): 221 unit tests passed; typecheck, ESLint,
+Prettier, `drizzle-kit check` and Next production build passed. The PostgreSQL
+integration suite was **executed for real** against an ephemeral local
+PostgreSQL 15 cluster and is 30/30 green (22 pre-existing + 8 new). Running it
+surfaced and fixed two latent production bugs in Task 2/4 code (rate-limit
+`Date`-in-SQL crash; drizzle `.cause`-chain error unwrap) — see `PLAN.md`.
 
 ## Global Constraints
 
@@ -90,8 +94,8 @@ was absent; they must be executed before final completion.
 
 ### Task 5: Autenticazione e amministrazione
 
-**Status:** IN PROGRESS — core complete; four scoped residuals remain. See
-`docs/HANDOFF_CLAUDE.md`.
+**Status:** COMPLETE — fix round 4 closed the four residuals; code + security
+review PASS. See `docs/HANDOFF_CLAUDE.md` for the deferred Task 6 notes.
 
 **Files:** `auth.ts`, `proxy.ts`, `src/app/admin/*`, `src/actions/admin/*`, `src/components/admin/*`, `scripts/admin-*`.
 

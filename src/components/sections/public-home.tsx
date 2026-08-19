@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUpRight } from "lucide-react";
+import Image from "next/image";
 
 import { EditorialArt } from "@/components/graphics/editorial-art";
 import { Monogram } from "@/components/graphics/monogram";
@@ -238,10 +239,31 @@ function StorySection({
               {moment.marker}
             </div>
             <div className="story-art">
-              <EditorialArt
-                label={`Segnaposto demo: ${moment.title}`}
-                variant="path"
-              />
+              {moment.media ? (
+                <Image
+                  className="story-photo"
+                  src={moment.media.url}
+                  alt={moment.media.alt}
+                  width={640}
+                  height={720}
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  style={{
+                    objectPosition: `${moment.media.focalPoint.x}% ${moment.media.focalPoint.y}%`
+                  }}
+                  // User-supplied media of arbitrary origin; the optimizer is
+                  // bypassed so no per-host allowlist is required.
+                  unoptimized
+                />
+              ) : (
+                <EditorialArt
+                  label={
+                    demoMode
+                      ? `Segnaposto demo: ${moment.title}`
+                      : `Illustrazione originale per ${moment.title}`
+                  }
+                  variant="path"
+                />
+              )}
             </div>
             <div>
               <p className="eyebrow">Capitolo {moment.marker}</p>

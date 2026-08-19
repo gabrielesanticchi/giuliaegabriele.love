@@ -6,7 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
-import { giftIntents, giftLocks, gifts } from "@/db/schema";
+import { auditLogs, giftIntents, giftLocks, gifts } from "@/db/schema";
 import { TransactionError } from "@/db/transactions/errors";
 import {
   assertCancellationAllowed,
@@ -14,6 +14,7 @@ import {
   getVerificationAmounts
 } from "@/db/transactions/policies";
 import {
+  deliverPendingEmailBatch,
   deliverQueuedVerificationNotification,
   enqueueVerificationDelivery
 } from "@/lib/email";
@@ -120,7 +121,7 @@ export async function verifyRequestAction(formData: FormData) {
       const deliveryId = await enqueueVerificationDelivery(tx, {
         intentId: intent.id,
         idempotencyKey: hashFingerprint(
-          `verify:${admin.id}:${parsed.idempotencyKey}`,
+          `verify:${intent.id}:${admin.id}:${parsed.idempotencyKey}`,
           required("REQUEST_FINGERPRINT_SECRET")
         ),
         hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
@@ -538,7 +539,7 @@ export async function resendRequestEmailAction(formData: FormData) {
       const deliveryId = await enqueueVerificationDelivery(tx, {
         intentId,
         idempotencyKey: hashFingerprint(
-          `resend:${admin.id}:${idempotencyKey}`,
+          `resend:${intentId}:${admin.id}:${idempotencyKey}`,
           required("REQUEST_FINGERPRINT_SECRET")
         ),
         hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
@@ -558,6 +559,30 @@ export async function resendRequestEmailAction(formData: FormData) {
     });
     return outcome;
   });
+}
+
+export async function processPendingEmailDeliveriesAction(): Promise<AdminActionResult> {
+  const admin = await authorizedAdmin("request.process-pending-emails");
+  // Best-effort flush: never rolls back and degrades to "skipped" without a
+  // provider. Each row reuses its stored, stable provider idempotency key.
+  const processed = await deliverPendingEmailBatch(getDatabase(), {
+    encryptionKey: required("DATA_ENCRYPTION_KEY"),
+    hashingSecret: required("REQUEST_FINGERPRINT_SECRET"),
+    limit: 25
+  });
+  // The authoritative per-email trail lives on each email_deliveries row
+  // (status/sentAt/providerMessageIdHash), written durably as it is processed;
+  // this summary audit is deliberately best-effort and cannot share a
+  // transaction with the effect because the sends are external network calls.
+  await getDatabase().insert(auditLogs).values({
+    actorAdminId: admin.id,
+    actorType: "admin",
+    action: "email_delivery.batch_processed",
+    targetType: "email_delivery",
+    metadata: { processed }
+  });
+  await refreshAdmin("/admin/richieste");
+  return { ok: true, message: `Email in attesa elaborate: ${processed}` };
 }
 
 function required(name: string): string {

@@ -5,7 +5,11 @@ import { and, eq, sql } from "drizzle-orm";
 import type { WeddingDatabase } from "@/db";
 import { auditLogs, giftIntents, giftLocks, gifts } from "@/db/schema";
 
-import { mapExhaustedSerializationFailure, TransactionError } from "./errors";
+import {
+  findPostgresError,
+  mapExhaustedSerializationFailure,
+  TransactionError
+} from "./errors";
 import {
   assertCancellationAllowed,
   assertGiftReservationAvailable,
@@ -39,19 +43,12 @@ type NewIntentInput = {
   expiresAt: Date;
 };
 
-type PostgresError = Error & { code?: string; constraint_name?: string };
-
-function postgresError(error: unknown): PostgresError | undefined {
-  if (error instanceof Error) return error as PostgresError;
-  return undefined;
-}
-
 function isUniqueViolation(error: unknown): boolean {
-  return postgresError(error)?.code === "23505";
+  return findPostgresError(error)?.code === "23505";
 }
 
 function constraintName(error: unknown): string {
-  return postgresError(error)?.constraint_name ?? "";
+  return findPostgresError(error)?.constraint_name ?? "";
 }
 
 async function runSerializable<T>(
@@ -62,7 +59,7 @@ async function runSerializable<T>(
     try {
       return await db.transaction(callback, { isolationLevel: "serializable" });
     } catch (error) {
-      if (postgresError(error)?.code !== "40001") throw error;
+      if (findPostgresError(error)?.code !== "40001") throw error;
       if (attempt === 2) throw mapExhaustedSerializationFailure(error);
     }
   }

@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -12,7 +12,7 @@ import {
   siteSettings,
   storyMoments
 } from "@/db/schema";
-import { parseRomeDateTimeLocal } from "@/lib/admin/datetime";
+import { parseRomeDateTimeLocalSafe } from "@/lib/admin/datetime";
 
 import {
   type AdminActionResult,
@@ -51,13 +51,24 @@ const settingSchema = z.object({
   published: z.boolean()
 });
 
+const romeDateTime = z.string().transform((value, ctx) => {
+  const parsed = parseRomeDateTimeLocalSafe(value);
+  if (!parsed) {
+    // Report as a Zod issue so safeParse fails cleanly instead of throwing an
+    // invalid/DST-gap datetime out of the schema.
+    ctx.addIssue({ code: "custom", message: "Data non valida" });
+    return z.NEVER;
+  }
+  return parsed;
+});
+
 const scheduleSchema = z.object({
   id: z.uuid().optional(),
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(2_000).optional(),
   locationName: z.string().trim().max(200).optional(),
-  startsAt: z.string().transform(parseRomeDateTimeLocal),
-  endsAt: z.string().transform(parseRomeDateTimeLocal).optional(),
+  startsAt: romeDateTime,
+  endsAt: romeDateTime.optional(),
   sortOrder: z.coerce.number().int().min(0),
   published: z.boolean()
 });
@@ -246,6 +257,19 @@ export async function saveStoryMomentAction(
     targetId: id,
     metadata: { published: values.published, sortOrder: values.sortOrder },
     mutation: async (tx) => {
+      if (values.mediaAssetId) {
+        const asset = await tx
+          .select({ id: mediaAssets.id })
+          .from(mediaAssets)
+          .where(
+            and(
+              eq(mediaAssets.id, values.mediaAssetId),
+              isNull(mediaAssets.archivedAt)
+            )
+          )
+          .limit(1);
+        if (!asset[0]) throw new Error("Media non valido");
+      }
       if (existingId) {
         const updated = await tx
           .update(storyMoments)

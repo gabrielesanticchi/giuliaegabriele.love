@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { Resend } from "resend";
 import { z } from "zod";
 
@@ -139,11 +139,23 @@ export async function enqueueVerificationDelivery(
     .returning({ id: emailDeliveries.id });
   if (inserted[0]) return inserted[0].id;
   const existing = await tx
-    .select({ id: emailDeliveries.id })
+    .select({
+      id: emailDeliveries.id,
+      intentId: emailDeliveries.intentId,
+      templateKey: emailDeliveries.templateKey
+    })
     .from(emailDeliveries)
     .where(eq(emailDeliveries.idempotencyKey, input.idempotencyKey))
     .limit(1);
   if (!existing[0]) throw new Error("Consegna email non accodata");
+  // Never hand back a delivery that belongs to a different intent/template: a
+  // colliding key must map to the very request that created it.
+  if (
+    existing[0].intentId !== input.intentId ||
+    existing[0].templateKey !== "gift_verification"
+  ) {
+    throw new Error("Consegna email di un altro intento");
+  }
   return existing[0].id;
 }
 
@@ -230,6 +242,33 @@ export async function deliverQueuedVerificationNotification(
       .set({ status: "failed", failureCode: "provider_unavailable" })
       .where(eq(emailDeliveries.id, input.deliveryId));
   }
+}
+
+/**
+ * Owner-triggered outbox flush: reprocesses a bounded batch of deliveries that
+ * are still waiting (pending/failed/skipped) using each row's stored, stable
+ * provider idempotency key. Each send is best-effort and self-contained, so a
+ * missing provider only marks rows "skipped" and never rolls anything back.
+ * Returns the number of deliveries attempted.
+ */
+export async function deliverPendingEmailBatch(
+  db: WeddingDatabase,
+  input: { encryptionKey: string; hashingSecret: string; limit?: number }
+): Promise<number> {
+  const batch = await db
+    .select({ id: emailDeliveries.id })
+    .from(emailDeliveries)
+    .where(inArray(emailDeliveries.status, ["pending", "failed", "skipped"]))
+    .orderBy(asc(emailDeliveries.createdAt))
+    .limit(Math.min(Math.max(input.limit ?? 25, 1), 100));
+  for (const delivery of batch) {
+    await deliverQueuedVerificationNotification(db, {
+      deliveryId: delivery.id,
+      encryptionKey: input.encryptionKey,
+      hashingSecret: input.hashingSecret
+    });
+  }
+  return batch.length;
 }
 
 export async function deliverVerificationNotification(

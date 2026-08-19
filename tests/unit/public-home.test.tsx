@@ -87,6 +87,61 @@ describe("PublicHome", () => {
     ).toBeInTheDocument();
   });
 
+  it("mostra la fotografia di un momento con next/image, alt e focal point", () => {
+    const content: PublicContent = {
+      ...demoPublicContent,
+      story: [
+        {
+          marker: "01",
+          title: "Il primo viaggio",
+          description: "Il racconto del nostro primo viaggio",
+          media: {
+            url: "https://store.public.blob.vercel-storage.com/storia/uno.jpg",
+            alt: "Gabriele e Giulia al primo viaggio",
+            focalPoint: { x: 40, y: 60 }
+          }
+        }
+      ]
+    };
+
+    render(<PublicHome content={content} />);
+
+    const story = screen.getByRole("region", {
+      name: "Un sentiero da raccontare"
+    });
+    const image = within(story).getByRole("img", {
+      name: "Gabriele e Giulia al primo viaggio"
+    });
+    expect(image).toHaveStyle({ objectPosition: "40% 60%" });
+    expect(image.getAttribute("src")).toContain("storia/uno.jpg");
+  });
+
+  it("usa la line art quando un momento non ha una fotografia", () => {
+    const content: PublicContent = {
+      ...demoPublicContent,
+      story: [
+        {
+          marker: "01",
+          title: "Solo testo",
+          description: "Un capitolo senza immagine",
+          media: null
+        }
+      ]
+    };
+
+    render(<PublicHome content={content} />);
+
+    const story = screen.getByRole("region", {
+      name: "Un sentiero da raccontare"
+    });
+    expect(
+      within(story).queryByRole("img", { name: /al primo viaggio/ })
+    ).not.toBeInTheDocument();
+    expect(
+      within(story).getByRole("img", { name: /Solo testo/ })
+    ).toBeInTheDocument();
+  });
+
   it("non rende mai disponibili i contenuti demo in produzione", () => {
     expect(getDemoPublicContent("production")).toBeNull();
     expect(getDemoPublicContent("development")).toBe(demoPublicContent);

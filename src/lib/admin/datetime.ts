@@ -44,3 +44,16 @@ export function parseRomeDateTimeLocal(value: string): Date {
   if (!candidates[0]) throw new TypeError("Ora locale non valida");
   return candidates[0];
 }
+
+/**
+ * Non-throwing variant for validation boundaries: returns `null` for malformed
+ * input or a nonexistent DST wall time so callers (e.g. Zod transforms) can turn
+ * the failure into a controlled issue instead of letting it escape `safeParse`.
+ */
+export function parseRomeDateTimeLocalSafe(value: string): Date | null {
+  try {
+    return parseRomeDateTimeLocal(value);
+  } catch {
+    return null;
+  }
+}

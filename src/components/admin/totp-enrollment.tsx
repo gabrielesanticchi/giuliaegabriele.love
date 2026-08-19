@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import {
   beginTotpEnrollmentAction,
   completeTotpEnrollmentAction,
+  restartTotpEnrollmentAction,
   type TotpEnrollmentState
 } from "@/actions/admin/totp";
 
@@ -27,12 +28,28 @@ export function TotpEnrollment() {
     setLoading(false);
   }
 
+  async function restart() {
+    setLoading(true);
+    setSetup(await restartTotpEnrollmentAction());
+    setLoading(false);
+  }
+
   return (
     <div className="totp-enrollment">
       {!setup.qrDataUrl ? (
-        <button type="button" onClick={begin} disabled={loading}>
-          {loading ? "Preparazione…" : "Inizia configurazione"}
-        </button>
+        <div className="totp-enrollment-actions">
+          <button type="button" onClick={begin} disabled={loading}>
+            {loading ? "Preparazione…" : "Inizia configurazione"}
+          </button>
+          <button
+            type="button"
+            className="totp-restart"
+            onClick={restart}
+            disabled={loading}
+          >
+            Ricomincia la configurazione (se hai perso QR o codici)
+          </button>
+        </div>
       ) : (
         <>
           {/* eslint-disable-next-line @next/next/no-img-element */}

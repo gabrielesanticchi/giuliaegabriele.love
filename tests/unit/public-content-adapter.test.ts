@@ -99,6 +99,56 @@ describe("database public content adapter", () => {
     });
   });
 
+  it("includes story media url, alt and focal point in the public model", () => {
+    const content = mapPublicContentSnapshot(
+      {
+        ...snapshot,
+        story: [
+          {
+            ...snapshot.story[0],
+            mediaUrl:
+              "https://store.public.blob.vercel-storage.com/storia/uno.jpg",
+            mediaAlt: "Gabriele e Giulia al primo viaggio"
+          }
+        ]
+      },
+      false
+    );
+    expect(content?.story[0].media).toEqual({
+      url: "https://store.public.blob.vercel-storage.com/storia/uno.jpg",
+      alt: "Gabriele e Giulia al primo viaggio",
+      focalPoint: { x: 50, y: 50 }
+    });
+  });
+
+  it("drops story media when the joined asset is archived or missing", () => {
+    const content = mapPublicContentSnapshot(
+      {
+        ...snapshot,
+        story: [{ ...snapshot.story[0], mediaUrl: null, mediaAlt: null }]
+      },
+      false
+    );
+    expect(content?.story[0].media).toBeNull();
+  });
+
+  it("drops story media with an unsafe url", () => {
+    const content = mapPublicContentSnapshot(
+      {
+        ...snapshot,
+        story: [
+          {
+            ...snapshot.story[0],
+            mediaUrl: "javascript:alert(1)",
+            mediaAlt: "Tentativo non sicuro"
+          }
+        ]
+      },
+      false
+    );
+    expect(content?.story[0].media).toBeNull();
+  });
+
   it("returns waiting state when unpublished and excludes drafts publicly", () => {
     expect(
       mapPublicContentSnapshot({ ...snapshot, published: false }, false)

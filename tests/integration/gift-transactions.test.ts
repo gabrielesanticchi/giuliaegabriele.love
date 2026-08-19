@@ -27,7 +27,7 @@ integration(
     const giftIds: string[] = [];
 
     beforeAll(async () => {
-      sql = postgres(databaseUrl!, { max: 8 });
+      sql = postgres(databaseUrl!, { max: 8, prepare: false });
       db = createDatabase(sql);
       await migrate(db, { migrationsFolder: "drizzle" });
     });

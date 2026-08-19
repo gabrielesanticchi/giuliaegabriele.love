@@ -78,6 +78,68 @@ export async function beginTotpEnrollmentAction(): Promise<TotpEnrollmentState> 
   };
 }
 
+/**
+ * Recovers a stuck onboarding: a not-yet-enabled admin that lost the QR/recovery
+ * response can restart enrollment. Serialized under the row lock and audited, it
+ * atomically replaces the pending secret and pending recovery codes and returns
+ * a fresh QR plus one-time recovery codes. It never touches the active TOTP
+ * credentials of an already-enabled account.
+ */
+export async function restartTotpEnrollmentAction(): Promise<TotpEnrollmentState> {
+  const admin = await authorizedAdmin("totp.enroll");
+  const secrets = authSecrets();
+  const enrollment = await getDatabase().transaction(async (tx) => {
+    await tx.execute(
+      sql`select id from ${adminUsers} where id = ${admin.id} for update`
+    );
+    const rows = await tx
+      .select()
+      .from(adminUsers)
+      .where(eq(adminUsers.id, admin.id))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return { error: "Account non disponibile" } as const;
+    if (row.totpEnabled)
+      return { error: "TOTP già attivo: usa il reset protetto" } as const;
+    const created = createTotpEnrollment({
+      email: decryptSecret(row.emailEncrypted, secrets.encryptionKey),
+      encryptionKey: secrets.encryptionKey,
+      recoveryPepper: secrets.recoveryPepper
+    });
+    const updated = await tx
+      .update(adminUsers)
+      .set({
+        pendingTotpSecretEncrypted: created.secretEncrypted,
+        pendingRecoveryCodeHashes: created.recoveryCodeHashes,
+        updatedAt: new Date()
+      })
+      .where(eq(adminUsers.id, admin.id))
+      .returning({ id: adminUsers.id });
+    if (!updated[0]) throw new Error("Account non aggiornato");
+    await tx.insert(auditLogs).values({
+      actorAdminId: admin.id,
+      actorType: "admin",
+      action: "admin.totp_enrollment_restarted",
+      targetType: "admin_user",
+      targetId: admin.id,
+      metadata: {}
+    });
+    return { created } as const;
+  });
+  if ("error" in enrollment)
+    return { ok: false, message: enrollment.error ?? "Errore TOTP" };
+  return {
+    ok: true,
+    message: "Nuova configurazione pronta: scansiona il QR e salva i codici",
+    qrDataUrl: await QRCode.toDataURL(enrollment.created.uri, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 280
+    }),
+    recoveryCodes: enrollment.created.recoveryCodes
+  };
+}
+
 export async function completeTotpEnrollmentAction(
   _previous: TotpEnrollmentState,
   formData: FormData

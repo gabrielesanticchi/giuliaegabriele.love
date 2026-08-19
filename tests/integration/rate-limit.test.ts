@@ -22,7 +22,7 @@ integration(
     const fingerprints: string[] = [];
 
     beforeAll(async () => {
-      sql = postgres(databaseUrl!, { max: 12 });
+      sql = postgres(databaseUrl!, { max: 12, prepare: false });
       db = createDatabase(sql);
       await migrate(db, { migrationsFolder: "drizzle" });
     });

@@ -33,10 +33,17 @@ export type HeroMediaContent =
       focalPoint: { x: number; y: number };
     };
 
+export interface StoryMedia {
+  url: string;
+  alt: string;
+  focalPoint: { x: number; y: number };
+}
+
 export interface StoryMoment {
   marker: string;
   title: string;
   description: string;
+  media?: StoryMedia | null;
 }
 
 export interface DressColor {

@@ -28,7 +28,44 @@ test PostgreSQL non realmente eseguiti.
 Non fare push, deploy, provisioning Vercel o modifiche DNS senza autorizzazione
 esplicita.
 
-## Task immediato: chiudere Task 5, fix round 4
+## Task 5 fix round 4 — COMPLETATO (review PASS)
+
+Tutti e quattro i finding chiusi con TDD; code + security review scoped PASS
+(0 CRITICAL/HIGH). Gate: 221 unit, typecheck, ESLint, Prettier, `drizzle-kit
+check`, build. Integration **eseguiti davvero**: 30/30 verdi.
+
+### Come eseguire davvero i test di integrazione (PostgreSQL effimero locale)
+
+Non serve Docker; usare i binari Homebrew `postgresql@15`:
+
+```bash
+export LC_ALL=C LANG=C
+PGBIN=/opt/homebrew/opt/postgresql@15/bin
+PGDATA="$SCRATCH/pgdata"; SOCK=/tmp/wpg   # socket corto: il path lungo supera 103 byte
+"$PGBIN/initdb" -D "$PGDATA" -U wedding --auth=trust --locale=C -E UTF8
+mkdir -p "$SOCK"
+"$PGBIN/pg_ctl" -D "$PGDATA" -o "-p 54329 -k $SOCK -c listen_addresses=127.0.0.1" -w start
+"$PGBIN/createdb" -h 127.0.0.1 -p 54329 -U wedding wedding_test
+export TEST_DATABASE_URL='postgres://wedding@127.0.0.1:54329/wedding_test'
+node_modules/.bin/vitest run --config vitest.integration.config.ts
+```
+
+### Due bug di produzione scoperti e corretti (Task 2/4)
+
+- `src/lib/security/rate-limit.ts`: `Date` grezzi nei frammenti `sql` →
+  crash driver. Fix: ISO + `::timestamptz`.
+- `src/db/transactions/gifts.ts` + `errors.ts`: codici errore letti sul wrapper
+  invece che su `.cause`; ora `findPostgresError` risale la catena e seleziona
+  un codice con forma SQLSTATE.
+
+### Note differite a Task 6
+
+- Story media: sostituire `next/image unoptimized` con `remotePatterns` per
+  l'host Vercel Blob e abilitare l'ottimizzazione.
+- Salvare in `media_assets.pathname` una URL risolvibile (https) o path
+  root-relative, altrimenti `isSafeMediaUrl` scarta il media pubblico.
+
+## Archivio: dettaglio dei quattro finding chiusi
 
 Usare TDD: aggiungere il test, osservarlo fallire per il motivo atteso,
 implementare il minimo, rieseguire test mirati e suite completa.

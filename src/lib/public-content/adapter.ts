@@ -15,6 +15,7 @@ import {
   storyMoments
 } from "@/db/schema";
 import { getPublicGiftStatus } from "@/lib/domain/gifts";
+import { isSafeMediaUrl } from "@/lib/domain/urls";
 
 type Snapshot = {
   published: boolean;
@@ -35,6 +36,8 @@ type Snapshot = {
     body: string;
     sortOrder: number;
     published: boolean;
+    mediaUrl?: string | null;
+    mediaAlt?: string | null;
   }>;
   colors: Array<{ name: string; hexColor: string; sortOrder: number }>;
   gifts: Array<{
@@ -149,7 +152,15 @@ export function mapPublicContentSnapshot(
       .map((item, index) => ({
         marker: String(index + 1).padStart(2, "0"),
         title: item.title,
-        description: item.body
+        description: item.body,
+        media:
+          typeof item.mediaUrl === "string" && isSafeMediaUrl(item.mediaUrl)
+            ? {
+                url: item.mediaUrl,
+                alt: item.mediaAlt ?? "",
+                focalPoint: { x: 50, y: 50 }
+              }
+            : null
       })),
     dressCode: {
       name: String(dress.name ?? dress.title ?? ""),
@@ -205,8 +216,23 @@ export async function loadPublicContent(
       .where(isNull(scheduleItems.archivedAt))
       .orderBy(asc(scheduleItems.sortOrder)),
     db
-      .select()
+      .select({
+        id: storyMoments.id,
+        title: storyMoments.title,
+        body: storyMoments.body,
+        sortOrder: storyMoments.sortOrder,
+        published: storyMoments.published,
+        mediaUrl: mediaAssets.pathname,
+        mediaAlt: mediaAssets.altText
+      })
       .from(storyMoments)
+      .leftJoin(
+        mediaAssets,
+        and(
+          eq(storyMoments.mediaAssetId, mediaAssets.id),
+          isNull(mediaAssets.archivedAt)
+        )
+      )
       .where(isNull(storyMoments.archivedAt))
       .orderBy(asc(storyMoments.sortOrder)),
     db
