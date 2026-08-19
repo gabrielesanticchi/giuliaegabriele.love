@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 300" fill="none">
+  <title>Sentiero botanico astratto</title>
+  <path
+    d="M-20 248C137 44 245 319 414 117 536-29 661 142 820 16"
+    stroke="#20342c"
+    stroke-opacity=".42"
+    stroke-width="2"
+  />
+  <path
+    d="M406 126c-45-42-68-85-67-129M360 70c-47-5-78-25-95-58M350 39c39-28 83-39 132-31"
+    stroke="#20342c"
+    stroke-opacity=".38"
+    stroke-width="2"
+    stroke-linecap="round"
+  />
+  <path
+    d="M265 12c38-5 67 8 86 41-41 7-69-7-86-41ZM482 8c-8 39-32 63-70 72 8-39 31-63 70-72Z"
+    stroke="#20342c"
+    stroke-opacity=".38"
+    stroke-width="2"
+  />
+</svg>
