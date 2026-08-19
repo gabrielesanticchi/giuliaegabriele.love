@@ -31,6 +31,22 @@ describe("GiftRegistry", () => {
       "aria-pressed",
       "true"
     );
+    expect(
+      screen.getByRole("group", { name: "Filtra i regali" })
+    ).toBeInTheDocument();
+  });
+
+  it("ripristina il focus sulla CTA che ha aperto il dialog", async () => {
+    const user = userEvent.setup();
+    render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
+    const trigger = screen.getAllByRole("button", { name: "Regala" })[0];
+
+    await user.click(trigger);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 
   it("apre un dialog Regala accessibile con il copy concordato", async () => {

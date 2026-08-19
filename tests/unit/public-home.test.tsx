@@ -2,7 +2,11 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PublicHome } from "@/components/sections/public-home";
-import { demoPublicContent, getDemoPublicContent } from "@/data/demo-content";
+import {
+  demoPublicContent,
+  getDemoPublicContent,
+  type PublicContent
+} from "@/data/demo-content";
 
 afterEach(cleanup);
 
@@ -35,8 +39,32 @@ describe("PublicHome", () => {
       screen.getByText("Via Giuseppe Carcassola 15, Trezzo sull'Adda")
     ).toBeInTheDocument();
     expect(screen.getByText("11:00", { selector: "time" })).toBeInTheDocument();
-    expect(screen.getByText("A seguire")).toBeInTheDocument();
+    expect(screen.getByText("11:00", { selector: "time" })).toHaveAttribute(
+      "datetime",
+      "11:00"
+    );
+    expect(screen.getByText("A seguire").tagName).toBe("SPAN");
     expect(screen.getByText("23:00", { selector: "time" })).toBeInTheDocument();
+    expect(screen.getByText("23:00", { selector: "time" })).toHaveAttribute(
+      "datetime",
+      "23:00"
+    );
+  });
+
+  it("nasconde Maps quando il link manca o non è HTTPS", () => {
+    const content = {
+      ...demoPublicContent,
+      locations: demoPublicContent.locations.map((location, index) => ({
+        ...location,
+        mapsUrl: index === 0 ? undefined : "http://example.com/location"
+      }))
+    } as unknown as PublicContent;
+
+    render(<PublicHome content={content} demoMode />);
+
+    expect(
+      screen.queryByRole("link", { name: /Apri Maps per/ })
+    ).not.toBeInTheDocument();
   });
 
   it("mantiene generici e riconoscibili i cinque momenti demo", () => {

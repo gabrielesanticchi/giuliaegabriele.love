@@ -4,8 +4,10 @@ import { EditorialArt } from "@/components/graphics/editorial-art";
 import { Monogram } from "@/components/graphics/monogram";
 import { SiteHeader } from "@/components/layout/site-header";
 import { GiftRegistry } from "@/components/sections/gift-registry";
+import { HeroMedia } from "@/components/sections/hero-media";
 import { WeddingCountdown } from "@/components/sections/wedding-countdown";
 import type { PublicContent } from "@/data/demo-content";
+import { isSafeExternalUrl } from "@/lib/domain/urls";
 
 export interface PublicHomeProps {
   content: PublicContent;
@@ -79,9 +81,7 @@ function Hero({
 }) {
   return (
     <section className="hero" id="home" aria-labelledby="hero-title">
-      <div className="hero-media" aria-hidden="true">
-        <EditorialArt label="Bosco stilizzato e sentiero" variant="arch" />
-      </div>
+      <HeroMedia media={content.heroMedia} />
       <div className="hero-content">
         <Monogram className="hero-monogram" />
         <p className="hero-kicker">Ci sposiamo</p>
@@ -147,14 +147,16 @@ function WeddingSection({ content }: { content: PublicContent }) {
               {location.address ? <p>{location.address}</p> : null}
               <p className="location-time">{location.time}</p>
               <p>{location.note}</p>
-              <a
-                href={location.mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={`Apri Maps per ${location.name}`}
-              >
-                Apri Maps <ArrowUpRight aria-hidden="true" />
-              </a>
+              {location.mapsUrl && isSafeExternalUrl(location.mapsUrl) ? (
+                <a
+                  href={location.mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Apri Maps per ${location.name}`}
+                >
+                  Apri Maps <ArrowUpRight aria-hidden="true" />
+                </a>
+              ) : null}
             </div>
           </article>
         ))}
@@ -181,7 +183,11 @@ function ScheduleSection({ content }: { content: PublicContent }) {
             <span className="schedule-index" aria-hidden="true">
               0{index + 1}
             </span>
-            <time>{item.time}</time>
+            {item.dateTime ? (
+              <time dateTime={item.dateTime}>{item.time}</time>
+            ) : (
+              <span className="schedule-time">{item.time}</span>
+            )}
             <div>
               <h3>{item.title}</h3>
               <p>{item.description}</p>

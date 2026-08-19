@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { ArrowUpRight, X } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { type RefObject, useMemo, useRef, useState } from "react";
 
 import type { PublicGift } from "@/data/demo-content";
 import { formatCurrency } from "@/lib/domain/currency";
@@ -39,6 +39,7 @@ export function GiftRegistry({
     gift: PublicGift;
     action: GiftAction;
   } | null>(null);
+  const invokerRef = useRef<HTMLButtonElement | null>(null);
   const visibleGifts = useMemo(
     () =>
       filter === "all" ? gifts : gifts.filter((gift) => gift.status === filter),
@@ -51,7 +52,11 @@ export function GiftRegistry({
 
   return (
     <>
-      <div className="registry-filters" aria-label="Filtra i regali">
+      <div
+        className="registry-filters"
+        role="group"
+        aria-label="Filtra i regali"
+      >
         {filters.map((item) => (
           <button
             key={item.value}
@@ -118,7 +123,10 @@ export function GiftRegistry({
                     {gift.allowFullGift ? (
                       <button
                         type="button"
-                        onClick={() => setSelection({ gift, action: "gift" })}
+                        onClick={(event) => {
+                          invokerRef.current = event.currentTarget;
+                          setSelection({ gift, action: "gift" });
+                        }}
                       >
                         Regala <ArrowUpRight aria-hidden="true" />
                       </button>
@@ -127,9 +135,10 @@ export function GiftRegistry({
                       <button
                         className="text-action"
                         type="button"
-                        onClick={() =>
-                          setSelection({ gift, action: "contribute" })
-                        }
+                        onClick={(event) => {
+                          invokerRef.current = event.currentTarget;
+                          setSelection({ gift, action: "contribute" });
+                        }}
                       >
                         Contribuisci
                       </button>
@@ -150,6 +159,7 @@ export function GiftRegistry({
           }
         }}
         demoMode={demoMode}
+        invokerRef={invokerRef}
       />
     </>
   );
@@ -160,13 +170,15 @@ interface GiftActionDialogProps {
   onOpenChange: (open: boolean) => void;
   onContinue: () => void;
   demoMode: boolean;
+  invokerRef: RefObject<HTMLButtonElement | null>;
 }
 
 function GiftActionDialog({
   selection,
   onOpenChange,
   onContinue,
-  demoMode
+  demoMode,
+  invokerRef
 }: GiftActionDialogProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const isContribution = selection?.action === "contribute";
@@ -190,6 +202,10 @@ function GiftActionDialog({
               "[data-dialog-close]"
             );
             close?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            invokerRef.current?.focus();
           }}
         >
           <Dialog.Close asChild>

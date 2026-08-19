@@ -1,0 +1,118 @@
+:root {
+  --color-ivory: #f4efe7;
+  --color-paper: #fbf8f2;
+  --color-forest: #20342c;
+  --color-deep: #14231d;
+  --color-sage: #748476;
+  --color-moss: #53675b;
+  --color-clay: #b6754e;
+  --color-clay-text: #8a4e2e;
+  --color-on-clay: #101d18;
+  --color-stone: #d8cbb9;
+  --color-ink: #191d1a;
+  --color-muted: #5c635e;
+  --color-line: rgb(32 52 44 / 18%);
+  --page-pad: clamp(1.25rem, 5vw, 6rem);
+  --content-max: 90rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+  overflow-x: hidden;
+  color: var(--color-ink);
+  background: var(--color-ivory);
+  font-family: var(--font-body), Manrope, system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  content: "";
+  opacity: 0.16;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E");
+}
+a {
+  color: inherit;
+}
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+button {
+  font: inherit;
+}
+:focus-visible {
+  outline: 3px solid var(--color-clay-text);
+  outline-offset: 4px;
+}
+.skip-link {
+  position: fixed;
+  z-index: 999;
+  top: 0.75rem;
+  left: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: var(--color-paper);
+  background: var(--color-deep);
+  transform: translateY(-180%);
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
+.section-pad {
+  padding: clamp(5rem, 10vw, 10rem) var(--page-pad);
+}
+.eyebrow {
+  margin: 0 0 1rem;
+  color: var(--color-clay-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 500;
+  line-height: 0.96;
+}
+h2 {
+  font-size: clamp(3.25rem, 7vw, 7.5rem);
+  letter-spacing: -0.045em;
+}
+h3 {
+  font-size: clamp(2rem, 3vw, 3.25rem);
+}
+p {
+  text-wrap: pretty;
+}
+.lead {
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(1.4rem, 2.4vw, 2.1rem);
+  line-height: 1.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -7,14 +7,31 @@ export interface WeddingLocation {
   address?: string;
   time: string;
   note: string;
-  mapsUrl: string;
+  mapsUrl?: string;
 }
 
 export interface ScheduleItem {
   time: string;
+  dateTime?: string;
   title: string;
   description: string;
 }
+
+export type HeroMediaContent =
+  | { kind: "art"; label: string }
+  | {
+      kind: "image";
+      src: string;
+      alt: string;
+      focalPoint: { x: number; y: number };
+    }
+  | {
+      kind: "video";
+      src: string;
+      posterSrc: string;
+      posterAlt: string;
+      focalPoint: { x: number; y: number };
+    };
 
 export interface StoryMoment {
   marker: string;
@@ -47,6 +64,7 @@ export interface PublicGift {
 }
 
 export interface PublicContent {
+  heroMedia: HeroMediaContent;
   weddingDate: string | null;
   displayDate: string | null;
   place: string;
@@ -74,6 +92,7 @@ const gift = (
 });
 
 export const demoPublicContent: PublicContent = {
+  heroMedia: { kind: "art", label: "Bosco stilizzato e sentiero" },
   weddingDate: "2026-10-24T11:00:00+02:00",
   displayDate: "24 ottobre 2026",
   place: "Caleppio di Settala",
@@ -101,6 +120,7 @@ export const demoPublicContent: PublicContent = {
   schedule: [
     {
       time: "11:00",
+      dateTime: "11:00",
       title: "Cerimonia",
       description: "Chiesa San Giovanni Bosco, Caleppio di Settala"
     },
@@ -111,6 +131,7 @@ export const demoPublicContent: PublicContent = {
     },
     {
       time: "23:00",
+      dateTime: "23:00",
       title: "Saluti",
       description: "La conclusione della nostra giornata insieme"
     }
