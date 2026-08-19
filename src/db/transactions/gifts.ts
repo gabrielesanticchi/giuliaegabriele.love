@@ -5,8 +5,14 @@ import { and, eq, sql } from "drizzle-orm";
 import type { WeddingDatabase } from "@/db";
 import { auditLogs, giftIntents, giftLocks, gifts } from "@/db/schema";
 
-import { TransactionError } from "./errors";
-import { assertCancellationAllowed, getVerificationAmounts } from "./policies";
+import { mapExhaustedSerializationFailure, TransactionError } from "./errors";
+import {
+  assertCancellationAllowed,
+  assertGiftReservationAvailable,
+  assertIdempotentRequestMatches,
+  getVerificationAmounts,
+  type IntentRequestSemantics
+} from "./policies";
 
 type Transaction = Parameters<Parameters<WeddingDatabase["transaction"]>[0]>[0];
 type GiftIntent = typeof giftIntents.$inferSelect;
@@ -17,6 +23,8 @@ type NewIntentInput = {
   idempotencyKey: string;
   publicReference: string;
   method: GiftMethod;
+  amountCents: number;
+  requestFingerprintHash: string;
   guestTokenHash: string;
   guestEmailHash?: string;
   fingerprintHash?: string;
@@ -46,7 +54,8 @@ async function runSerializable<T>(
     try {
       return await db.transaction(callback, { isolationLevel: "serializable" });
     } catch (error) {
-      if (postgresError(error)?.code !== "40001" || attempt === 2) throw error;
+      if (postgresError(error)?.code !== "40001") throw error;
+      if (attempt === 2) throw mapExhaustedSerializationFailure(error);
     }
   }
   throw new Error("Transazione non raggiungibile");
@@ -87,10 +96,42 @@ async function recoverIdempotency(
   return undefined;
 }
 
+function intentSemantics(intent: GiftIntent): IntentRequestSemantics {
+  return {
+    giftId: intent.giftId,
+    kind: intent.kind,
+    method: intent.method,
+    amountCents: intent.amountCents,
+    requestFingerprintHash: intent.requestFingerprintHash
+  };
+}
+
+function requestSemantics(
+  input: NewIntentInput,
+  kind: IntentRequestSemantics["kind"]
+): IntentRequestSemantics {
+  return {
+    giftId: input.giftId,
+    kind,
+    method: input.method,
+    amountCents: input.amountCents,
+    requestFingerprintHash: input.requestFingerprintHash
+  };
+}
+
+function resolveIdempotentIntent(
+  intent: GiftIntent,
+  requested: IntentRequestSemantics
+): GiftIntent {
+  assertIdempotentRequestMatches(intentSemantics(intent), requested);
+  return intent;
+}
+
 export async function reserveGift(
   db: WeddingDatabase,
   input: NewIntentInput
 ): Promise<GiftIntent> {
+  const requested = requestSemantics(input, "full_gift");
   try {
     return await runSerializable(db, async (tx) => {
       const idempotent = await tx
@@ -98,12 +139,30 @@ export async function reserveGift(
         .from(giftIntents)
         .where(eq(giftIntents.idempotencyKey, input.idempotencyKey))
         .limit(1);
-      if (idempotent[0]) return idempotent[0];
+      if (idempotent[0]) {
+        return resolveIdempotentIntent(idempotent[0], requested);
+      }
 
       const gift = await lockAndReadGift(tx, input.giftId);
-      if (!gift || gift.completed) {
+      if (!gift || gift.completed || input.amountCents !== gift.priceCents) {
         throw new TransactionError("gift_unavailable");
       }
+
+      const contributions = await tx
+        .select({
+          status: giftIntents.status,
+          expiresAt: giftIntents.expiresAt,
+          amountCents: giftIntents.amountCents,
+          appliedAmountCents: giftIntents.appliedAmountCents
+        })
+        .from(giftIntents)
+        .where(
+          and(
+            eq(giftIntents.giftId, gift.id),
+            eq(giftIntents.kind, "contribution")
+          )
+        );
+      assertGiftReservationAvailable({ now: new Date(), contributions });
 
       const inserted = await tx
         .insert(giftIntents)
@@ -111,7 +170,7 @@ export async function reserveGift(
           ...input,
           kind: "full_gift",
           status: "pending",
-          amountCents: gift.priceCents
+          amountCents: input.amountCents
         })
         .returning();
       const intent = inserted[0];
@@ -131,7 +190,7 @@ export async function reserveGift(
       error,
       input.idempotencyKey
     );
-    if (idempotent) return idempotent;
+    if (idempotent) return resolveIdempotentIntent(idempotent, requested);
     if (
       isUniqueViolation(error) &&
       ["gift_locks_pkey", "gift_locks_intent_unique"].includes(
@@ -146,12 +205,13 @@ export async function reserveGift(
 
 export async function contributeToGift(
   db: WeddingDatabase,
-  input: NewIntentInput & { amountCents: number }
+  input: NewIntentInput
 ): Promise<GiftIntent> {
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
     throw new TransactionError("amount_unavailable");
   }
 
+  const requested = requestSemantics(input, "contribution");
   try {
     return await runSerializable(db, async (tx) => {
       const idempotent = await tx
@@ -159,7 +219,9 @@ export async function contributeToGift(
         .from(giftIntents)
         .where(eq(giftIntents.idempotencyKey, input.idempotencyKey))
         .limit(1);
-      if (idempotent[0]) return idempotent[0];
+      if (idempotent[0]) {
+        return resolveIdempotentIntent(idempotent[0], requested);
+      }
 
       const gift = await lockAndReadGift(tx, input.giftId);
       if (!gift || gift.completed) {
@@ -221,7 +283,7 @@ export async function contributeToGift(
       error,
       input.idempotencyKey
     );
-    if (idempotent) return idempotent;
+    if (idempotent) return resolveIdempotentIntent(idempotent, requested);
     throw error;
   }
 }
@@ -281,6 +343,7 @@ export async function verifyIntent(
     const amounts = getVerificationAmounts({
       priceCents: gift.priceCents,
       alreadyAppliedCents,
+      intentAmountCents: intent.amountCents,
       receivedAmountCents: input.receivedAmountCents
     });
     const now = new Date();

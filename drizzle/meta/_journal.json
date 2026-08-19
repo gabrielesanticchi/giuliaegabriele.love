@@ -8,6 +8,13 @@
       "when": 1787157045045,
       "tag": "0000_thick_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787159186628,
+      "tag": "0001_gorgeous_firelord",
+      "breakpoints": true
     }
   ]
 }

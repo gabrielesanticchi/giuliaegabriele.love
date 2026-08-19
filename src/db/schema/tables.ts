@@ -198,6 +198,9 @@ export const giftIntents = pgTable(
     receivedAmountCents: integer("received_amount_cents"),
     appliedAmountCents: integer("applied_amount_cents").default(0).notNull(),
     idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprintHash: varchar("request_fingerprint_hash", {
+      length: 64
+    }).notNull(),
     guestTokenHash: varchar("guest_token_hash", { length: 64 }).notNull(),
     guestEmailHash: varchar("guest_email_hash", { length: 64 }),
     fingerprintHash: varchar("fingerprint_hash", { length: 64 }),
@@ -226,6 +229,9 @@ export const giftIntents = pgTable(
       table.expiresAt
     ),
     index("gift_intents_email_hash_idx").on(table.guestEmailHash),
+    index("gift_intents_request_fingerprint_idx").on(
+      table.requestFingerprintHash
+    ),
     check("gift_intents_amount_nonnegative", sql`${table.amountCents} >= 0`),
     check(
       "gift_intents_received_nonnegative",

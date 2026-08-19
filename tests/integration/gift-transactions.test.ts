@@ -59,7 +59,9 @@ integration(
       const giftId = await createGift();
       const input = {
         giftId,
+        amountCents: 10_000,
         idempotencyKey: randomUUID(),
+        requestFingerprintHash: tokenHash(),
         publicReference: `I-${randomUUID()}`,
         method: "bank_transfer" as const,
         guestTokenHash: tokenHash(),
@@ -84,7 +86,9 @@ integration(
       const attempts = ["A", "B"].map((suffix) =>
         reserveGift(db, {
           giftId,
+          amountCents: 10_000,
           idempotencyKey: randomUUID(),
+          requestFingerprintHash: tokenHash(),
           publicReference: `I-${suffix}-${randomUUID()}`,
           method: "bank_transfer",
           guestTokenHash: tokenHash(),
@@ -114,6 +118,7 @@ integration(
           giftId,
           amountCents,
           idempotencyKey: randomUUID(),
+          requestFingerprintHash: tokenHash(),
           publicReference: `C-${index}-${randomUUID()}`,
           method: "bank_transfer",
           guestTokenHash: tokenHash(),
@@ -138,40 +143,45 @@ integration(
       const giftId = await createGift(10_000);
       const first = await contributeToGift(db, {
         giftId,
-        amountCents: 8_000,
+        amountCents: 6_000,
         idempotencyKey: randomUUID(),
+        requestFingerprintHash: tokenHash(),
         publicReference: `C-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
-      await verifyIntent(db, {
-        intentId: first.id,
-        receivedAmountCents: 8_000
-      });
       const second = await contributeToGift(db, {
         giftId,
-        amountCents: 2_000,
+        amountCents: 4_000,
         idempotencyKey: randomUUID(),
+        requestFingerprintHash: tokenHash(),
         publicReference: `C-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
 
+      const firstVerified = await verifyIntent(db, {
+        intentId: first.id,
+        receivedAmountCents: 10_000
+      });
+
       const verified = await verifyIntent(db, {
         intentId: second.id,
-        receivedAmountCents: 3_000
+        receivedAmountCents: 4_000
       });
       const repeated = await verifyIntent(db, {
         intentId: second.id,
         receivedAmountCents: 9_000
       });
 
-      expect(verified.receivedAmountCents).toBe(3_000);
-      expect(verified.appliedAmountCents).toBe(2_000);
-      expect(repeated.receivedAmountCents).toBe(3_000);
-      expect(repeated.appliedAmountCents).toBe(2_000);
+      expect(firstVerified.receivedAmountCents).toBe(10_000);
+      expect(firstVerified.appliedAmountCents).toBe(6_000);
+      expect(verified.receivedAmountCents).toBe(4_000);
+      expect(verified.appliedAmountCents).toBe(4_000);
+      expect(repeated.receivedAmountCents).toBe(4_000);
+      expect(repeated.appliedAmountCents).toBe(4_000);
       const gift = await db.select().from(gifts).where(eq(gifts.id, giftId));
       expect(gift[0]?.completed).toBe(true);
     });
@@ -180,7 +190,9 @@ integration(
       const giftId = await createGift();
       const cancellable = await reserveGift(db, {
         giftId,
+        amountCents: 10_000,
         idempotencyKey: randomUUID(),
+        requestFingerprintHash: tokenHash(),
         publicReference: `I-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
@@ -194,7 +206,9 @@ integration(
 
       const declared = await reserveGift(db, {
         giftId,
+        amountCents: 10_000,
         idempotencyKey: randomUUID(),
+        requestFingerprintHash: tokenHash(),
         publicReference: `I-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
@@ -211,6 +225,70 @@ integration(
         code: "payment_already_declared",
         httpStatus: 409
       });
+    });
+
+    it.each(["pending", "verified"] as const)(
+      "rejects a full-gift reservation with a %s contribution",
+      async (contributionStatus) => {
+        const giftId = await createGift();
+        const contribution = await contributeToGift(db, {
+          giftId,
+          amountCents: 2_000,
+          idempotencyKey: randomUUID(),
+          requestFingerprintHash: tokenHash(),
+          publicReference: `C-${randomUUID()}`,
+          method: "bank_transfer",
+          guestTokenHash: tokenHash(),
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+        });
+        if (contributionStatus === "verified") {
+          await verifyIntent(db, {
+            intentId: contribution.id,
+            receivedAmountCents: 2_000
+          });
+        }
+
+        await expect(
+          reserveGift(db, {
+            giftId,
+            amountCents: 10_000,
+            idempotencyKey: randomUUID(),
+            requestFingerprintHash: tokenHash(),
+            publicReference: `I-${randomUUID()}`,
+            method: "bank_transfer",
+            guestTokenHash: tokenHash(),
+            expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+          })
+        ).rejects.toMatchObject({ code: "gift_unavailable", httpStatus: 409 });
+      }
+    );
+
+    it("rejects a changed request that reuses an idempotency key", async () => {
+      const giftId = await createGift();
+      const idempotencyKey = randomUUID();
+      await contributeToGift(db, {
+        giftId,
+        amountCents: 2_000,
+        idempotencyKey,
+        requestFingerprintHash: tokenHash(),
+        publicReference: `C-${randomUUID()}`,
+        method: "bank_transfer",
+        guestTokenHash: tokenHash(),
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+      });
+
+      await expect(
+        contributeToGift(db, {
+          giftId,
+          amountCents: 3_000,
+          idempotencyKey,
+          requestFingerprintHash: tokenHash(),
+          publicReference: `C-${randomUUID()}`,
+          method: "bank_transfer",
+          guestTokenHash: tokenHash(),
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+        })
+      ).rejects.toMatchObject({ code: "duplicate_request", httpStatus: 409 });
     });
   }
 );
