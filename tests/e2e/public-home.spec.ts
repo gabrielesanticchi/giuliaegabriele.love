@@ -30,6 +30,10 @@ test.describe("public home", () => {
     page
   }) => {
     await page.goto("/");
+    await page.addStyleTag({
+      content:
+        "*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important}"
+    });
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .analyze();

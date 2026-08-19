@@ -33,4 +33,24 @@ test.describe("visual QA screenshots", () => {
       expect(overflow).toBeLessThanOrEqual(1);
     });
   }
+
+  test("admin login @ desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/admin/login");
+    await expect(page.locator('input[type="password"]')).toBeVisible();
+    await page.screenshot({
+      path: "artifacts/screenshots/admin-login-1440x900.png",
+      fullPage: true
+    });
+  });
+
+  test("contribute dialog @ desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Contribuisci" }).first().click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await page.screenshot({
+      path: "artifacts/screenshots/contribute-dialog-1440x900.png"
+    });
+  });
 });

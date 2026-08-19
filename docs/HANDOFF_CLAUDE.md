@@ -167,21 +167,26 @@ Consegnato e verificato:
   produzione). CLI admin ora **operative**: `--conditions=react-server` (stub di
   `server-only`) + `closeDatabase()` per l'uscita pulita; verificato
   create+list. Corepack pnpm resta guasto: usare `node_modules/.bin`.
-- Playwright + axe: **7/7 verdi** contro un server reale sul DB seedato — home
-  (h1 unico, skip-link, tastiera), accessibilità senza violazioni
-  serious/critical, login admin, guardia dashboard non autenticata, robots,
-  health.
-- Screenshot QA **della home pubblica** a 390×844, 768×1024, 1440×900 con
-  guardia anti-overflow; ispezione visiva OK (`artifacts/`, git-ignored).
+- Playwright + axe: **12/12 verdi** contro un server reale sul DB seedato — home
+  (h1 unico, skip-link, tastiera, a11y), registry (filtri toggle, dialog modale
+  con focus-trap/restore, a11y con dialog aperto), pagine pubbliche (privacy
+  a11y, token invitato invalido → risposta controllata), admin (login, guardia
+  dashboard non autenticata), robots, health. Gli scan axe azzerano le
+  transizioni CSS per misurare lo stato assestato.
+- **A11y fix** emerso dagli E2E: widget Turnstile → `role="group"` (prima
+  `aria-label` su `div` senza ruolo, violazione `aria-prohibited-attr`). Unit
+  test aggiunto. La “bassa contrast” della nav era un frame di transizione: da
+  assestata è `#14231d` su chiaro (~15:1).
+- Screenshot QA a 390×844, 768×1024, 1440×900 **+ admin login + dialog
+  contributo** con guardia anti-overflow; ispezione visiva OK (`artifacts/`,
+  git-ignored).
 - README, AGENTS, checklist di produzione.
 
 Perimetro non coperto (onesto, per il prossimo giro se richiesto):
 
-- Copertura E2E **non** estesa a tutti i ~20 flussi del brief (reserve/contribute
-  end-to-end, dialog Lista Nozze, pagina invitato, flussi admin completi). Le
-  gare di concorrenza sono coperte dai test di **integration** (gift
-  transactions, rate limit, outbox, TOTP) eseguiti su PostgreSQL reale.
-- Screenshot **admin e modali** non catturati (solo home pubblica).
+- E2E di **submission** reserve/contribute end-to-end non coperti: richiedono un
+  token Turnstile (obbligatorio in produzione). Le gare di concorrenza sono
+  comunque coperte dai test di **integration** su PostgreSQL reale.
 
 Gate finale eseguito davvero: lint, typecheck, unit (230), integration (30/30 su
 PostgreSQL reale), E2E (7/7), build, `drizzle-kit check`, scan segreti.

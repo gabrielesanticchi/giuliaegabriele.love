@@ -119,5 +119,9 @@ export const TurnstileWidget = forwardRef<
     };
   }, [siteKey]);
 
-  return <div ref={containerRef} aria-label="Verifica anti-spam" />;
+  // role="group" makes the aria-label valid (aria-label on a plain div with no
+  // role is prohibited) without changing the Turnstile mount behaviour.
+  return (
+    <div ref={containerRef} role="group" aria-label="Verifica anti-spam" />
+  );
 });

@@ -75,10 +75,16 @@ eseguita. Corretti con i test falliti come riproduzione:
 - `scripts/migrate.ts` e `scripts/seed.ts` (idempotente, dev/test only). Le CLI
   admin (create/list/reset) ora funzionano: aggiunto `--conditions=react-server`
   (stub di `server-only`) e `closeDatabase()` per evitare l'hang del pool.
-- Playwright + axe: 7/7 verdi (home, skip-link/tastiera, accessibilità senza
-  violazioni serious/critical, login admin, guardia dashboard, robots, health).
-- Screenshot QA 390×844 / 768×1024 / 1440×900 con guardia anti-overflow;
-  ispezione visiva OK (in `artifacts/`, git-ignored).
+- Playwright + axe: 12/12 verdi — home (h1/skip-link/tastiera, a11y),
+  registry (filtri toggle, dialog modale con focus-trap/restore, a11y con dialog
+  aperto), pagine pubbliche (privacy a11y, token invitato invalido controllato),
+  admin (login, guardia dashboard), robots, health. Le scansioni axe azzerano le
+  transizioni per misurare lo stato assestato.
+- A11y fix emerso dagli E2E: il widget Turnstile ora usa `role="group"` (prima
+  `aria-label` su `div` senza ruolo → violazione). La bassa contrast della nav
+  era solo un frame di transizione: assestata è `#14231d` su chiaro (~15:1).
+- Screenshot QA 390×844 / 768×1024 / 1440×900 + admin login + dialog contributo
+  con guardia anti-overflow; ispezione visiva OK (in `artifacts/`, git-ignored).
 - `README.md`, `AGENTS.md`, `docs/PRODUCTION_CHECKLIST.md`.
 
 ## Note non bloccanti per l'evoluzione futura
