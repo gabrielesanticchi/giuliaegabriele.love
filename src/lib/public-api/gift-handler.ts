@@ -94,8 +94,8 @@ export type GiftIntentHandlerDependencies = {
   }>;
   getGift: (giftId: string) => Promise<GiftForMutation | null>;
   mutate: (input: MutationInput) => Promise<MutationResult>;
-  checkBankInstructionsReady: () => Promise<void>;
-  loadBankInstructions: () => Promise<BankInstructions>;
+  loadEncryptedBankInstructions: () => Promise<string>;
+  decryptBankInstructions: (encrypted: string) => BankInstructions;
   encryptGuestDetails: (details: {
     firstName: string;
     lastName: string;
@@ -271,9 +271,10 @@ export function createGiftIntentHandler(
         "amountCents" in parsed.data
           ? parsed.data.amountCents
           : gift.priceCents;
-      if (method === "bank_transfer") {
-        await dependencies.checkBankInstructionsReady();
-      }
+      const encryptedBankInstructions =
+        method === "bank_transfer"
+          ? await dependencies.loadEncryptedBankInstructions()
+          : undefined;
       let bankInstructions: BankInstructions | undefined;
       const intent = await dependencies.mutate({
         giftId: gift.id,
@@ -306,7 +307,12 @@ export function createGiftIntentHandler(
         beforeCommit:
           method === "bank_transfer"
             ? async () => {
-                bankInstructions = await dependencies.loadBankInstructions();
+                if (!encryptedBankInstructions) {
+                  throw new PublicServiceUnavailableError();
+                }
+                bankInstructions = dependencies.decryptBankInstructions(
+                  encryptedBankInstructions
+                );
               }
             : undefined
       });

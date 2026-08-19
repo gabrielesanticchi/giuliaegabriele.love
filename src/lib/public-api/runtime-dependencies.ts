@@ -83,14 +83,12 @@ async function encryptedBankInstructions(): Promise<string> {
   return encrypted;
 }
 
-async function checkBankInstructionsReady(): Promise<void> {
-  await encryptedBankInstructions();
+async function loadEncryptedBankInstructions(): Promise<string> {
   requiredEnvironment("DATA_ENCRYPTION_KEY");
+  return encryptedBankInstructions();
 }
 
-async function loadBankInstructions(): Promise<BankInstructions> {
-  const encrypted = await encryptedBankInstructions();
-
+function decryptBankInstructions(encrypted: string): BankInstructions {
   try {
     return bankInstructionsSchema.parse(
       JSON.parse(
@@ -157,8 +155,8 @@ export function createGiftRuntimeDependencies(
       kind === "reserve"
         ? reserveGift(db, input, { beforeCommit })
         : contributeToGift(db, input, { beforeCommit }),
-    checkBankInstructionsReady,
-    loadBankInstructions,
+    loadEncryptedBankInstructions,
+    decryptBankInstructions,
     encryptGuestDetails: (details) =>
       encryptSecret(
         JSON.stringify(details),

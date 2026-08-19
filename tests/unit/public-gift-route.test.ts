@@ -74,8 +74,10 @@ function dependencies(
         replayed: false
       };
     }),
-    checkBankInstructionsReady: vi.fn().mockResolvedValue(undefined),
-    loadBankInstructions: vi.fn().mockResolvedValue({
+    loadEncryptedBankInstructions: vi
+      .fn()
+      .mockResolvedValue("encrypted-bank-instructions"),
+    decryptBankInstructions: vi.fn().mockReturnValue({
       accountHolder: "Intestatario configurato",
       iban: "IT00X0000000000000000000000",
       bankName: "Banca configurata"
@@ -225,8 +227,11 @@ describe("public gift route", () => {
   });
 
   it("restituisce istruzioni soltanto nella mutation no-store e non passa IP grezzo al DB", async () => {
-    const checkBankInstructionsReady = vi.fn().mockResolvedValue(undefined);
     const events: string[] = [];
+    const loadEncryptedBankInstructions = vi.fn(async () => {
+      events.push("banking-query");
+      return "encrypted-bank-instructions";
+    });
     const deps = dependencies({
       mutate: vi.fn(async (input) => {
         events.push("mutation-started");
@@ -239,7 +244,7 @@ describe("public gift route", () => {
           replayed: false
         };
       }),
-      loadBankInstructions: vi.fn(async () => {
+      decryptBankInstructions: vi.fn(() => {
         events.push("banking-decrypted");
         return {
           accountHolder: "Intestatario configurato",
@@ -248,7 +253,7 @@ describe("public gift route", () => {
         };
       })
     });
-    Object.assign(deps, { checkBankInstructionsReady });
+    Object.assign(deps, { loadEncryptedBankInstructions });
     const handler = createGiftIntentHandler("reserve", deps);
 
     const response = await handler(post(), { giftId });
@@ -282,10 +287,67 @@ describe("public gift route", () => {
       "guestDetailsEncrypted",
       "encrypted-guest-details"
     );
-    expect(checkBankInstructionsReady.mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0
-    );
+    expect(
+      loadEncryptedBankInstructions.mock.invocationCallOrder[0]
+    ).toBeLessThan(vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0);
     expect(events).toEqual([
+      "banking-query",
+      "mutation-started",
+      "banking-decrypted",
+      "mutation-committed"
+    ]);
+  });
+
+  it("carica il blob bancario una volta prima della mutation e non interroga il pool in beforeCommit", async () => {
+    const encryptedBankInstructions = "encrypted-bank-instructions";
+    const events: string[] = [];
+    let mutationRunning = false;
+    const loadEncryptedBankInstructions = vi.fn(async () => {
+      if (mutationRunning) throw new Error("query eseguita dentro la mutation");
+      events.push("banking-query");
+      return encryptedBankInstructions;
+    });
+    const decryptBankInstructions = vi.fn((encrypted: string) => {
+      expect(encrypted).toBe(encryptedBankInstructions);
+      events.push("banking-decrypted");
+      return {
+        accountHolder: "Intestatario configurato",
+        iban: "IT00X0000000000000000000000",
+        bankName: "Banca configurata"
+      };
+    });
+    const deps = dependencies({
+      mutate: vi.fn(async (input) => {
+        mutationRunning = true;
+        events.push("mutation-started");
+        try {
+          await input.beforeCommit?.();
+          events.push("mutation-committed");
+        } finally {
+          mutationRunning = false;
+        }
+        return {
+          id: "123e4567-e89b-42d3-a456-426614174002",
+          publicReference: "REQ-ABC123",
+          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+          replayed: false
+        };
+      })
+    });
+    Object.assign(deps, {
+      loadEncryptedBankInstructions,
+      decryptBankInstructions
+    });
+
+    const response = await createGiftIntentHandler("reserve", deps)(post(), {
+      giftId
+    });
+
+    expect(response.status).toBe(200);
+    expect(loadEncryptedBankInstructions).toHaveBeenCalledTimes(1);
+    expect(decryptBankInstructions).toHaveBeenCalledTimes(1);
+    expect(events).toEqual([
+      "banking-query",
       "mutation-started",
       "banking-decrypted",
       "mutation-committed"
@@ -336,7 +398,9 @@ describe("public gift route", () => {
   });
 
   it("su replay idempotente non ridivulga token o coordinate bancarie", async () => {
-    const checkBankInstructionsReady = vi.fn().mockResolvedValue(undefined);
+    const loadEncryptedBankInstructions = vi
+      .fn()
+      .mockResolvedValue("encrypted-bank-instructions");
     let mutationCount = 0;
     const deps = dependencies({
       mutate: vi.fn(async (input) => {
@@ -350,7 +414,7 @@ describe("public gift route", () => {
         };
       })
     });
-    Object.assign(deps, { checkBankInstructionsReady });
+    Object.assign(deps, { loadEncryptedBankInstructions });
     const handler = createGiftIntentHandler("reserve", deps);
 
     const first = (await (await handler(post(), { giftId })).json()) as Record<
@@ -370,8 +434,8 @@ describe("public gift route", () => {
       giftStatus: "reserved",
       replayed: true
     });
-    expect(checkBankInstructionsReady).toHaveBeenCalledTimes(2);
-    expect(deps.loadBankInstructions).toHaveBeenCalledTimes(1);
+    expect(loadEncryptedBankInstructions).toHaveBeenCalledTimes(2);
+    expect(deps.decryptBankInstructions).toHaveBeenCalledTimes(1);
   });
 
   it("se la decifratura beforeCommit fallisce non conferma intent, token o email", async () => {
@@ -393,7 +457,7 @@ describe("public gift route", () => {
           replayed: false
         };
       }),
-      loadBankInstructions: vi.fn(async () => {
+      decryptBankInstructions: vi.fn(() => {
         events.push("banking-invalid");
         throw new PublicServiceUnavailableError();
       })
