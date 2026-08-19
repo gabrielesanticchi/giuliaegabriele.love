@@ -92,16 +92,116 @@ viene annullata**.
   `PLAYWRIGHT_CHROMIUM_PATH`. Screenshot QA (390/768/1440) con
   `CAPTURE_SCREENSHOTS=1` in `artifacts/screenshots/`.
 
-## Architettura
+## Architettura del sistema
 
-- `src/app/(public)` — homepage editoriale, privacy, pagina personale invitato.
-- `src/app/admin` — login, onboarding TOTP, dashboard e CRUD.
-- `src/app/api` — auth, health, reserve/contribute, gestione richiesta, upload.
-- `src/db` — schema Drizzle, query e transazioni (`reserveGift`,
-  `contributeToGift`, `verifyIntent`, …).
-- `src/lib` — configurazione, crittografia AES-256-GCM, auth, rate limiting,
-  email, Blob, validazione, adapter contenuti pubblici.
-- `src/components` — sistema visivo, sezioni pubbliche, UI admin.
+Monolite Next.js (App Router) su Vercel: Server Components per contenuti e
+dashboard, Client Components solo per navigazione, countdown, filtri, dialog e
+form. Drizzle parla con PostgreSQL tramite transazioni e vincoli univoci; i
+servizi esterni (Blob, Resend, Turnstile) degradano in modo controllato quando
+non configurati.
+
+```mermaid
+flowchart TB
+  subgraph client["Client"]
+    G["Invitati / pubblico"]
+    ADMU["Amministratori"]
+  end
+
+  subgraph next["Next.js App Router — Vercel"]
+    direction TB
+    PUB["app/(public)<br/>home · privacy · /richiesta/[token]"]
+    ADM["app/admin<br/>login · TOTP · dashboard · CRUD"]
+    API["app/api<br/>health · gifts reserve/contribute<br/>requests · media/upload · auth"]
+    SA["actions/admin<br/>Server Actions (effect+audit+receipt)"]
+    LIB["lib<br/>security (AES-256-GCM) · auth · rate-limit<br/>email · blob · turnstile · public-content"]
+    DBX["db<br/>Drizzle schema + transazioni<br/>reserveGift · contributeToGift · verifyIntent"]
+  end
+
+  subgraph data["Persistenza"]
+    PG[("PostgreSQL<br/>14 tabelle")]
+  end
+
+  subgraph ext["Servizi esterni (opzionali)"]
+    BLOB["Vercel Blob"]
+    RESEND["Resend"]
+    TS["Cloudflare Turnstile"]
+  end
+
+  G --> PUB
+  G -->|reserve / contribute / cancel| API
+  ADMU --> ADM
+  ADM --> SA
+  PUB --> LIB
+  API --> LIB
+  SA --> LIB
+  LIB --> DBX
+  DBX --> PG
+  LIB -.->|upload firmato, no SVG| BLOB
+  LIB -.->|email best-effort, no rollback| RESEND
+  API -.->|verifica anti-abuso| TS
+
+  instr["instrumentation.ts<br/>fail-closed env al boot"] -.-> next
+```
+
+### Componenti del repository
+
+```text
+giuliaegabriele.love/
+├── src/
+│   ├── app/
+│   │   ├── (public)/            # home editoriale, privacy, pagina invitato
+│   │   ├── admin/               # login, onboarding TOTP, dashboard, CRUD
+│   │   ├── api/                 # health, gifts, requests, media/upload, auth
+│   │   ├── layout.tsx           # metadata, OG, canonical, font
+│   │   ├── robots.ts · sitemap.ts · manifest.ts
+│   ├── actions/admin/           # Server Actions (content, gifts, requests, totp, settings)
+│   ├── components/              # graphics, layout, sections (pubblico), admin (UI)
+│   ├── db/
+│   │   ├── schema/              # tabelle Drizzle + enum e vincoli
+│   │   └── transactions/        # reserveGift, contributeToGift, verifyIntent, errori
+│   ├── lib/
+│   │   ├── security/            # AES-256-GCM, hashing, rate-limit
+│   │   ├── auth/                # Auth.js, TOTP, password (Argon2id), CLI
+│   │   ├── email/               # template + outbox (Resend opzionale)
+│   │   ├── blob/                # policy upload (allowlist MIME, no SVG)
+│   │   ├── admin/               # policy azioni, idempotenza, audit, datetime
+│   │   ├── config/              # validazione env di produzione (fail-closed)
+│   │   ├── public-content/      # adapter DB → modello pubblico
+│   │   ├── turnstile/ · domain/ # anti-abuso · valuta, countdown, URL, schemi
+│   ├── styles/                  # design tokens + CSS “Bosco Incantato Editoriale”
+│   └── data/demo-content.ts     # contenuti demo (solo dev/test)
+├── scripts/                     # migrate, seed (dev/test), admin CLI
+├── drizzle/                     # migrazioni SQL generate
+├── tests/                       # unit (Vitest) · integration (PostgreSQL) · e2e (Playwright+axe)
+├── instrumentation.ts           # verifica env al boot (produzione fail-closed)
+└── next.config.ts               # CSP + security header
+```
+
+**Tabelle PostgreSQL:** `admin_users`, `site_settings`, `media_assets`,
+`schedule_items`, `story_moments`, `dress_code_colors`, `gift_categories`,
+`gifts`, `gift_intents`, `gift_locks`, `admin_action_receipts`, `audit_logs`,
+`rate_limit_buckets`, `email_deliveries`.
+
+### Flusso critico — prenotazione / contributo
+
+```mermaid
+sequenceDiagram
+  participant U as Invitato
+  participant API as /api/gifts/[id]/(reserve|contribute)
+  participant TX as reserveGift / contributeToGift
+  participant PG as PostgreSQL
+  U->>API: POST (Zod, origin, honeypot, Turnstile, idempotency)
+  API->>TX: transazione SERIALIZABLE
+  TX->>PG: lock regalo + somma verified/pending
+  alt disponibile
+    PG-->>TX: ok
+    TX->>PG: crea intent (+ gift_lock unico)
+    API-->>U: 200 + istruzioni bancarie una-tantum (no-store)
+  else contesa / oltre residuo
+    PG-->>TX: unique 23505 / serialization 40001
+    API-->>U: 409 gift_unavailable / amount_unavailable
+  end
+```
 
 ## Sicurezza (in breve)
 
