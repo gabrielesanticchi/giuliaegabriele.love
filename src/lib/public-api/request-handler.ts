@@ -10,7 +10,11 @@ import {
 } from "@/lib/turnstile";
 
 import { PublicServiceUnavailableError, publicError } from "./gift-handler";
-import { resolveClientIdentity } from "./client-identity";
+import {
+  ClientIdentityUnavailableError,
+  type ClientIdentityPolicy,
+  resolveClientIdentity
+} from "./client-identity";
 import { readBoundedJson } from "./request-body";
 import { requestActionSchema } from "./validation";
 
@@ -29,7 +33,7 @@ export type RequestActionDependencies = {
   siteOrigin: string;
   fingerprintSecret: string;
   guestTokenSecret: string;
-  trustVercelProxy?: boolean;
+  clientIdentityPolicy?: ClientIdentityPolicy;
   verifyTurnstile: (input: {
     token: string;
     remoteIp?: string;
@@ -89,6 +93,7 @@ function terminalTokenIsValid(intent: GuestIntent, now: Date): boolean {
 function mapRequestError(error: unknown): Response {
   if (
     error instanceof TurnstileUnavailableError ||
+    error instanceof ClientIdentityUnavailableError ||
     error instanceof PublicServiceUnavailableError
   ) {
     return publicError(503, "service_unavailable", { "retry-after": "60" });
@@ -139,7 +144,7 @@ export function createRequestActionHandler(
 
       const client = resolveClientIdentity(
         request,
-        dependencies.trustVercelProxy ?? false
+        dependencies.clientIdentityPolicy ?? { production: false }
       );
       const turnstile = await dependencies.verifyTurnstile({
         token: parsed.data.turnstileToken,

@@ -50,13 +50,19 @@ function publicConfig() {
   if (fingerprintSecret === guestTokenSecret) {
     throw new PublicServiceUnavailableError();
   }
-  const trustVercelProxy =
-    process.env.VERCEL === "1" || process.env.TRUST_VERCEL_PROXY === "true";
+  const explicitTrustedHeader = process.env.TRUSTED_PROXY_IP_HEADER?.trim();
+  const trustedProxyHeader =
+    process.env.VERCEL === "1"
+      ? "x-vercel-forwarded-for"
+      : explicitTrustedHeader || undefined;
   return {
     siteOrigin,
     fingerprintSecret,
     guestTokenSecret,
-    trustVercelProxy
+    clientIdentityPolicy: {
+      production: process.env.NODE_ENV === "production",
+      trustedProxyHeader
+    }
   };
 }
 
@@ -65,7 +71,7 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-async function loadBankInstructions(): Promise<BankInstructions> {
+async function encryptedBankInstructions(): Promise<string> {
   const db = getDatabase();
   const rows = await db
     .select({ encryptedValue: siteSettings.encryptedValue })
@@ -74,6 +80,16 @@ async function loadBankInstructions(): Promise<BankInstructions> {
     .limit(1);
   const encrypted = rows[0]?.encryptedValue;
   if (!encrypted) throw new PublicServiceUnavailableError();
+  return encrypted;
+}
+
+async function checkBankInstructionsReady(): Promise<void> {
+  await encryptedBankInstructions();
+  requiredEnvironment("DATA_ENCRYPTION_KEY");
+}
+
+async function loadBankInstructions(): Promise<BankInstructions> {
+  const encrypted = await encryptedBankInstructions();
 
   try {
     return bankInstructionsSchema.parse(
@@ -139,6 +155,7 @@ export function createGiftRuntimeDependencies(
     },
     mutate: (input) =>
       kind === "reserve" ? reserveGift(db, input) : contributeToGift(db, input),
+    checkBankInstructionsReady,
     loadBankInstructions,
     encryptGuestDetails: (details) =>
       encryptSecret(

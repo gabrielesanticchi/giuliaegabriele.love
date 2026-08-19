@@ -12,13 +12,17 @@ import {
 } from "@/lib/turnstile";
 
 import {
+  ClientIdentityUnavailableError,
+  type ClientIdentityPolicy,
+  resolveClientIdentity
+} from "./client-identity";
+import { readBoundedJson } from "./request-body";
+import {
   contributionRequestSchema,
   reserveGiftRequestSchema,
   type ContributionRequest,
   type ReserveGiftRequest
 } from "./validation";
-import { resolveClientIdentity } from "./client-identity";
-import { readBoundedJson } from "./request-body";
 
 const MAX_BODY_BYTES = 16_384;
 const GIFT_HOLD_MS = 48 * 60 * 60 * 1_000;
@@ -74,7 +78,7 @@ export type GiftIntentHandlerDependencies = {
   siteOrigin: string;
   fingerprintSecret: string;
   guestTokenSecret: string;
-  trustVercelProxy?: boolean;
+  clientIdentityPolicy?: ClientIdentityPolicy;
   verifyTurnstile: (input: {
     token: string;
     remoteIp?: string;
@@ -89,6 +93,7 @@ export type GiftIntentHandlerDependencies = {
   }>;
   getGift: (giftId: string) => Promise<GiftForMutation | null>;
   mutate: (input: MutationInput) => Promise<MutationResult>;
+  checkBankInstructionsReady: () => Promise<void>;
   loadBankInstructions: () => Promise<BankInstructions>;
   encryptGuestDetails: (details: {
     firstName: string;
@@ -184,6 +189,7 @@ function requestFingerprint(
 function mapError(error: unknown): Response {
   if (
     error instanceof TurnstileUnavailableError ||
+    error instanceof ClientIdentityUnavailableError ||
     error instanceof PublicServiceUnavailableError
   ) {
     return publicError(503, "service_unavailable", { "retry-after": "60" });
@@ -228,7 +234,7 @@ export function createGiftIntentHandler(
 
       const client = resolveClientIdentity(
         request,
-        dependencies.trustVercelProxy ?? false
+        dependencies.clientIdentityPolicy ?? { production: false }
       );
       const turnstile = await dependencies.verifyTurnstile({
         token: parsed.data.turnstileToken,
@@ -264,10 +270,9 @@ export function createGiftIntentHandler(
         "amountCents" in parsed.data
           ? parsed.data.amountCents
           : gift.priceCents;
-      const bank =
-        method === "bank_transfer"
-          ? await dependencies.loadBankInstructions()
-          : null;
+      if (method === "bank_transfer") {
+        await dependencies.checkBankInstructionsReady();
+      }
       const intent = await dependencies.mutate({
         giftId: gift.id,
         idempotencyKey: parsed.data.idempotencyKey,
@@ -312,7 +317,8 @@ export function createGiftIntentHandler(
 
       const personalLink = `/richiesta/${guestToken}`;
       let instructions: Record<string, string | undefined> = { type: method };
-      if (bank) {
+      if (method === "bank_transfer") {
+        const bank = await dependencies.loadBankInstructions();
         instructions = {
           type: method,
           ...bank,

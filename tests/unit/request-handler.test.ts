@@ -216,4 +216,21 @@ describe("personal request action route", () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     expect(deps.complete).not.toHaveBeenCalled();
   });
+
+  it("non usa il fallback client-controlled per le action in production", async () => {
+    const deps = dependencies();
+    Object.assign(deps, { clientIdentityPolicy: { production: true } });
+
+    const response = await createRequestActionHandler("complete", deps)(
+      request(body, "https://giuliaegabriele.love", {
+        "x-forwarded-for": "203.0.113.10",
+        "user-agent": "spoofable"
+      }),
+      { token }
+    );
+
+    expect(response.status).toBe(503);
+    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
+    expect(deps.complete).not.toHaveBeenCalled();
+  });
 });

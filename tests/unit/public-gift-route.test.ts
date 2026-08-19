@@ -70,6 +70,7 @@ function dependencies(
       expiresAt: new Date("2026-08-21T12:00:00.000Z"),
       replayed: false
     }),
+    checkBankInstructionsReady: vi.fn().mockResolvedValue(undefined),
     loadBankInstructions: vi.fn().mockResolvedValue({
       accountHolder: "Intestatario configurato",
       iban: "IT00X0000000000000000000000",
@@ -220,7 +221,9 @@ describe("public gift route", () => {
   });
 
   it("restituisce istruzioni soltanto nella mutation no-store e non passa IP grezzo al DB", async () => {
+    const checkBankInstructionsReady = vi.fn().mockResolvedValue(undefined);
     const deps = dependencies();
+    Object.assign(deps, { checkBankInstructionsReady });
     const handler = createGiftIntentHandler("reserve", deps);
 
     const response = await handler(post(), { giftId });
@@ -254,9 +257,12 @@ describe("public gift route", () => {
       "guestDetailsEncrypted",
       "encrypted-guest-details"
     );
+    expect(checkBankInstructionsReady.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0
+    );
     expect(
       vi.mocked(deps.loadBankInstructions).mock.invocationCallOrder[0]
-    ).toBeLessThan(vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0);
+    ).toBeGreaterThan(vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0);
   });
 
   it("usa token casuali non derivabili dalla idempotency key", async () => {
@@ -299,6 +305,7 @@ describe("public gift route", () => {
   });
 
   it("su replay idempotente non ridivulga token o coordinate bancarie", async () => {
+    const checkBankInstructionsReady = vi.fn().mockResolvedValue(undefined);
     const deps = dependencies({
       mutate: vi
         .fn()
@@ -315,6 +322,7 @@ describe("public gift route", () => {
           replayed: true
         })
     });
+    Object.assign(deps, { checkBankInstructionsReady });
     const handler = createGiftIntentHandler("reserve", deps);
 
     const first = (await (await handler(post(), { giftId })).json()) as Record<
@@ -334,6 +342,77 @@ describe("public gift route", () => {
       giftStatus: "reserved",
       replayed: true
     });
+    expect(checkBankInstructionsReady).toHaveBeenCalledTimes(2);
+    expect(deps.loadBankInstructions).toHaveBeenCalledTimes(1);
+  });
+
+  it("fallisce chiuso in production senza un boundary proxy verificato", async () => {
+    const deps = dependencies();
+    Object.assign(deps, {
+      clientIdentityPolicy: { production: true }
+    });
+
+    const response = await createGiftIntentHandler("reserve", deps)(
+      post(requestBody, {
+        "x-forwarded-for": "203.0.113.10",
+        "user-agent": "spoofable"
+      }),
+      { giftId }
+    );
+
+    expect(response.status).toBe(503);
+    expect(await errorCode(response)).toBe("service_unavailable");
+    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
+    expect(deps.mutate).not.toHaveBeenCalled();
+  });
+
+  it("fallisce chiuso in production se il trusted header manca o è malformato", async () => {
+    const deps = dependencies();
+    Object.assign(deps, {
+      clientIdentityPolicy: {
+        production: true,
+        trustedProxyHeader: "x-vercel-forwarded-for"
+      }
+    });
+    const handler = createGiftIntentHandler("reserve", deps);
+
+    const missing = await handler(
+      post(requestBody, { "x-vercel-forwarded-for": "" }),
+      { giftId }
+    );
+    const malformed = await handler(
+      post(requestBody, { "x-vercel-forwarded-for": "not-an-ip" }),
+      { giftId }
+    );
+
+    expect(missing.status).toBe(503);
+    expect(malformed.status).toBe(503);
+    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
+  });
+
+  it("usa soltanto il trusted header configurato in production", async () => {
+    const verifyTurnstile = vi.fn().mockResolvedValue({ success: true });
+    const deps = dependencies({ verifyTurnstile });
+    Object.assign(deps, {
+      clientIdentityPolicy: {
+        production: true,
+        trustedProxyHeader: "x-vercel-forwarded-for"
+      }
+    });
+
+    const response = await createGiftIntentHandler("reserve", deps)(
+      post(requestBody, {
+        "x-forwarded-for": "198.51.100.250",
+        "x-vercel-forwarded-for": "203.0.113.42"
+      }),
+      { giftId }
+    );
+
+    expect(response.status).toBe(200);
+    expect(verifyTurnstile).toHaveBeenCalledWith({
+      token: "verified-token",
+      remoteIp: "203.0.113.42"
+    });
   });
 
   it("ignora x-forwarded-for fuori dal boundary Vercel", async () => {
@@ -344,7 +423,9 @@ describe("public gift route", () => {
     });
     const verifyTurnstile = vi.fn().mockResolvedValue({ success: true });
     const deps = dependencies({ consumeRateLimit, verifyTurnstile });
-    Object.assign(deps, { trustVercelProxy: false });
+    Object.assign(deps, {
+      clientIdentityPolicy: { production: false }
+    });
     const handler = createGiftIntentHandler("reserve", deps);
 
     await handler(post(requestBody, { "x-forwarded-for": "203.0.113.10" }), {
