@@ -16,10 +16,26 @@ const bodyFont = Manrope({
   display: "swap"
 });
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+  "https://giuliaegabriele.love";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: "Gabriele & Giulia",
   description: "Il matrimonio di Gabriele e Giulia, 24 ottobre 2026.",
-  robots: { index: false, follow: false }
+  applicationName: "Gabriele & Giulia",
+  robots: { index: false, follow: false },
+  icons: { icon: "/graphics/monogram-mark.svg" },
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    locale: "it_IT",
+    siteName: "Gabriele & Giulia",
+    title: "Gabriele & Giulia",
+    description: "Il matrimonio di Gabriele e Giulia, 24 ottobre 2026.",
+    url: siteUrl
+  }
 };
 
 export default function RootLayout({
