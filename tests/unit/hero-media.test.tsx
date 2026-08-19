@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -24,6 +25,35 @@ function setReducedMotion(matches: boolean) {
       dispatchEvent: vi.fn()
     }))
   );
+}
+
+function createReducedMotionController(initial: boolean) {
+  let matches = initial;
+  const listeners = new Set<() => void>();
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn().mockImplementation((query: string) => ({
+      get matches() {
+        return matches;
+      },
+      media: query,
+      onchange: null,
+      addEventListener: (_event: string, listener: () => void) =>
+        listeners.add(listener),
+      removeEventListener: (_event: string, listener: () => void) =>
+        listeners.delete(listener),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn()
+    }))
+  );
+
+  return {
+    set(next: boolean) {
+      matches = next;
+      listeners.forEach((listener) => listener());
+    }
+  };
 }
 
 afterEach(() => {
@@ -156,5 +186,50 @@ describe("HeroMedia", () => {
         name: "Il video non può essere avviato"
       })
     ).toBeInTheDocument();
+  });
+
+  it("rimonta il video con stato pulito dopo un cambio reduced motion", async () => {
+    const motion = createReducedMotionController(false);
+    const user = userEvent.setup();
+    const play = vi
+      .spyOn(HTMLMediaElement.prototype, "play")
+      .mockResolvedValue(undefined);
+
+    render(
+      <HeroMedia
+        media={{
+          kind: "video",
+          src: "/media/hero.mp4",
+          posterSrc: "/graphics/hero-poster.jpg",
+          posterAlt: "Sentiero nel bosco",
+          focalPoint: { x: 50, y: 40 }
+        }}
+      />
+    );
+
+    const firstVideo = await waitFor(() => {
+      const element = document.querySelector("video");
+      expect(element).toBeInTheDocument();
+      return element!;
+    });
+    fireEvent.play(firstVideo);
+    expect(
+      screen.getByRole("button", { name: "Pausa video" })
+    ).toBeInTheDocument();
+    fireEvent.error(firstVideo);
+    expect(screen.getByRole("status")).toBeInTheDocument();
+
+    act(() => motion.set(true));
+    expect(
+      screen.getByRole("img", { name: "Sentiero nel bosco" })
+    ).toBeInTheDocument();
+
+    act(() => motion.set(false));
+    const retry = screen.getByRole("button", { name: "Riprendi video" });
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(document.querySelector("video")).not.toBe(firstVideo);
+
+    await user.click(retry);
+    expect(play).toHaveBeenCalledTimes(1);
   });
 });
