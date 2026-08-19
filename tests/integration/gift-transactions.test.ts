@@ -6,7 +6,7 @@ import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { createDatabase, type WeddingDatabase } from "@/db";
-import { gifts, giftIntents } from "@/db/schema";
+import { gifts, giftIntents, giftLocks } from "@/db/schema";
 import {
   cancelIntent,
   contributeToGift,
@@ -346,5 +346,46 @@ integration(
         })
       ).rejects.toMatchObject({ code: "duplicate_request", httpStatus: 409 });
     });
+
+    it.each([
+      ["reserveGift", reserveGift, 10_000],
+      ["contributeToGift", contributeToGift, 3_000]
+    ] as const)(
+      "%s rolls back the intent when beforeCommit rejects",
+      async (_name, mutation, amountCents) => {
+        const giftId = await createGift();
+        const idempotencyKey = randomUUID();
+        const input = {
+          giftId,
+          amountCents,
+          idempotencyKey,
+          requestFingerprintHash: tokenHash(),
+          publicReference: `I-${randomUUID()}`,
+          method: "bank_transfer" as const,
+          guestTokenHash: tokenHash(),
+          guestDetailsEncrypted: "encrypted-guest-details",
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+        };
+
+        await expect(
+          mutation(db, input, {
+            beforeCommit: async () => {
+              throw new Error("banking configuration invalid");
+            }
+          })
+        ).rejects.toThrow("banking configuration invalid");
+
+        const intents = await db
+          .select()
+          .from(giftIntents)
+          .where(eq(giftIntents.idempotencyKey, idempotencyKey));
+        const locks = await db
+          .select()
+          .from(giftLocks)
+          .where(eq(giftLocks.giftId, giftId));
+        expect(intents).toHaveLength(0);
+        expect(locks).toHaveLength(0);
+      }
+    );
   }
 );

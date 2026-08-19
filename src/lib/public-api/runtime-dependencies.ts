@@ -153,8 +153,10 @@ export function createGiftRuntimeDependencies(
         .limit(1);
       return rows[0] ?? null;
     },
-    mutate: (input) =>
-      kind === "reserve" ? reserveGift(db, input) : contributeToGift(db, input),
+    mutate: ({ beforeCommit, ...input }) =>
+      kind === "reserve"
+        ? reserveGift(db, input, { beforeCommit })
+        : contributeToGift(db, input, { beforeCommit }),
     checkBankInstructionsReady,
     loadBankInstructions,
     encryptGuestDetails: (details) =>

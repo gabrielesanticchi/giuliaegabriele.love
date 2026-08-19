@@ -51,6 +51,7 @@ export type MutationInput = {
   guestEmailHash: string;
   fingerprintHash: string;
   expiresAt: Date;
+  beforeCommit?: () => Promise<void>;
 };
 
 type MutationResult = {
@@ -273,6 +274,7 @@ export function createGiftIntentHandler(
       if (method === "bank_transfer") {
         await dependencies.checkBankInstructionsReady();
       }
+      let bankInstructions: BankInstructions | undefined;
       const intent = await dependencies.mutate({
         giftId: gift.id,
         idempotencyKey: parsed.data.idempotencyKey,
@@ -300,7 +302,13 @@ export function createGiftIntentHandler(
         fingerprintHash,
         expiresAt: new Date(
           now.getTime() + (dependencies.holdDurationMs ?? GIFT_HOLD_MS)
-        )
+        ),
+        beforeCommit:
+          method === "bank_transfer"
+            ? async () => {
+                bankInstructions = await dependencies.loadBankInstructions();
+              }
+            : undefined
       });
 
       if (intent.replayed) {
@@ -318,10 +326,10 @@ export function createGiftIntentHandler(
       const personalLink = `/richiesta/${guestToken}`;
       let instructions: Record<string, string | undefined> = { type: method };
       if (method === "bank_transfer") {
-        const bank = await dependencies.loadBankInstructions();
+        if (!bankInstructions) throw new PublicServiceUnavailableError();
         instructions = {
           type: method,
-          ...bank,
+          ...bankInstructions,
           transferReason: buildTransferReason(
             gift.publicReference,
             intent.publicReference

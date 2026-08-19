@@ -21,6 +21,10 @@ export type GiftMutationResult = GiftIntent & { replayed: boolean };
 export type GiftActionResult = GiftIntent & { replayed: boolean };
 type GiftMethod = GiftIntent["method"];
 
+export type GiftMutationBoundary = {
+  beforeCommit?: () => Promise<void>;
+};
+
 type NewIntentInput = {
   giftId: string;
   idempotencyKey: string;
@@ -133,7 +137,8 @@ function resolveIdempotentIntent(
 
 export async function reserveGift(
   db: WeddingDatabase,
-  input: NewIntentInput
+  input: NewIntentInput,
+  boundary: GiftMutationBoundary = {}
 ): Promise<GiftMutationResult> {
   const requested = requestSemantics(input, "full_gift");
   try {
@@ -185,6 +190,7 @@ export async function reserveGift(
         intentId: intent.id,
         expiresAt: input.expiresAt
       });
+      await boundary.beforeCommit?.();
       return { ...intent, replayed: false };
     });
   } catch (error) {
@@ -209,7 +215,8 @@ export async function reserveGift(
 
 export async function contributeToGift(
   db: WeddingDatabase,
-  input: NewIntentInput
+  input: NewIntentInput,
+  boundary: GiftMutationBoundary = {}
 ): Promise<GiftMutationResult> {
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
     throw new TransactionError("amount_unavailable");
@@ -278,6 +285,7 @@ export async function contributeToGift(
         })
         .returning();
       if (!inserted[0]) throw new Error("Intent non creato");
+      await boundary.beforeCommit?.();
       return { ...inserted[0], replayed: false };
     });
   } catch (error) {

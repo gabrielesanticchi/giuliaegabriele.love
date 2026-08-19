@@ -6,3 +6,4 @@ export {
   reserveGift,
   verifyIntent
 } from "./gifts";
+export type { GiftMutationBoundary, GiftMutationResult } from "./gifts";

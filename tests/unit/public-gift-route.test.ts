@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import { TransactionError } from "@/db/transactions/errors";
 import {
   createGiftIntentHandler,
-  type GiftIntentHandlerDependencies
+  type GiftIntentHandlerDependencies,
+  PublicServiceUnavailableError
 } from "@/lib/public-api/gift-handler";
 
 const giftId = "123e4567-e89b-42d3-a456-426614174001";
@@ -64,11 +65,14 @@ function dependencies(
       title: "Tavolo per la cucina",
       priceCents: 120000
     }),
-    mutate: vi.fn().mockResolvedValue({
-      id: "123e4567-e89b-42d3-a456-426614174002",
-      publicReference: "REQ-ABC123",
-      expiresAt: new Date("2026-08-21T12:00:00.000Z"),
-      replayed: false
+    mutate: vi.fn(async (input) => {
+      await input.beforeCommit?.();
+      return {
+        id: "123e4567-e89b-42d3-a456-426614174002",
+        publicReference: "REQ-ABC123",
+        expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+        replayed: false
+      };
     }),
     checkBankInstructionsReady: vi.fn().mockResolvedValue(undefined),
     loadBankInstructions: vi.fn().mockResolvedValue({
@@ -222,7 +226,28 @@ describe("public gift route", () => {
 
   it("restituisce istruzioni soltanto nella mutation no-store e non passa IP grezzo al DB", async () => {
     const checkBankInstructionsReady = vi.fn().mockResolvedValue(undefined);
-    const deps = dependencies();
+    const events: string[] = [];
+    const deps = dependencies({
+      mutate: vi.fn(async (input) => {
+        events.push("mutation-started");
+        await input.beforeCommit?.();
+        events.push("mutation-committed");
+        return {
+          id: "123e4567-e89b-42d3-a456-426614174002",
+          publicReference: "REQ-ABC123",
+          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+          replayed: false
+        };
+      }),
+      loadBankInstructions: vi.fn(async () => {
+        events.push("banking-decrypted");
+        return {
+          accountHolder: "Intestatario configurato",
+          iban: "IT00X0000000000000000000000",
+          bankName: "Banca configurata"
+        };
+      })
+    });
     Object.assign(deps, { checkBankInstructionsReady });
     const handler = createGiftIntentHandler("reserve", deps);
 
@@ -260,27 +285,33 @@ describe("public gift route", () => {
     expect(checkBankInstructionsReady.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0
     );
-    expect(
-      vi.mocked(deps.loadBankInstructions).mock.invocationCallOrder[0]
-    ).toBeGreaterThan(vi.mocked(deps.mutate).mock.invocationCallOrder[0] ?? 0);
+    expect(events).toEqual([
+      "mutation-started",
+      "banking-decrypted",
+      "mutation-committed"
+    ]);
   });
 
   it("usa token casuali non derivabili dalla idempotency key", async () => {
+    let mutationCount = 0;
     const deps = dependencies({
-      mutate: vi
-        .fn()
-        .mockResolvedValueOnce({
-          id: "123e4567-e89b-42d3-a456-426614174002",
-          publicReference: "REQ-ABC123",
-          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
-          replayed: false
-        })
-        .mockResolvedValueOnce({
-          id: "123e4567-e89b-42d3-a456-426614174003",
-          publicReference: "REQ-DEF456",
-          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
-          replayed: false
-        })
+      mutate: vi.fn(async (input) => {
+        await input.beforeCommit?.();
+        mutationCount += 1;
+        return mutationCount === 1
+          ? {
+              id: "123e4567-e89b-42d3-a456-426614174002",
+              publicReference: "REQ-ABC123",
+              expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+              replayed: false
+            }
+          : {
+              id: "123e4567-e89b-42d3-a456-426614174003",
+              publicReference: "REQ-DEF456",
+              expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+              replayed: false
+            };
+      })
     });
     const handler = createGiftIntentHandler("reserve", deps);
 
@@ -306,21 +337,18 @@ describe("public gift route", () => {
 
   it("su replay idempotente non ridivulga token o coordinate bancarie", async () => {
     const checkBankInstructionsReady = vi.fn().mockResolvedValue(undefined);
+    let mutationCount = 0;
     const deps = dependencies({
-      mutate: vi
-        .fn()
-        .mockResolvedValueOnce({
+      mutate: vi.fn(async (input) => {
+        mutationCount += 1;
+        if (mutationCount === 1) await input.beforeCommit?.();
+        return {
           id: "123e4567-e89b-42d3-a456-426614174002",
           publicReference: "REQ-ABC123",
           expiresAt: new Date("2026-08-21T12:00:00.000Z"),
-          replayed: false
-        })
-        .mockResolvedValueOnce({
-          id: "123e4567-e89b-42d3-a456-426614174002",
-          publicReference: "REQ-ABC123",
-          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
-          replayed: true
-        })
+          replayed: mutationCount > 1
+        };
+      })
     });
     Object.assign(deps, { checkBankInstructionsReady });
     const handler = createGiftIntentHandler("reserve", deps);
@@ -344,6 +372,47 @@ describe("public gift route", () => {
     });
     expect(checkBankInstructionsReady).toHaveBeenCalledTimes(2);
     expect(deps.loadBankInstructions).toHaveBeenCalledTimes(1);
+  });
+
+  it("se la decifratura beforeCommit fallisce non conferma intent, token o email", async () => {
+    const events: string[] = [];
+    const deps = dependencies({
+      mutate: vi.fn(async (input) => {
+        events.push("mutation-started");
+        try {
+          await input.beforeCommit?.();
+        } catch (error) {
+          events.push("mutation-rolled-back");
+          throw error;
+        }
+        events.push("mutation-committed");
+        return {
+          id: "123e4567-e89b-42d3-a456-426614174002",
+          publicReference: "REQ-ABC123",
+          expiresAt: new Date("2026-08-21T12:00:00.000Z"),
+          replayed: false
+        };
+      }),
+      loadBankInstructions: vi.fn(async () => {
+        events.push("banking-invalid");
+        throw new PublicServiceUnavailableError();
+      })
+    });
+
+    const response = await createGiftIntentHandler("reserve", deps)(post(), {
+      giftId
+    });
+    const body = await response.text();
+
+    expect(response.status).toBe(503);
+    expect(events).toEqual([
+      "mutation-started",
+      "banking-invalid",
+      "mutation-rolled-back"
+    ]);
+    expect(body).not.toContain("/richiesta/");
+    expect(body).not.toContain("IT00");
+    expect(deps.notify).not.toHaveBeenCalled();
   });
 
   it("fallisce chiuso in production senza un boundary proxy verificato", async () => {
