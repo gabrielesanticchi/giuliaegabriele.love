@@ -91,23 +91,23 @@ export async function createAdminAccount(input: {
   password: string;
 }) {
   const secrets = authSecrets();
-  const inserted = await getDatabase()
-    .insert(adminUsers)
-    .values({
-      emailHash: hashEmail(input.email, secrets.hmacPepper),
-      emailEncrypted: encryptSecret(
-        input.email.toLowerCase(),
-        secrets.encryptionKey
-      ),
-      passwordHash: await hashAdminPassword(input.password),
-      role: input.role
-    })
-    .returning({ id: adminUsers.id });
-  const admin = inserted[0];
-  if (!admin) throw new Error("Account non creato");
-  await getDatabase()
-    .insert(auditLogs)
-    .values({
+  const passwordHash = await hashAdminPassword(input.password);
+  return getDatabase().transaction(async (tx) => {
+    const inserted = await tx
+      .insert(adminUsers)
+      .values({
+        emailHash: hashEmail(input.email, secrets.hmacPepper),
+        emailEncrypted: encryptSecret(
+          input.email.toLowerCase(),
+          secrets.encryptionKey
+        ),
+        passwordHash,
+        role: input.role
+      })
+      .returning({ id: adminUsers.id });
+    const admin = inserted[0];
+    if (!admin) throw new Error("Account non creato");
+    await tx.insert(auditLogs).values({
       actorAdminId: admin.id,
       actorType: "cli",
       action: "admin.created",
@@ -115,7 +115,8 @@ export async function createAdminAccount(input: {
       targetId: admin.id,
       metadata: { role: input.role }
     });
-  return admin;
+    return admin;
+  });
 }
 
 export async function resetAdminPassword(input: {
@@ -127,20 +128,22 @@ export async function resetAdminPassword(input: {
   const recovery = input.resetRecovery
     ? createRecoveryCodes(secrets.recoveryPepper)
     : undefined;
-  const rows = await getDatabase()
-    .update(adminUsers)
-    .set({
-      passwordHash: await hashAdminPassword(input.password),
-      sessionVersion: sql`${adminUsers.sessionVersion} + 1`,
-      recoveryCodeHashes: recovery?.recoveryCodeHashes,
-      updatedAt: new Date()
-    })
-    .where(eq(adminUsers.emailHash, hashEmail(input.email, secrets.hmacPepper)))
-    .returning({ id: adminUsers.id });
-  if (!rows[0]) throw new Error("Account non trovato");
-  await getDatabase()
-    .insert(auditLogs)
-    .values({
+  const passwordHash = await hashAdminPassword(input.password);
+  return getDatabase().transaction(async (tx) => {
+    const rows = await tx
+      .update(adminUsers)
+      .set({
+        passwordHash,
+        sessionVersion: sql`${adminUsers.sessionVersion} + 1`,
+        recoveryCodeHashes: recovery?.recoveryCodeHashes,
+        updatedAt: new Date()
+      })
+      .where(
+        eq(adminUsers.emailHash, hashEmail(input.email, secrets.hmacPepper))
+      )
+      .returning({ id: adminUsers.id });
+    if (!rows[0]) throw new Error("Account non trovato");
+    await tx.insert(auditLogs).values({
       actorAdminId: rows[0].id,
       actorType: "cli",
       action: "admin.password_reset",
@@ -148,7 +151,8 @@ export async function resetAdminPassword(input: {
       targetId: rows[0].id,
       metadata: { recoveryReset: Boolean(recovery) }
     });
-  return { id: rows[0].id, recoveryCodes: recovery?.recoveryCodes };
+    return { id: rows[0].id, recoveryCodes: recovery?.recoveryCodes };
+  });
 }
 
 export async function listAdminAccounts() {
