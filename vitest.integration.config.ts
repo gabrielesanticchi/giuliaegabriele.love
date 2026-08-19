@@ -8,9 +8,9 @@ export default defineConfig({
     }
   },
   test: {
-    environment: "jsdom",
-    setupFiles: ["./tests/setup.ts"],
-    include: ["tests/unit/**/*.test.{ts,tsx}"],
-    coverage: { reporter: ["text", "html"] }
+    environment: "node",
+    include: ["tests/integration/**/*.test.ts"],
+    testTimeout: 20_000,
+    hookTimeout: 20_000
   }
 });
