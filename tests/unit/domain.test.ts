@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+
+import { getCountdown } from "@/lib/domain/countdown";
+import { formatCurrency } from "@/lib/domain/currency";
+import { getGiftFunding, getPublicGiftStatus } from "@/lib/domain/gifts";
+import { buildTransferReason } from "@/lib/domain/references";
+import {
+  emailSchema,
+  httpsUrlSchema,
+  optionalEmailSchema
+} from "@/lib/domain/schemas";
+import { isSafeExternalUrl } from "@/lib/domain/urls";
+
+describe("formatCurrency", () => {
+  it("formatta i centesimi in euro italiani", () => {
+    expect(formatCurrency(123456)).toBe("1234,56 €");
+  });
+});
+
+describe("getCountdown", () => {
+  it("non inventa un countdown quando la data manca", () => {
+    expect(getCountdown(null, new Date("2026-01-01T00:00:00Z"))).toEqual({
+      phase: "missing"
+    });
+  });
+
+  it("calcola una data futura senza valori negativi", () => {
+    expect(
+      getCountdown(
+        "2026-10-24T11:00:00+02:00",
+        new Date("2026-10-23T09:00:00Z")
+      )
+    ).toEqual({ phase: "before", days: 1, hours: 0, minutes: 0, seconds: 0 });
+  });
+
+  it("riconosce il giorno del matrimonio nel fuso di Roma", () => {
+    expect(
+      getCountdown(
+        "2026-10-24T11:00:00+02:00",
+        new Date("2026-10-24T12:00:00Z")
+      )
+    ).toEqual({ phase: "today" });
+  });
+
+  it("riconosce una data trascorsa", () => {
+    expect(
+      getCountdown(
+        "2026-10-24T11:00:00+02:00",
+        new Date("2026-10-25T00:00:00Z")
+      )
+    ).toEqual({ phase: "after" });
+  });
+});
+
+describe("gift domain", () => {
+  it("mappa un lock attivo sullo stato pubblico riservato", () => {
+    expect(
+      getPublicGiftStatus({ completed: false, hasFullGiftLock: true })
+    ).toBe("reserved");
+  });
+
+  it("calcola confermato, pending e residuo impegnabile in centesimi", () => {
+    expect(
+      getGiftFunding({
+        priceCents: 90000,
+        verifiedContributionCents: 35000,
+        pendingContributionCents: 10000
+      })
+    ).toEqual({
+      confirmedCents: 35000,
+      pendingCents: 10000,
+      remainingCents: 55000,
+      committableCents: 45000,
+      complete: false
+    });
+  });
+});
+
+describe("buildTransferReason", () => {
+  it("genera una causale stabile e priva di spazi", () => {
+    expect(buildTransferReason("LIBRERIA", "AB12CD34")).toBe(
+      "CASA-LIBRERIA-AB12CD34"
+    );
+  });
+});
+
+describe("isSafeExternalUrl", () => {
+  it.each([
+    ["https://maps.google.com/?q=Villa+Cavenago", true],
+    ["http://example.com", false],
+    ["javascript:alert(1)", false],
+    ["not-a-url", false]
+  ])("valida %s", (value, expected) => {
+    expect(isSafeExternalUrl(value)).toBe(expected);
+  });
+});
+
+describe("shared domain schemas", () => {
+  it("normalizza e valida un indirizzo email", () => {
+    expect(emailSchema.parse("  invitata@example.com ")).toBe(
+      "invitata@example.com"
+    );
+    expect(emailSchema.safeParse("invitata.example.com").success).toBe(false);
+  });
+
+  it("tratta un'email vuota opzionale come assente", () => {
+    expect(optionalEmailSchema.parse("   ")).toBeUndefined();
+  });
+
+  it("accetta soltanto URL HTTPS assoluti", () => {
+    expect(
+      httpsUrlSchema.parse("https://maps.google.com/?q=Villa+Cavenago")
+    ).toBe("https://maps.google.com/?q=Villa+Cavenago");
+    expect(httpsUrlSchema.safeParse("http://example.com").success).toBe(false);
+    expect(httpsUrlSchema.safeParse("/privacy").success).toBe(false);
+  });
+});
