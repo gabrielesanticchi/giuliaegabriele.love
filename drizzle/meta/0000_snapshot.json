@@ -538,6 +538,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "guest_details_encrypted": {
+          "name": "guest_details_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "guest_email_hash": {
           "name": "guest_email_hash",
           "type": "varchar(64)",

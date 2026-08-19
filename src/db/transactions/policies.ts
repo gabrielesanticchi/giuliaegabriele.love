@@ -55,6 +55,15 @@ export function assertCancellationAllowed(input: {
   }
 }
 
+export function assertPaymentDeclarationAllowed(input: {
+  status: "pending" | "verified" | "cancelled" | "expired" | "rejected";
+  paymentDeclaredAt: Date | null;
+}): void {
+  if (input.status !== "pending") {
+    throw new TransactionError("intent_not_pending");
+  }
+}
+
 export function assertGiftReservationAvailable(input: {
   now: Date;
   contributions: Array<{

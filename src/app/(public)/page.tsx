@@ -7,5 +7,15 @@ export default function HomePage() {
 
   if (!content) return <WaitingPage />;
 
-  return <PublicHome content={content} demoMode />;
+  return (
+    <PublicHome
+      content={content}
+      demoMode
+      allowDemoSubmission={
+        process.env.NODE_ENV !== "production" &&
+        process.env.WEDDING_DEMO_MODE === "true"
+      }
+      turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+    />
+  );
 }

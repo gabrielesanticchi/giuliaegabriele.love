@@ -69,6 +69,7 @@ CREATE TABLE "gift_intents" (
 	"idempotency_key" varchar(128) NOT NULL,
 	"request_fingerprint_hash" varchar(64) NOT NULL,
 	"guest_token_hash" varchar(64) NOT NULL,
+	"guest_details_encrypted" text NOT NULL,
 	"guest_email_hash" varchar(64),
 	"fingerprint_hash" varchar(64),
 	"expires_at" timestamp with time zone NOT NULL,

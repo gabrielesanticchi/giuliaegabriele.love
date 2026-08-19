@@ -10,6 +10,7 @@ import { gifts, giftIntents } from "@/db/schema";
 import {
   cancelIntent,
   contributeToGift,
+  declareIntentPayment,
   reserveGift,
   TransactionError,
   verifyIntent
@@ -65,6 +66,7 @@ integration(
         publicReference: `I-${randomUUID()}`,
         method: "bank_transfer" as const,
         guestTokenHash: tokenHash(),
+        guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       };
 
@@ -92,6 +94,7 @@ integration(
           publicReference: `I-${suffix}-${randomUUID()}`,
           method: "bank_transfer",
           guestTokenHash: tokenHash(),
+          guestDetailsEncrypted: "encrypted-guest-details",
           expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
         })
       );
@@ -122,6 +125,7 @@ integration(
           publicReference: `C-${index}-${randomUUID()}`,
           method: "bank_transfer",
           guestTokenHash: tokenHash(),
+          guestDetailsEncrypted: "encrypted-guest-details",
           expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
         })
       );
@@ -149,6 +153,7 @@ integration(
         publicReference: `C-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
+        guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
       const second = await contributeToGift(db, {
@@ -159,6 +164,7 @@ integration(
         publicReference: `C-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
+        guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
 
@@ -196,6 +202,7 @@ integration(
         publicReference: `I-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
+        guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
       const cancelled = await cancelIntent(db, {
@@ -212,6 +219,7 @@ integration(
         publicReference: `I-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
+        guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
       await db
@@ -227,6 +235,28 @@ integration(
       });
     });
 
+    it("declares payment atomically and idempotently without changing pending status", async () => {
+      const giftId = await createGift();
+      const intent = await reserveGift(db, {
+        giftId,
+        amountCents: 10_000,
+        idempotencyKey: randomUUID(),
+        requestFingerprintHash: tokenHash(),
+        publicReference: `I-${randomUUID()}`,
+        method: "bank_transfer",
+        guestTokenHash: tokenHash(),
+        guestDetailsEncrypted: "encrypted-guest-details",
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+      });
+
+      const declared = await declareIntentPayment(db, { intentId: intent.id });
+      const repeated = await declareIntentPayment(db, { intentId: intent.id });
+
+      expect(declared.status).toBe("pending");
+      expect(declared.paymentDeclaredAt).not.toBeNull();
+      expect(repeated.paymentDeclaredAt).toEqual(declared.paymentDeclaredAt);
+    });
+
     it.each(["pending", "verified"] as const)(
       "rejects a full-gift reservation with a %s contribution",
       async (contributionStatus) => {
@@ -239,6 +269,7 @@ integration(
           publicReference: `C-${randomUUID()}`,
           method: "bank_transfer",
           guestTokenHash: tokenHash(),
+          guestDetailsEncrypted: "encrypted-guest-details",
           expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
         });
         if (contributionStatus === "verified") {
@@ -257,6 +288,7 @@ integration(
             publicReference: `I-${randomUUID()}`,
             method: "bank_transfer",
             guestTokenHash: tokenHash(),
+            guestDetailsEncrypted: "encrypted-guest-details",
             expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
           })
         ).rejects.toMatchObject({ code: "gift_unavailable", httpStatus: 409 });
@@ -274,6 +306,7 @@ integration(
         publicReference: `C-${randomUUID()}`,
         method: "bank_transfer",
         guestTokenHash: tokenHash(),
+        guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
 
@@ -286,6 +319,7 @@ integration(
           publicReference: `C-${randomUUID()}`,
           method: "bank_transfer",
           guestTokenHash: tokenHash(),
+          guestDetailsEncrypted: "encrypted-guest-details",
           expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
         })
       ).rejects.toMatchObject({ code: "duplicate_request", httpStatus: 409 });

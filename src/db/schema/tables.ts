@@ -202,6 +202,7 @@ export const giftIntents = pgTable(
       length: 64
     }).notNull(),
     guestTokenHash: varchar("guest_token_hash", { length: 64 }).notNull(),
+    guestDetailsEncrypted: text("guest_details_encrypted").notNull(),
     guestEmailHash: varchar("guest_email_hash", { length: 64 }),
     fingerprintHash: varchar("fingerprint_hash", { length: 64 }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

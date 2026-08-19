@@ -6,6 +6,7 @@ import {
   assertCancellationAllowed,
   assertGiftReservationAvailable,
   assertIdempotentRequestMatches,
+  assertPaymentDeclarationAllowed,
   getVerificationAmounts
 } from "@/db/transactions/policies";
 
@@ -67,6 +68,23 @@ describe("gift transaction policies", () => {
         paymentDeclaredAt: new Date("2026-08-19T10:00:00.000Z")
       })
     ).not.toThrow();
+  });
+
+  it("allows a repeated declaration but rejects terminal requests", () => {
+    expect(() =>
+      assertPaymentDeclarationAllowed({
+        status: "pending",
+        paymentDeclaredAt: new Date("2026-08-19T10:00:00.000Z")
+      })
+    ).not.toThrow();
+    expect(() =>
+      assertPaymentDeclarationAllowed({
+        status: "cancelled",
+        paymentDeclaredAt: null
+      })
+    ).toThrowError(
+      expect.objectContaining({ code: "intent_not_pending", httpStatus: 409 })
+    );
   });
 
   it.each([

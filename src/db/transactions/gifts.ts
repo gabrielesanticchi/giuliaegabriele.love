@@ -10,6 +10,7 @@ import {
   assertCancellationAllowed,
   assertGiftReservationAvailable,
   assertIdempotentRequestMatches,
+  assertPaymentDeclarationAllowed,
   getVerificationAmounts,
   type IntentRequestSemantics
 } from "./policies";
@@ -26,6 +27,7 @@ type NewIntentInput = {
   amountCents: number;
   requestFingerprintHash: string;
   guestTokenHash: string;
+  guestDetailsEncrypted: string;
   guestEmailHash?: string;
   fingerprintHash?: string;
   expiresAt: Date;
@@ -427,6 +429,53 @@ export async function cancelIntent(
       targetType: "gift_intent",
       targetId: intent.id,
       metadata: {}
+    });
+    if (!updated[0]) throw new Error("Intent non aggiornato");
+    return updated[0];
+  });
+}
+
+export async function declareIntentPayment(
+  db: WeddingDatabase,
+  input: { intentId: string }
+): Promise<GiftIntent> {
+  return runSerializable(db, async (tx) => {
+    const initial = await tx
+      .select({ giftId: giftIntents.giftId })
+      .from(giftIntents)
+      .where(eq(giftIntents.id, input.intentId))
+      .limit(1);
+    if (!initial[0]) throw new TransactionError("intent_not_found", 404);
+
+    await lockAndReadGift(tx, initial[0].giftId);
+    await tx.execute(
+      sql`select id from ${giftIntents} where id = ${input.intentId} for update`
+    );
+    const rows = await tx
+      .select()
+      .from(giftIntents)
+      .where(eq(giftIntents.id, input.intentId))
+      .limit(1);
+    const intent = rows[0];
+    if (!intent) throw new TransactionError("intent_not_found", 404);
+    assertPaymentDeclarationAllowed({
+      status: intent.status,
+      paymentDeclaredAt: intent.paymentDeclaredAt
+    });
+    if (intent.paymentDeclaredAt) return intent;
+
+    const now = new Date();
+    const updated = await tx
+      .update(giftIntents)
+      .set({ paymentDeclaredAt: now, updatedAt: now })
+      .where(eq(giftIntents.id, intent.id))
+      .returning();
+    await tx.insert(auditLogs).values({
+      actorType: "guest",
+      action: "gift_intent.payment_declared",
+      targetType: "gift_intent",
+      targetId: intent.id,
+      metadata: { paymentDeclared: true }
     });
     if (!updated[0]) throw new Error("Intent non aggiornato");
     return updated[0];

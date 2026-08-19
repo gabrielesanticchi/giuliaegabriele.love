@@ -12,12 +12,16 @@ import { isSafeExternalUrl } from "@/lib/domain/urls";
 export interface PublicHomeProps {
   content: PublicContent;
   demoMode?: boolean;
+  allowDemoSubmission?: boolean;
+  turnstileSiteKey?: string;
   initialNow?: string;
 }
 
 export function PublicHome({
   content,
   demoMode = false,
+  allowDemoSubmission = false,
+  turnstileSiteKey = "",
   initialNow = new Date().toISOString()
 }: PublicHomeProps) {
   return (
@@ -59,7 +63,12 @@ export function PublicHome({
               resterà con noi.
             </p>
           </div>
-          <GiftRegistry gifts={content.gifts} demoMode={demoMode} />
+          <GiftRegistry
+            gifts={content.gifts}
+            demoMode={demoMode}
+            allowDemoSubmission={allowDemoSubmission}
+            turnstileSiteKey={turnstileSiteKey}
+          />
         </section>
       </main>
       <footer className="site-footer">

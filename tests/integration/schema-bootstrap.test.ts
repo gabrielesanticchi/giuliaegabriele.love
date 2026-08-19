@@ -49,13 +49,16 @@ integration(
       }
     });
 
-    it("creates the request fingerprint column and index from migration 0000", async () => {
-      const columns = await adminSql<Array<{ is_nullable: "YES" | "NO" }>>`
-        select is_nullable
+    it("creates request security columns and index from migration 0000", async () => {
+      const columns = await adminSql<
+        Array<{ column_name: string; is_nullable: "YES" | "NO" }>
+      >`
+        select column_name, is_nullable
         from information_schema.columns
         where table_schema = ${schemaName}
           and table_name = 'gift_intents'
-          and column_name = 'request_fingerprint_hash'
+          and column_name in ('request_fingerprint_hash', 'guest_details_encrypted')
+        order by column_name
       `;
       const indexes = await adminSql<Array<{ indexname: string }>>`
         select indexname
@@ -65,7 +68,10 @@ integration(
           and indexname = 'gift_intents_request_fingerprint_idx'
       `;
 
-      expect(columns).toEqual([{ is_nullable: "NO" }]);
+      expect(columns).toEqual([
+        { column_name: "guest_details_encrypted", is_nullable: "NO" },
+        { column_name: "request_fingerprint_hash", is_nullable: "NO" }
+      ]);
       expect(indexes).toEqual([
         { indexname: "gift_intents_request_fingerprint_idx" }
       ]);
@@ -87,6 +93,7 @@ integration(
         publicReference: `I-${randomUUID()}`,
         method: "bank_transfer" as const,
         guestTokenHash: randomBytes(32).toString("hex"),
+        guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       };
 
