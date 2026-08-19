@@ -53,10 +53,28 @@ describe("getCountdown", () => {
 });
 
 describe("gift domain", () => {
+  it("rende disponibile un regalo incompleto e senza lock", () => {
+    expect(
+      getPublicGiftStatus({ completed: false, hasFullGiftLock: false })
+    ).toBe("available");
+  });
+
   it("mappa un lock attivo sullo stato pubblico riservato", () => {
     expect(
       getPublicGiftStatus({ completed: false, hasFullGiftLock: true })
     ).toBe("reserved");
+  });
+
+  it("rende regalato un regalo completato", () => {
+    expect(
+      getPublicGiftStatus({ completed: true, hasFullGiftLock: false })
+    ).toBe("gifted");
+  });
+
+  it("dà precedenza al completamento rispetto a un lock attivo", () => {
+    expect(
+      getPublicGiftStatus({ completed: true, hasFullGiftLock: true })
+    ).toBe("gifted");
   });
 
   it("calcola confermato, pending e residuo impegnabile in centesimi", () => {
@@ -73,6 +91,33 @@ describe("gift domain", () => {
       committableCents: 45000,
       complete: false
     });
+  });
+
+  it.each([
+    ["priceCents", -1],
+    ["priceCents", 1.5],
+    ["priceCents", Number.NaN],
+    ["priceCents", Number.POSITIVE_INFINITY],
+    ["priceCents", 9007199254740992],
+    ["verifiedContributionCents", -1],
+    ["verifiedContributionCents", 1.5],
+    ["verifiedContributionCents", Number.NaN],
+    ["verifiedContributionCents", Number.POSITIVE_INFINITY],
+    ["verifiedContributionCents", 9007199254740992],
+    ["pendingContributionCents", -1],
+    ["pendingContributionCents", 1.5],
+    ["pendingContributionCents", Number.NaN],
+    ["pendingContributionCents", Number.POSITIVE_INFINITY],
+    ["pendingContributionCents", 9007199254740992]
+  ] as const)("rifiuta l'importo non valido %s=%s", (field, value) => {
+    expect(() =>
+      getGiftFunding({
+        priceCents: 90000,
+        verifiedContributionCents: 35000,
+        pendingContributionCents: 10000,
+        [field]: value
+      })
+    ).toThrow(TypeError);
   });
 });
 

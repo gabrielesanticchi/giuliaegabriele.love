@@ -9,11 +9,24 @@ export function getPublicGiftStatus(input: {
   return "available";
 }
 
+function assertValidCents(value: number, field: string): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError(`${field} deve essere un intero non negativo sicuro`);
+  }
+}
+
 export function getGiftFunding(input: {
   priceCents: number;
   verifiedContributionCents: number;
   pendingContributionCents: number;
 }) {
+  assertValidCents(input.priceCents, "priceCents");
+  assertValidCents(
+    input.verifiedContributionCents,
+    "verifiedContributionCents"
+  );
+  assertValidCents(input.pendingContributionCents, "pendingContributionCents");
+
   const confirmedCents = Math.max(0, input.verifiedContributionCents);
   const pendingCents = Math.max(0, input.pendingContributionCents);
   const remainingCents = Math.max(0, input.priceCents - confirmedCents);
