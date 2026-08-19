@@ -1,16 +1,18 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import QRCode from "qrcode";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
-import { adminUsers } from "@/db/schema";
+import { adminUsers, auditLogs } from "@/db/schema";
 import { authSecrets } from "@/lib/auth/environment";
 import { createTotpEnrollment, verifyTotpCode } from "@/lib/auth/totp";
+import { verifyAdminPassword } from "@/lib/auth/password";
+import { verifyRecoveryCode } from "@/lib/auth/totp";
 import { decryptSecret } from "@/lib/security/crypto";
 
-import { authorizedAdmin, writeAdminAudit } from "./shared";
+import { authorizedAdmin } from "./shared";
 
 export type TotpEnrollmentState = {
   ok: boolean;
@@ -22,11 +24,16 @@ export type TotpEnrollmentState = {
 export async function beginTotpEnrollmentAction(): Promise<TotpEnrollmentState> {
   const admin = await authorizedAdmin("totp.enroll");
   const rows = await getDatabase()
-    .select({ emailEncrypted: adminUsers.emailEncrypted })
+    .select({
+      emailEncrypted: adminUsers.emailEncrypted,
+      totpEnabled: adminUsers.totpEnabled
+    })
     .from(adminUsers)
     .where(eq(adminUsers.id, admin.id))
     .limit(1);
   if (!rows[0]) return { ok: false, message: "Account non disponibile" };
+  if (rows[0].totpEnabled)
+    return { ok: false, message: "TOTP già attivo: usa il reset protetto" };
   const secrets = authSecrets();
   const email = decryptSecret(rows[0].emailEncrypted, secrets.encryptionKey);
   const enrollment = createTotpEnrollment({
@@ -38,7 +45,7 @@ export async function beginTotpEnrollmentAction(): Promise<TotpEnrollmentState> 
     .update(adminUsers)
     .set({
       pendingTotpSecretEncrypted: enrollment.secretEncrypted,
-      recoveryCodeHashes: enrollment.recoveryCodeHashes,
+      pendingRecoveryCodeHashes: enrollment.recoveryCodeHashes,
       updatedAt: new Date()
     })
     .where(eq(adminUsers.id, admin.id));
@@ -64,34 +71,108 @@ export async function completeTotpEnrollmentAction(
     .regex(/^\d{6}$/)
     .safeParse(formData.get("code"));
   if (!code.success) return { ok: false, message: "Codice non valido" };
+  const completed = await getDatabase().transaction(async (tx) => {
+    await tx.execute(
+      sql`select id from ${adminUsers} where id = ${admin.id} for update`
+    );
+    const rows = await tx
+      .select()
+      .from(adminUsers)
+      .where(eq(adminUsers.id, admin.id))
+      .limit(1);
+    const row = rows[0];
+    if (
+      !row?.pendingTotpSecretEncrypted ||
+      row.pendingRecoveryCodeHashes.length === 0
+    )
+      return false;
+    const valid = await verifyTotpCode({
+      code: code.data,
+      secretEncrypted: row.pendingTotpSecretEncrypted,
+      encryptionKey: authSecrets().encryptionKey
+    });
+    if (!valid) return false;
+    await tx
+      .update(adminUsers)
+      .set({
+        totpSecretEncrypted: row.pendingTotpSecretEncrypted,
+        pendingTotpSecretEncrypted: null,
+        recoveryCodeHashes: row.pendingRecoveryCodeHashes,
+        pendingRecoveryCodeHashes: [],
+        totpEnabled: true,
+        sessionVersion: row.sessionVersion + 1,
+        updatedAt: new Date()
+      })
+      .where(eq(adminUsers.id, admin.id));
+    await tx.insert(auditLogs).values({
+      actorAdminId: admin.id,
+      actorType: "admin",
+      action: "admin.totp_enabled",
+      targetType: "admin_user",
+      targetId: admin.id,
+      metadata: {}
+    });
+    return true;
+  });
+  return completed
+    ? { ok: true, message: "Autenticazione a due fattori attiva" }
+    : { ok: false, message: "Codice non valido" };
+}
+
+export async function resetTotpEnrollmentAction(
+  formData: FormData
+): Promise<TotpEnrollmentState> {
+  const admin = await authorizedAdmin("totp.reset-recovery");
+  const parsed = z
+    .object({ password: z.string().min(1), code: z.string().min(6).max(32) })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success)
+    return { ok: false, message: "Verifica recente non valida" };
   const rows = await getDatabase()
-    .select({ pending: adminUsers.pendingTotpSecretEncrypted })
+    .select()
     .from(adminUsers)
     .where(eq(adminUsers.id, admin.id))
     .limit(1);
-  const pending = rows[0]?.pending;
-  if (!pending) return { ok: false, message: "Avvia prima la configurazione" };
-  const valid = await verifyTotpCode({
-    code: code.data,
-    secretEncrypted: pending,
-    encryptionKey: authSecrets().encryptionKey
+  const row = rows[0];
+  if (
+    !row?.totpEnabled ||
+    !(await verifyAdminPassword(parsed.data.password, row.passwordHash))
+  )
+    return { ok: false, message: "Verifica recente non valida" };
+  const secrets = authSecrets();
+  const validTotp = row.totpSecretEncrypted
+    ? await verifyTotpCode({
+        code: parsed.data.code,
+        secretEncrypted: row.totpSecretEncrypted,
+        encryptionKey: secrets.encryptionKey
+      })
+    : false;
+  const recovery = verifyRecoveryCode({
+    code: parsed.data.code,
+    recoveryCodeHashes: row.recoveryCodeHashes,
+    recoveryPepper: secrets.recoveryPepper
   });
-  if (!valid) return { ok: false, message: "Codice non valido" };
+  if (!validTotp && !recovery.valid)
+    return { ok: false, message: "Verifica recente non valida" };
+  const email = decryptSecret(row.emailEncrypted, secrets.encryptionKey);
+  const enrollment = createTotpEnrollment({
+    email,
+    encryptionKey: secrets.encryptionKey,
+    recoveryPepper: secrets.recoveryPepper
+  });
   await getDatabase()
     .update(adminUsers)
     .set({
-      totpSecretEncrypted: pending,
-      pendingTotpSecretEncrypted: null,
-      totpEnabled: true,
-      sessionVersion: admin.sessionVersion + 1,
+      pendingTotpSecretEncrypted: enrollment.secretEncrypted,
+      pendingRecoveryCodeHashes: enrollment.recoveryCodeHashes,
+      recoveryCodeHashes: recovery.hashes ?? row.recoveryCodeHashes,
       updatedAt: new Date()
     })
     .where(eq(adminUsers.id, admin.id));
-  await writeAdminAudit({
-    actorAdminId: admin.id,
-    action: "admin.totp_enabled",
-    targetType: "admin_user",
-    targetId: admin.id
-  });
-  return { ok: true, message: "Autenticazione a due fattori attiva" };
+  return {
+    ok: true,
+    message: "Nuova configurazione pronta",
+    qrDataUrl: await QRCode.toDataURL(enrollment.uri),
+    recoveryCodes: enrollment.recoveryCodes
+  };
 }

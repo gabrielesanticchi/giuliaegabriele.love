@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { asc, desc, isNull } from "drizzle-orm";
+import { asc, desc, eq, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import {
@@ -10,11 +10,21 @@ import {
   saveStoryMomentAction,
   saveStructuredContentAction
 } from "@/actions/admin/content";
-import { saveGiftAction, saveGiftCategoryAction } from "@/actions/admin/gifts";
+import {
+  archiveGiftAction,
+  duplicateGiftAction,
+  saveGiftAction,
+  saveGiftCategoryAction,
+  setGiftPublishedAction
+} from "@/actions/admin/gifts";
 import {
   cancelRequestAction,
+  createManualRequestAction,
+  extendRequestAction,
   rejectRequestAction,
+  resendRequestEmailAction,
   saveRequestNoteAction,
+  unlockRequestAction,
   verifyRequestAction
 } from "@/actions/admin/requests";
 import {
@@ -35,6 +45,7 @@ import {
   gifts,
   mediaAssets,
   scheduleItems,
+  siteSettings,
   storyMoments
 } from "@/db/schema";
 import { getAdminPrincipal } from "@/lib/auth/session";
@@ -96,6 +107,19 @@ export default async function AdminSectionPage({
 
   if (section === "sito" || section === "matrimonio") {
     const key = section === "sito" ? "hero" : "wedding";
+    const existingRows = await db
+      .select({ value: siteSettings.value })
+      .from(siteSettings)
+      .where(eq(siteSettings.key, key))
+      .limit(1);
+    const existing = (existingRows[0]?.value ?? {}) as {
+      title?: string;
+      description?: string;
+      published?: boolean;
+      weddingDate?: string;
+      displayDate?: string;
+      place?: string;
+    };
     return (
       <>
         <PageHeader section={section} />
@@ -106,9 +130,48 @@ export default async function AdminSectionPage({
           hidden={{ key }}
           submitLabel="Salva contenuto"
           fields={[
-            { name: "title", label: "Titolo", type: "text", required: true },
-            { name: "description", label: "Testo", type: "textarea" },
-            { name: "published", label: "Pubblicato", type: "checkbox" }
+            {
+              name: "title",
+              label: "Titolo",
+              type: "text",
+              required: true,
+              defaultValue: existing.title ?? ""
+            },
+            {
+              name: "description",
+              label: "Testo",
+              type: "textarea",
+              defaultValue: existing.description ?? ""
+            },
+            ...(section === "matrimonio"
+              ? [
+                  {
+                    name: "weddingDate",
+                    label: "Data ISO con fuso",
+                    type: "text" as const,
+                    required: true,
+                    defaultValue: existing.weddingDate ?? ""
+                  },
+                  {
+                    name: "displayDate",
+                    label: "Data visualizzata",
+                    type: "text" as const,
+                    defaultValue: existing.displayDate ?? ""
+                  },
+                  {
+                    name: "place",
+                    label: "Luogo",
+                    type: "text" as const,
+                    defaultValue: existing.place ?? ""
+                  }
+                ]
+              : []),
+            {
+              name: "published",
+              label: "Pubblicato",
+              type: "checkbox",
+              defaultValue: existing.published === true
+            }
           ]}
         />
       </>
@@ -209,6 +272,17 @@ export default async function AdminSectionPage({
     return (
       <>
         <PageHeader section={section} />
+        <StructuredEditor
+          title="Testo dress code"
+          description="Titolo e invito mostrati nella sezione pubblica."
+          action={saveStructuredContentAction}
+          hidden={{ key: "dress_code" }}
+          fields={[
+            { name: "title", label: "Titolo", type: "text", required: true },
+            { name: "description", label: "Descrizione", type: "textarea" },
+            { name: "published", label: "Pubblicato", type: "checkbox" }
+          ]}
+        />
         <StructuredEditor
           title="Aggiungi un colore"
           description="Palette accessibile con nome e valore esadecimale."
@@ -317,14 +391,53 @@ export default async function AdminSectionPage({
             { name: "description", label: "Descrizione", type: "textarea" }
           ]}
         />
-        <SimpleTable
-          headers={["Regalo", "Prezzo", "Stato"]}
-          rows={giftRows.map((row) => [
-            row.title,
-            formatCurrency(row.priceCents),
-            row.published ? "Pubblicato" : "Nascosto"
-          ])}
-        />
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th>Regalo</th>
+              <th>Prezzo</th>
+              <th>Stato</th>
+              <th>Azioni</th>
+            </tr>
+          </thead>
+          <tbody>
+            {giftRows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.title}</td>
+                <td>{formatCurrency(row.priceCents)}</td>
+                <td>{row.published ? "Pubblicato" : "Nascosto"}</td>
+                <td>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await setGiftPublishedAction(row.id, !row.published);
+                    }}
+                  >
+                    <button type="submit">
+                      {row.published ? "Nascondi" : "Pubblica"}
+                    </button>
+                  </form>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await duplicateGiftAction(row.id);
+                    }}
+                  >
+                    <button type="submit">Duplica</button>
+                  </form>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await archiveGiftAction(row.id);
+                    }}
+                  >
+                    <button type="submit">Archivia</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </>
     );
   }
@@ -338,6 +451,52 @@ export default async function AdminSectionPage({
     return (
       <>
         <PageHeader section={section} />
+        <StructuredEditor
+          title="Inserimento manuale"
+          description="Crea una richiesta rispettando lock e disponibilità del regalo."
+          action={createManualRequestAction}
+          hidden={{ idempotencyKey: randomUUID() }}
+          fields={[
+            {
+              name: "giftId",
+              label: "ID regalo",
+              type: "text",
+              required: true
+            },
+            {
+              name: "kind",
+              label: "Tipo",
+              type: "select",
+              options: [
+                { label: "Regalo completo", value: "full_gift" },
+                { label: "Contributo", value: "contribution" }
+              ]
+            },
+            {
+              name: "method",
+              label: "Metodo",
+              type: "select",
+              options: [
+                { label: "Bonifico", value: "bank_transfer" },
+                { label: "Acquisto esterno", value: "external_purchase" }
+              ]
+            },
+            {
+              name: "amountCents",
+              label: "Importo ricevuto (centesimi)",
+              type: "number",
+              required: true
+            },
+            { name: "firstName", label: "Nome", type: "text", required: true },
+            {
+              name: "lastName",
+              label: "Cognome",
+              type: "text",
+              required: true
+            },
+            { name: "email", label: "Email", type: "email", required: true }
+          ]}
+        />
         <table className="admin-table">
           <thead>
             <tr>
@@ -386,10 +545,63 @@ export default async function AdminSectionPage({
                   <form
                     action={async (data) => {
                       "use server";
+                      await unlockRequestAction(data);
+                    }}
+                  >
+                    <input type="hidden" name="intentId" value={row.id} />
+                    <input
+                      type="hidden"
+                      name="idempotencyKey"
+                      value={randomUUID()}
+                    />
+                    <button type="submit">Sblocca</button>
+                  </form>
+                  <form
+                    action={async (data) => {
+                      "use server";
+                      await extendRequestAction(data);
+                    }}
+                  >
+                    <input type="hidden" name="intentId" value={row.id} />
+                    <input
+                      type="datetime-local"
+                      name="expiresAt"
+                      aria-label={`Nuova scadenza ${row.publicReference}`}
+                      required
+                    />
+                    <button type="submit">Estendi</button>
+                  </form>
+                  <form
+                    action={async (data) => {
+                      "use server";
+                      await resendRequestEmailAction(data);
+                    }}
+                  >
+                    <input type="hidden" name="intentId" value={row.id} />
+                    <input
+                      type="hidden"
+                      name="idempotencyKey"
+                      value={randomUUID()}
+                    />
+                    <input
+                      type="hidden"
+                      name="idempotencyKey"
+                      value={randomUUID()}
+                    />
+                    <button type="submit">Reinvia email</button>
+                  </form>
+                  <form
+                    action={async (data) => {
+                      "use server";
                       await rejectRequestAction(data);
                     }}
                   >
                     <input type="hidden" name="intentId" value={row.id} />
+                    <input
+                      type="hidden"
+                      name="idempotencyKey"
+                      value={randomUUID()}
+                    />
                     <input
                       type="hidden"
                       name="idempotencyKey"
@@ -418,6 +630,11 @@ export default async function AdminSectionPage({
                     }}
                   >
                     <input type="hidden" name="intentId" value={row.id} />
+                    <input
+                      type="hidden"
+                      name="idempotencyKey"
+                      value={randomUUID()}
+                    />
                     <input
                       name="note"
                       aria-label={`Nota ${row.publicReference}`}
@@ -492,6 +709,16 @@ export default async function AdminSectionPage({
   if (section === "impostazioni") {
     const principal = await getAdminPrincipal();
     const readiness = principal?.role === "owner" ? await loadReadiness() : [];
+    const settingsRows = await db
+      .select({ value: siteSettings.value })
+      .from(siteSettings)
+      .where(eq(siteSettings.key, "admin_settings"))
+      .limit(1);
+    const currentSettings = (settingsRows[0]?.value ?? {}) as {
+      privacyReviewed?: boolean;
+      requestHoldHours?: number;
+      publicContactLabel?: string;
+    };
     return (
       <>
         <PageHeader section={section} />
@@ -505,18 +732,20 @@ export default async function AdminSectionPage({
                 {
                   name: "privacyReviewed",
                   label: "Privacy verificata",
-                  type: "checkbox"
+                  type: "checkbox",
+                  defaultValue: currentSettings.privacyReviewed === true
                 },
                 {
                   name: "requestHoldHours",
                   label: "Durata riserva (ore)",
                   type: "number",
-                  defaultValue: 48
+                  defaultValue: currentSettings.requestHoldHours ?? 48
                 },
                 {
                   name: "publicContactLabel",
                   label: "Etichetta contatto",
-                  type: "text"
+                  type: "text",
+                  defaultValue: currentSettings.publicContactLabel ?? ""
                 }
               ]}
             />

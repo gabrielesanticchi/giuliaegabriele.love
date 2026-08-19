@@ -7,6 +7,7 @@ import { getDatabase } from "@/db";
 import {
   dressCodeColors,
   gifts,
+  mediaAssets,
   scheduleItems,
   siteSettings,
   storyMoments
@@ -129,47 +130,60 @@ export async function saveAdminSettingsAction(
 export async function loadReadiness() {
   await authorizedAdmin("site.publish");
   const db = getDatabase();
-  const [settings, scheduleCount, storyCount, colorCount, giftCount, banking] =
-    await Promise.all([
-      db.select().from(siteSettings),
-      db
-        .select({ count: count() })
-        .from(scheduleItems)
-        .where(eq(scheduleItems.published, true)),
-      db
-        .select({ count: count() })
-        .from(storyMoments)
-        .where(eq(storyMoments.published, true)),
-      db.select({ count: count() }).from(dressCodeColors),
-      db
-        .select({ count: count() })
-        .from(gifts)
-        .where(
-          and(
-            eq(gifts.published, true),
-            eq(gifts.completed, false),
-            isNull(gifts.archivedAt)
-          )
-        ),
-      db
-        .select({ encryptedValue: siteSettings.encryptedValue })
-        .from(siteSettings)
-        .where(eq(siteSettings.key, "banking_instructions"))
-        .limit(1)
-    ]);
+  const [
+    settings,
+    scheduleCount,
+    storyCount,
+    colorCount,
+    giftCount,
+    banking,
+    mediaCount
+  ] = await Promise.all([
+    db.select().from(siteSettings),
+    db
+      .select({ count: count() })
+      .from(scheduleItems)
+      .where(eq(scheduleItems.published, true)),
+    db
+      .select({ count: count() })
+      .from(storyMoments)
+      .where(eq(storyMoments.published, true)),
+    db.select({ count: count() }).from(dressCodeColors),
+    db
+      .select({ count: count() })
+      .from(gifts)
+      .where(
+        and(
+          eq(gifts.published, true),
+          eq(gifts.completed, false),
+          isNull(gifts.archivedAt)
+        )
+      ),
+    db
+      .select({ encryptedValue: siteSettings.encryptedValue })
+      .from(siteSettings)
+      .where(eq(siteSettings.key, "banking_instructions"))
+      .limit(1),
+    db.select({ count: count() }).from(mediaAssets)
+  ]);
   const byKey = new Map(
     settings.map((setting) => [setting.key, setting.value])
   );
   const adminSettings = byKey.get("admin_settings") as
     { privacyReviewed?: boolean } | undefined;
+  const hero = byKey.get("hero") as { published?: boolean } | undefined;
+  const wedding = byKey.get("wedding") as { published?: boolean } | undefined;
   return getReadinessChecklist({
     heroConfigured: byKey.has("hero"),
+    heroPublished: hero?.published === true,
     weddingConfigured: byKey.has("wedding"),
+    weddingPublished: wedding?.published === true,
     schedulePublishedCount: scheduleCount[0]?.count ?? 0,
     storyPublishedCount: storyCount[0]?.count ?? 0,
     dressColorCount: colorCount[0]?.count ?? 0,
     publishedGiftCount: giftCount[0]?.count ?? 0,
     bankingConfigured: Boolean(banking[0]?.encryptedValue),
+    requiredMediaCount: mediaCount[0]?.count ?? 0,
     privacyReviewed: adminSettings?.privacyReviewed === true
   });
 }
@@ -183,6 +197,16 @@ export async function publishSiteAction(
   }
   const checklist = await loadReadiness();
   assertSiteReady(checklist);
+  const current = await getDatabase()
+    .select({ value: siteSettings.value })
+    .from(siteSettings)
+    .where(eq(siteSettings.key, "site_publication"))
+    .limit(1);
+  if (
+    (current[0]?.value as { published?: boolean } | undefined)?.published ===
+    true
+  )
+    return { ok: true, message: "Sito già pubblicato" };
   await getDatabase()
     .insert(siteSettings)
     .values({
@@ -208,6 +232,16 @@ export async function publishSiteAction(
 
 export async function unpublishSiteAction(): Promise<AdminActionResult> {
   const admin = await authorizedAdmin("site.unpublish");
+  const current = await getDatabase()
+    .select({ value: siteSettings.value })
+    .from(siteSettings)
+    .where(eq(siteSettings.key, "site_publication"))
+    .limit(1);
+  if (
+    (current[0]?.value as { published?: boolean } | undefined)?.published ===
+    false
+  )
+    return { ok: true, message: "Pubblicazione già revocata" };
   await getDatabase()
     .insert(siteSettings)
     .values({ key: "site_publication", value: { published: false } })

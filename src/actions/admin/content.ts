@@ -31,6 +31,9 @@ const settingSchema = z.object({
   ]),
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(2_000),
+  weddingDate: z.string().datetime({ offset: true }).optional(),
+  displayDate: z.string().trim().max(100).optional(),
+  place: z.string().trim().max(200).optional(),
   published: z.boolean()
 });
 
@@ -85,15 +88,33 @@ export async function saveStructuredContentAction(
     key: formData.get("key"),
     title: formData.get("title"),
     description: formData.get("description"),
+    weddingDate: formData.get("weddingDate") || undefined,
+    displayDate: formData.get("displayDate") || undefined,
+    place: formData.get("place") || undefined,
     published: bool(formData.get("published"))
   });
   if (!parsed.success) return { ok: false, message: "Contenuto non valido" };
   await getDatabase()
     .insert(siteSettings)
-    .values({ key: parsed.data.key, value: parsed.data })
+    .values({
+      key: parsed.data.key,
+      value:
+        parsed.data.key === "hero"
+          ? { ...parsed.data, media: { kind: "art", label: parsed.data.title } }
+          : parsed.data
+    })
     .onConflictDoUpdate({
       target: siteSettings.key,
-      set: { value: parsed.data, updatedAt: new Date() }
+      set: {
+        value:
+          parsed.data.key === "hero"
+            ? {
+                ...parsed.data,
+                media: { kind: "art", label: parsed.data.title }
+              }
+            : parsed.data,
+        updatedAt: new Date()
+      }
     });
   await writeAdminAudit({
     actorAdminId: admin.id,

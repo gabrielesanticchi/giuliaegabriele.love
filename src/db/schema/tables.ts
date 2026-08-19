@@ -57,6 +57,10 @@ export const adminUsers = pgTable(
     sessionVersion: integer("session_version").default(1).notNull(),
     totpSecretEncrypted: text("totp_secret_encrypted"),
     pendingTotpSecretEncrypted: text("pending_totp_secret_encrypted"),
+    pendingRecoveryCodeHashes: jsonb("pending_recovery_code_hashes")
+      .$type<string[]>()
+      .default([])
+      .notNull(),
     recoveryCodeHashes: jsonb("recovery_code_hashes")
       .$type<string[]>()
       .default([])
@@ -281,7 +285,10 @@ export const adminActionReceipts = pgTable(
       .notNull()
       .references(() => adminUsers.id, { onDelete: "cascade" }),
     action: varchar("action", { length: 100 }).notNull(),
+    entityId: varchar("entity_id", { length: 160 }).notNull(),
     idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
+    payloadHash: varchar("payload_hash", { length: 64 }).notNull(),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
     result: jsonb("result").default({}).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -291,7 +298,12 @@ export const adminActionReceipts = pgTable(
     uniqueIndex("admin_action_receipts_action_key_unique").on(
       table.actorAdminId,
       table.action,
+      table.entityId,
       table.idempotencyKey
+    ),
+    check(
+      "admin_action_receipts_status_valid",
+      sql`${table.status} in ('pending', 'completed')`
     )
   ]
 );

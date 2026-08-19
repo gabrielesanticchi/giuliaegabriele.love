@@ -2,16 +2,37 @@ CREATE TYPE "public"."email_delivery_status" AS ENUM('pending', 'sent', 'failed'
 CREATE TYPE "public"."gift_intent_kind" AS ENUM('full_gift', 'contribution');--> statement-breakpoint
 CREATE TYPE "public"."gift_intent_method" AS ENUM('external_purchase', 'bank_transfer');--> statement-breakpoint
 CREATE TYPE "public"."gift_intent_status" AS ENUM('pending', 'verified', 'cancelled', 'expired', 'rejected');--> statement-breakpoint
+CREATE TABLE "admin_action_receipts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"actor_admin_id" uuid NOT NULL,
+	"action" varchar(100) NOT NULL,
+	"entity_id" varchar(160) NOT NULL,
+	"idempotency_key" varchar(128) NOT NULL,
+	"payload_hash" varchar(64) NOT NULL,
+	"status" varchar(20) DEFAULT 'pending' NOT NULL,
+	"result" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "admin_action_receipts_status_valid" CHECK ("admin_action_receipts"."status" in ('pending', 'completed'))
+);
+--> statement-breakpoint
 CREATE TABLE "admin_users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"email_hash" varchar(64) NOT NULL,
+	"email_encrypted" text NOT NULL,
 	"password_hash" text NOT NULL,
+	"role" varchar(20) DEFAULT 'editor' NOT NULL,
+	"session_version" integer DEFAULT 1 NOT NULL,
 	"totp_secret_encrypted" text,
+	"pending_totp_secret_encrypted" text,
+	"pending_recovery_code_hashes" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"recovery_code_hashes" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"totp_enabled" boolean DEFAULT false NOT NULL,
 	"disabled_at" timestamp with time zone,
 	"last_login_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "admin_users_role_valid" CHECK ("admin_users"."role" in ('owner', 'editor')),
+	CONSTRAINT "admin_users_session_version_positive" CHECK ("admin_users"."session_version" >= 1)
 );
 --> statement-breakpoint
 CREATE TABLE "audit_logs" (
@@ -78,6 +99,8 @@ CREATE TABLE "gift_intents" (
 	"guest_cancel_idempotency_key" varchar(128),
 	"verified_at" timestamp with time zone,
 	"cancelled_at" timestamp with time zone,
+	"rejected_at" timestamp with time zone,
+	"admin_note" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "gift_intents_amount_nonnegative" CHECK ("gift_intents"."amount_cents" >= 0),
@@ -104,6 +127,7 @@ CREATE TABLE "gifts" (
 	"progress_mode" varchar(20) DEFAULT 'discreet' NOT NULL,
 	"completed" boolean DEFAULT false NOT NULL,
 	"published" boolean DEFAULT false NOT NULL,
+	"archived_at" timestamp with time zone,
 	"sort_order" integer DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -166,6 +190,7 @@ CREATE TABLE "story_moments" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "admin_action_receipts" ADD CONSTRAINT "admin_action_receipts_actor_admin_id_admin_users_id_fk" FOREIGN KEY ("actor_admin_id") REFERENCES "public"."admin_users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_actor_admin_id_admin_users_id_fk" FOREIGN KEY ("actor_admin_id") REFERENCES "public"."admin_users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "email_deliveries" ADD CONSTRAINT "email_deliveries_intent_id_gift_intents_id_fk" FOREIGN KEY ("intent_id") REFERENCES "public"."gift_intents"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "gift_intents" ADD CONSTRAINT "gift_intents_gift_id_gifts_id_fk" FOREIGN KEY ("gift_id") REFERENCES "public"."gifts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -174,6 +199,7 @@ ALTER TABLE "gift_locks" ADD CONSTRAINT "gift_locks_intent_id_gift_intents_id_fk
 ALTER TABLE "gifts" ADD CONSTRAINT "gifts_category_id_gift_categories_id_fk" FOREIGN KEY ("category_id") REFERENCES "public"."gift_categories"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "gifts" ADD CONSTRAINT "gifts_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "story_moments" ADD CONSTRAINT "story_moments_media_asset_id_media_assets_id_fk" FOREIGN KEY ("media_asset_id") REFERENCES "public"."media_assets"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "admin_action_receipts_action_key_unique" ON "admin_action_receipts" USING btree ("actor_admin_id","action","entity_id","idempotency_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "admin_users_email_hash_unique" ON "admin_users" USING btree ("email_hash");--> statement-breakpoint
 CREATE INDEX "audit_logs_target_idx" ON "audit_logs" USING btree ("target_type","target_id");--> statement-breakpoint
 CREATE INDEX "audit_logs_created_at_idx" ON "audit_logs" USING btree ("created_at");--> statement-breakpoint

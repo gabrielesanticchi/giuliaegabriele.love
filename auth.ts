@@ -2,6 +2,10 @@ import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 
 import { authenticateAdmin, loadAdminPrincipal } from "@/lib/auth/repository";
+import {
+  ClientIdentityUnavailableError,
+  resolveClientIdentity
+} from "@/lib/public-api/client-identity";
 
 const secure = process.env.NODE_ENV === "production";
 
@@ -32,22 +36,28 @@ export const authOptions: NextAuthOptions = {
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials.password) return null;
-        const headers = request.headers as unknown as Record<
-          string,
-          string | string[] | undefined
-        >;
-        const forwarded = headers["x-forwarded-for"];
-        const clientIdentity = [
-          Array.isArray(forwarded) ? forwarded[0] : forwarded,
-          headers["user-agent"]
-        ]
-          .filter(Boolean)
-          .join("|");
+        const headers = new Headers(request.headers as HeadersInit);
+        let clientIdentity: string;
+        try {
+          clientIdentity = resolveClientIdentity(
+            new Request("https://auth.local", { headers }),
+            {
+              production: secure,
+              trustedProxyHeader:
+                process.env.VERCEL === "1"
+                  ? "x-vercel-forwarded-for"
+                  : process.env.TRUSTED_PROXY_IP_HEADER
+            }
+          ).fingerprintMaterial;
+        } catch (error) {
+          if (error instanceof ClientIdentityUnavailableError) return null;
+          throw error;
+        }
         const principal = await authenticateAdmin({
           email: credentials.email,
           password: credentials.password,
           code: credentials.code,
-          clientIdentity: clientIdentity || "unknown"
+          clientIdentity
         });
         if (!principal) return null;
         return {

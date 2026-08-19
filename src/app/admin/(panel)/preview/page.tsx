@@ -1,17 +1,23 @@
 import { PublicHome } from "@/components/sections/public-home";
-import { getDemoPublicContent } from "@/data/demo-content";
 import { requireAdmin } from "@/lib/auth/session";
+import { loadPublicContent } from "@/lib/public-content/adapter";
 
 export const dynamic = "force-dynamic";
 
 export default async function PreviewPage() {
   await requireAdmin();
-  const content = getDemoPublicContent();
+  const content = await loadPublicContent({ includeDrafts: true });
   return (
     <>
       {content ? (
-        <PublicHome content={content} demoMode allowDemoSubmission={false} />
-      ) : null}
+        <PublicHome
+          content={content}
+          demoMode={false}
+          allowDemoSubmission={false}
+        />
+      ) : (
+        <p>Nessuna anteprima disponibile: completa i contenuti obbligatori.</p>
+      )}
     </>
   );
 }

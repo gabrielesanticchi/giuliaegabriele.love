@@ -1,6 +1,6 @@
 import "server-only";
 
-import { count, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, lt, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import { giftIntents, gifts } from "@/db/schema";
@@ -16,7 +16,7 @@ export async function loadDashboardSummary() {
         .select({ count: count() })
         .from(giftIntents)
         .where(
-          or(eq(giftIntents.status, "expired"), lt(giftIntents.expiresAt, now))
+          and(eq(giftIntents.status, "pending"), lt(giftIntents.expiresAt, now))
         ),
       db
         .select({

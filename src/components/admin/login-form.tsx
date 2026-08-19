@@ -46,7 +46,7 @@ export function LoginForm() {
       </label>
       <label>
         <span>Codice autenticatore o recupero</span>
-        <input name="code" inputMode="numeric" autoComplete="one-time-code" />
+        <input name="code" autoComplete="one-time-code" />
       </label>
       <button type="submit" disabled={pending}>
         {pending ? "Accesso…" : "Accedi"}

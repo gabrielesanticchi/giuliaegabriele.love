@@ -1,9 +1,129 @@
 {
-  "id": "a31c52a5-13c0-403d-bac7-68039b9c4cfa",
+  "id": "a5e917e3-e570-484a-9f54-777a27295566",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.admin_action_receipts": {
+      "name": "admin_action_receipts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "actor_admin_id": {
+          "name": "actor_admin_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "action": {
+          "name": "action",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "varchar(160)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "varchar(128)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload_hash": {
+          "name": "payload_hash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "admin_action_receipts_action_key_unique": {
+          "name": "admin_action_receipts_action_key_unique",
+          "columns": [
+            {
+              "expression": "actor_admin_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "action",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entity_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "admin_action_receipts_actor_admin_id_admin_users_id_fk": {
+          "name": "admin_action_receipts_actor_admin_id_admin_users_id_fk",
+          "tableFrom": "admin_action_receipts",
+          "tableTo": "admin_users",
+          "columnsFrom": ["actor_admin_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "admin_action_receipts_status_valid": {
+          "name": "admin_action_receipts_status_valid",
+          "value": "\"admin_action_receipts\".\"status\" in ('pending', 'completed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.admin_users": {
       "name": "admin_users",
       "schema": "",
@@ -21,17 +141,57 @@
           "primaryKey": false,
           "notNull": true
         },
+        "email_encrypted": {
+          "name": "email_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "password_hash": {
           "name": "password_hash",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
+        "role": {
+          "name": "role",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'editor'"
+        },
+        "session_version": {
+          "name": "session_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "totp_secret_encrypted": {
           "name": "totp_secret_encrypted",
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "pending_totp_secret_encrypted": {
+          "name": "pending_totp_secret_encrypted",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_recovery_code_hashes": {
+          "name": "pending_recovery_code_hashes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "recovery_code_hashes": {
+          "name": "recovery_code_hashes",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
         },
         "totp_enabled": {
           "name": "totp_enabled",
@@ -88,7 +248,16 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "admin_users_role_valid": {
+          "name": "admin_users_role_valid",
+          "value": "\"admin_users\".\"role\" in ('owner', 'editor')"
+        },
+        "admin_users_session_version_positive": {
+          "name": "admin_users_session_version_positive",
+          "value": "\"admin_users\".\"session_version\" >= 1"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.audit_logs": {
@@ -592,6 +761,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "rejected_at": {
+          "name": "rejected_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_note": {
+          "name": "admin_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -945,6 +1126,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "archived_at": {
+          "name": "archived_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
         },
         "sort_order": {
           "name": "sort_order",

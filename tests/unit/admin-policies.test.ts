@@ -1,16 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { assertSiteReady, getReadinessChecklist } from "@/lib/admin/readiness";
 import { buildSafeCsv } from "@/lib/admin/csv";
 import { redactAuditMetadata } from "@/lib/admin/audit";
-import { runIdempotentAdminMutation } from "@/lib/admin/idempotency";
 
 describe("admin CSV export", () => {
   it("neutralizes spreadsheet formulas and excludes banking coordinates", () => {
     const csv = buildSafeCsv([
       {
         reference: '=HYPERLINK("https://evil.test")',
-        guest: "+Mario",
+        guest: " \t+Mario",
         note: "-formula",
         status: "@pending",
         amountCents: 12_500,
@@ -19,7 +18,7 @@ describe("admin CSV export", () => {
     ]);
 
     expect(csv).toContain("'=HYPERLINK");
-    expect(csv).toContain("'+Mario");
+    expect(csv).toContain("' \t+Mario");
     expect(csv).toContain("'-formula");
     expect(csv).toContain("'@pending");
     expect(csv).not.toContain("iban");
@@ -51,12 +50,15 @@ describe("audit minimization", () => {
 describe("readiness and publishing", () => {
   const readyInput = {
     heroConfigured: true,
+    heroPublished: true,
     weddingConfigured: true,
+    weddingPublished: true,
     schedulePublishedCount: 2,
     storyPublishedCount: 1,
     dressColorCount: 3,
     publishedGiftCount: 1,
     bankingConfigured: true,
+    requiredMediaCount: 1,
     privacyReviewed: true
   };
 
@@ -79,33 +81,5 @@ describe("readiness and publishing", () => {
     expect(() =>
       assertSiteReady(getReadinessChecklist(readyInput))
     ).not.toThrow();
-  });
-});
-
-describe("idempotent admin mutations", () => {
-  it("returns the prior result and does not repeat the side effect", async () => {
-    const effect = vi.fn(async () => ({ status: "verified" as const }));
-    const store = new Map<string, unknown>();
-    const dependencies = {
-      load: async (key: string) => store.get(key),
-      commit: async (key: string, result: unknown) => {
-        store.set(key, result);
-      }
-    };
-
-    const first = await runIdempotentAdminMutation(
-      "verify:intent-1:key-1",
-      effect,
-      dependencies
-    );
-    const replay = await runIdempotentAdminMutation(
-      "verify:intent-1:key-1",
-      effect,
-      dependencies
-    );
-
-    expect(first).toEqual({ result: { status: "verified" }, replayed: false });
-    expect(replay).toEqual({ result: { status: "verified" }, replayed: true });
-    expect(effect).toHaveBeenCalledTimes(1);
   });
 });

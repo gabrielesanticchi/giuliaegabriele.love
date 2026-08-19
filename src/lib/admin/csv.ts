@@ -16,7 +16,7 @@ type CsvRow = Partial<Record<(typeof EXPORT_COLUMNS)[number], unknown>> &
 
 function safeCell(value: unknown): string {
   let text = value == null ? "" : String(value);
-  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  if (/^[\u0000-\u0020]*[=+\-@]/.test(text)) text = `'${text}`;
   return `"${text.replaceAll('"', '""')}"`;
 }
 

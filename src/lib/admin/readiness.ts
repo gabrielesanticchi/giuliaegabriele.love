@@ -2,12 +2,15 @@ import "server-only";
 
 export type ReadinessInput = {
   heroConfigured: boolean;
+  heroPublished: boolean;
   weddingConfigured: boolean;
+  weddingPublished: boolean;
   schedulePublishedCount: number;
   storyPublishedCount: number;
   dressColorCount: number;
   publishedGiftCount: number;
   bankingConfigured: boolean;
+  requiredMediaCount: number;
   privacyReviewed: boolean;
 };
 
@@ -19,11 +22,20 @@ export type ReadinessItem = {
 
 export function getReadinessChecklist(input: ReadinessInput): ReadinessItem[] {
   return [
-    { key: "hero", label: "Hero configurata", ready: input.heroConfigured },
+    {
+      key: "hero",
+      label: "Hero pubblicata",
+      ready: input.heroConfigured && input.heroPublished
+    },
     {
       key: "wedding",
       label: "Dettagli del matrimonio completi",
-      ready: input.weddingConfigured
+      ready: input.weddingConfigured && input.weddingPublished
+    },
+    {
+      key: "media",
+      label: "Media obbligatori verificati",
+      ready: input.requiredMediaCount > 0
     },
     {
       key: "schedule",
