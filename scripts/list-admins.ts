@@ -1,3 +1,4 @@
+import { closeDatabase } from "../src/db";
 import { listAdminAccounts } from "../src/lib/auth/admin-cli";
 
 async function main() {
@@ -5,9 +6,11 @@ async function main() {
   process.stdout.write(`${JSON.stringify(admins, null, 2)}\n`);
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(
-    `${error instanceof Error ? error.message : "Operazione fallita"}\n`
-  );
-  process.exitCode = 1;
-});
+main()
+  .catch((error: unknown) => {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : "Operazione fallita"}\n`
+    );
+    process.exitCode = 1;
+  })
+  .finally(() => closeDatabase());

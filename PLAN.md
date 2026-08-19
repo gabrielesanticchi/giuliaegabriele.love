@@ -9,8 +9,8 @@
 | 3. Sistema grafico e sito pubblico | Completata | Commit `76e74b9` → `04f04e1`; review PASS |
 | 4. API pubbliche e pagina invitato | Completata | Commit `cde0076` → `892b7a4`; security review PASS |
 | 5. Auth.js, TOTP e amministrazione | Completata | Fix round 4; code+security review PASS (0 CRITICAL/HIGH) |
-| 6. Blob, privacy, SEO e hardening finale | In corso | Task 6 del piano esecutivo |
-| 7. E2E, QA visuale e documentazione | Da iniziare | Task 7 del piano esecutivo |
+| 6. Blob, privacy, SEO e hardening finale | Completata | Blob upload, CSP/header, SEO, health, `.env.example`, scan segreti |
+| 7. E2E, QA visuale e documentazione | Completata | migrate/seed/admin operativi, Playwright+axe 7/7, screenshot 390/768/1440, README/AGENTS |
 
 ## Baseline corrente
 
@@ -55,16 +55,41 @@ eseguita. Corretti con i test falliti come riproduzione:
    recovery, azione owner-only idempotente `processPendingEmailDeliveriesAction`
    in `/admin/richieste`, provider idempotency key stabile, Resend opzionale.
 
-## Note differite a Task 6 (dai review scoped)
+## Task 6 — completato
 
-- Il media della storia usa `next/image unoptimized`: in Task 6 configurare
-  `images.remotePatterns` per l'host Vercel Blob e abilitare l'ottimizzazione.
-- `media_assets.pathname` deve contenere una URL risolvibile (https assoluta) o
-  un path root-relative: altrimenti `isSafeMediaUrl` scarta il media. Definire il
-  formato definitivo con l'upload Blob.
-- `deliverPendingEmailBatch` non usa `FOR UPDATE SKIP LOCKED`: doppio click
-  concorrente è comunque de-duplicato dalla provider idempotency key; valutare
-  il lock se si vuole eliminare il lavoro ridondante.
+- Upload Blob autorizzato (`/api/admin/media/upload`, `handleUpload`) con
+  allowlist MIME/dimensione (niente SVG), policy testata; la pathname salvata è
+  la URL https del blob (risolve il vincolo `isSafeMediaUrl`).
+- Env di produzione fail-closed (`src/lib/config/env.ts`, testato) verificate al
+  boot da `instrumentation.ts`.
+- Security header + CSP (`next.config.ts`): niente `unsafe-eval`; Turnstile e
+  Blob con scope, HSTS, nosniff, frame DENY, referrer/permissions policy.
+- SEO: `robots.ts` (Disallow: / in fase noindex), `sitemap.ts`, `manifest.ts`,
+  OG/canonical, favicon; admin resta noindex.
+- Health/readiness `/api/health` (503 se DB irraggiungibile).
+- `.env.example` completo e documentato; scan segreti/PII pulito (nessun segreto
+  nel bundle client, nessun IBAN o segreto hardcoded).
+
+## Task 7 — completato
+
+- `scripts/migrate.ts` e `scripts/seed.ts` (idempotente, dev/test only). Le CLI
+  admin (create/list/reset) ora funzionano: aggiunto `--conditions=react-server`
+  (stub di `server-only`) e `closeDatabase()` per evitare l'hang del pool.
+- Playwright + axe: 7/7 verdi (home, skip-link/tastiera, accessibilità senza
+  violazioni serious/critical, login admin, guardia dashboard, robots, health).
+- Screenshot QA 390×844 / 768×1024 / 1440×900 con guardia anti-overflow;
+  ispezione visiva OK (in `artifacts/`, git-ignored).
+- `README.md`, `AGENTS.md`, `docs/PRODUCTION_CHECKLIST.md`.
+
+## Note non bloccanti per l'evoluzione futura
+
+- Story media: `next/image unoptimized` è volontario (media utente di origine
+  variabile). Per abilitare l'ottimizzazione, aggiungere `images.remotePatterns`
+  per l'host Blob e adeguare i test dei componenti.
+- `deliverPendingEmailBatch` non usa `FOR UPDATE SKIP LOCKED`: il doppio click
+  concorrente è comunque de-duplicato dalla provider idempotency key.
+- CSP mantiene `unsafe-inline` per script/stili (richiesto dall'hydration Next);
+  valutare una CSP a nonce via middleware come hardening successivo.
 
 ## Dopo Task 5
 

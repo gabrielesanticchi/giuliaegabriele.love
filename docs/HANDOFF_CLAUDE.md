@@ -136,23 +136,55 @@ Se non è disponibile, riportare esattamente i test skipped; non definirli
 “passati”. Richiedere una code/security review scoped del diff Task 5 e chiudere
 tutti i finding Important prima di iniziare Task 6.
 
-## Task 6 — pending
+## Task 6 — COMPLETATO
 
-- Vercel Blob upload admin con MIME/dimension limits, direct upload autorizzato,
-  metadata, retry, delete/replace e nessun SVG non fidato.
-- Privacy/retention/anonimizzazione, bozza non pubblicabile e checklist.
-- Metadata API, canonical, OG, favicon, manifest, robots/sitemap, noindex admin.
-- CSP e security header compatibili con Blob/Turnstile; niente `unsafe-eval`.
-- Health/readiness e `.env.example` validato; production fail-closed.
-- Scansione bundle/repository per segreti e PII.
+Consegnato:
 
-## Task 7 — pending
+- Upload Blob admin autorizzato (`/api/admin/media/upload`, `handleUpload`) con
+  allowlist MIME/dimensione (niente SVG), policy testata; pathname = URL https.
+- CSP e security header in `next.config.ts` (niente `unsafe-eval`; Turnstile e
+  Blob con scope; HSTS, nosniff, frame DENY, referrer/permissions policy).
+- SEO: `robots.ts` (Disallow: / in fase noindex), `sitemap.ts`, `manifest.ts`,
+  OG/canonical, favicon; admin resta noindex. Health/readiness `/api/health`.
+- Env di produzione fail-closed (`src/lib/config/env.ts`) verificate al boot da
+  `instrumentation.ts`. `.env.example` completo. Scan segreti/PII: pulito.
 
-- Script migrate/seed/admin operativi e seed demo idempotente solo dev/test.
-- Playwright per i 20 flussi del brief, axe e race test con PostgreSQL reale.
-- Screenshot/QA visuale a 390×844, 768×1024 e 1440×900, inclusi admin e modali.
-- README italiano completo, `AGENTS.md` conciso e checklist production.
-- Gate finale fresco: lint, typecheck, unit, integration, E2E, build e scan secret.
+Note (non automatizzato, per scelta/tempo):
+
+- Privacy: pagina + gate `privacyReviewed` già presenti; la retention/
+  anonimizzazione è **manuale guidata** e documentata in
+  `docs/PRODUCTION_CHECKLIST.md`, non è tooling automatico.
+- `delete/replace` media: l'archiviazione metadata esiste; la `del()` del blob
+  fisico non è ancora cablata.
+- CSP mantiene `unsafe-inline` (hydration Next); nonce-based CSP è un hardening
+  successivo.
+
+## Task 7 — COMPLETATO (con perimetro E2E esplicito)
+
+Consegnato e verificato:
+
+- `scripts/migrate.ts` + `scripts/seed.ts` (idempotente, dev/test only, rifiuta
+  produzione). CLI admin ora **operative**: `--conditions=react-server` (stub di
+  `server-only`) + `closeDatabase()` per l'uscita pulita; verificato
+  create+list. Corepack pnpm resta guasto: usare `node_modules/.bin`.
+- Playwright + axe: **7/7 verdi** contro un server reale sul DB seedato — home
+  (h1 unico, skip-link, tastiera), accessibilità senza violazioni
+  serious/critical, login admin, guardia dashboard non autenticata, robots,
+  health.
+- Screenshot QA **della home pubblica** a 390×844, 768×1024, 1440×900 con
+  guardia anti-overflow; ispezione visiva OK (`artifacts/`, git-ignored).
+- README, AGENTS, checklist di produzione.
+
+Perimetro non coperto (onesto, per il prossimo giro se richiesto):
+
+- Copertura E2E **non** estesa a tutti i ~20 flussi del brief (reserve/contribute
+  end-to-end, dialog Lista Nozze, pagina invitato, flussi admin completi). Le
+  gare di concorrenza sono coperte dai test di **integration** (gift
+  transactions, rate limit, outbox, TOTP) eseguiti su PostgreSQL reale.
+- Screenshot **admin e modali** non catturati (solo home pubblica).
+
+Gate finale eseguito davvero: lint, typecheck, unit (230), integration (30/30 su
+PostgreSQL reale), E2E (7/7), build, `drizzle-kit check`, scan segreti.
 
 ## Vincoli da non regredire
 

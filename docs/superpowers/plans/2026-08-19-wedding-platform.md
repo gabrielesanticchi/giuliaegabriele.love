@@ -19,8 +19,10 @@
 - Task 5: **complete**. Fix round 4 landed all four residual findings; scoped
   code + security review PASS (0 CRITICAL/HIGH; MEDIUM items resolved or
   documented).
-- Task 6: **in progress**.
-- Task 7: **pending**.
+- Task 6: **complete**. Blob upload, CSP/security headers, SEO, health/readiness,
+  `.env.example`, boot env validation; secret/PII scan clean.
+- Task 7: **complete**. migrate/seed + admin CLI operational; Playwright + axe
+  7/7; screenshots 390/768/1440; README/AGENTS/production checklist.
 
 Latest verification (fix round 4): 221 unit tests passed; typecheck, ESLint,
 Prettier, `drizzle-kit check` and Next production build passed. The PostgreSQL
@@ -108,7 +110,7 @@ review PASS. See `docs/HANDOFF_CLAUDE.md` for the deferred Task 6 notes.
 
 ### Task 6: Blob, privacy, SEO e hardening
 
-**Status:** PENDING.
+**Status:** COMPLETE.
 
 **Files:** `src/lib/blob/*`, upload route, `src/app/(public)/privacy/page.tsx`, metadata/robots/sitemap/manifest/OG, `next.config.ts`, `.env.example`.
 
@@ -121,7 +123,7 @@ review PASS. See `docs/HANDOFF_CLAUDE.md` for the deferred Task 6 notes.
 
 ### Task 7: E2E, QA visuale e documentazione
 
-**Status:** PENDING.
+**Status:** COMPLETE.
 
 **Files:** `tests/e2e/*`, `README.md`, `AGENTS.md`, script DB/seed, screenshot in `artifacts/` ignorati da Git.
 

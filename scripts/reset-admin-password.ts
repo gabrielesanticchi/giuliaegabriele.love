@@ -1,3 +1,4 @@
+import { closeDatabase } from "../src/db";
 import {
   parseAdminCliArgs,
   readAdminPassword,
@@ -20,9 +21,11 @@ async function main() {
     );
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(
-    `${error instanceof Error ? error.message : "Operazione fallita"}\n`
-  );
-  process.exitCode = 1;
-});
+main()
+  .catch((error: unknown) => {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : "Operazione fallita"}\n`
+    );
+    process.exitCode = 1;
+  })
+  .finally(() => closeDatabase());

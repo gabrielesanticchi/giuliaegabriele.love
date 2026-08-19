@@ -1,5 +1,9 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Optional override for environments where the pinned Playwright browser build
+// is unavailable but a compatible Chromium is already installed.
+const executablePath = process.env.PLAYWRIGHT_CHROMIUM_PATH || undefined;
+
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
@@ -13,7 +17,10 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { ...devices["Desktop Chrome"] }
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(executablePath ? { launchOptions: { executablePath } } : {})
+      }
     }
   ],
   webServer: {

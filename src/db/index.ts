@@ -24,3 +24,15 @@ export function getDatabase(): WeddingDatabase {
   database = createDatabase(client);
   return database;
 }
+
+/**
+ * Closes the shared connection pool so short-lived processes (CLI scripts) exit
+ * cleanly instead of hanging on an open handle. No-op inside the request runtime
+ * where the pool is reused.
+ */
+export async function closeDatabase(): Promise<void> {
+  const current = client;
+  client = undefined;
+  database = undefined;
+  if (current) await current.end();
+}
