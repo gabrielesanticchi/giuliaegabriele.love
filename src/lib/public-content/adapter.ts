@@ -107,7 +107,30 @@ export function mapPublicContentSnapshot(
       typeof wedding.displayDate === "string" ? wedding.displayDate : null,
     place: typeof wedding.place === "string" ? wedding.place : "",
     locations: Array.isArray(wedding.locations)
-      ? (wedding.locations as PublicContent["locations"])
+      ? wedding.locations.flatMap((raw) => {
+          const location = object(raw);
+          if (
+            (location.kind !== "ceremony" && location.kind !== "reception") ||
+            typeof location.name !== "string" ||
+            typeof location.address !== "string" ||
+            typeof location.time !== "string" ||
+            typeof location.mapsUrl !== "string" ||
+            !location.mapsUrl.startsWith("https://")
+          )
+            return [];
+          return [
+            {
+              kind: location.kind,
+              name: location.name,
+              place: location.address,
+              address: location.address,
+              time: location.time,
+              note:
+                typeof location.parking === "string" ? location.parking : "",
+              mapsUrl: location.mapsUrl
+            }
+          ];
+        })
       : [],
     schedule: snapshot.schedule
       .filter((item) => includeDrafts || item.published)

@@ -17,7 +17,24 @@ describe("database public content adapter", () => {
         weddingDate: "2026-10-24T11:00:00+02:00",
         displayDate: "24 ottobre 2026",
         place: "Caleppio",
-        locations: []
+        locations: [
+          {
+            kind: "ceremony",
+            name: "Chiesa",
+            address: "Via Roma 1",
+            time: "11:00",
+            parking: "Parcheggio sul retro",
+            mapsUrl: "https://maps.example.test/chiesa"
+          },
+          {
+            kind: "reception",
+            name: "Villa",
+            address: "Via Milano 2",
+            time: "A seguire",
+            parking: "Parcheggio interno",
+            mapsUrl: "https://maps.example.test/villa"
+          }
+        ]
       },
       dress_code: {
         published: true,
@@ -69,6 +86,12 @@ describe("database public content adapter", () => {
     const content = mapPublicContentSnapshot(snapshot, false);
     expect(content?.heroMedia).toEqual({ kind: "art", label: "Bosco" });
     expect(content?.schedule).toHaveLength(1);
+    expect(content?.locations[0]).toMatchObject({
+      kind: "ceremony",
+      address: "Via Roma 1",
+      note: "Parcheggio sul retro",
+      mapsUrl: "https://maps.example.test/chiesa"
+    });
     expect(content?.gifts[0]).toMatchObject({
       status: "reserved",
       confirmedContributionCents: 2500,

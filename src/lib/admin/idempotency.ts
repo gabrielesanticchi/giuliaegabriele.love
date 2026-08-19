@@ -59,75 +59,73 @@ export async function runAdminIdempotentTransaction<
     input.idempotencyKey
   ].join(":");
 
-  return db.transaction(
-    async (tx) => {
-      await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${logicalKey}, 0))`
-      );
-      const existing = await tx
-        .select()
-        .from(adminActionReceipts)
-        .where(
-          and(
-            eq(adminActionReceipts.actorAdminId, input.actorAdminId),
-            eq(adminActionReceipts.action, input.action),
-            eq(adminActionReceipts.entityId, input.entityId),
-            eq(adminActionReceipts.idempotencyKey, input.idempotencyKey)
-          )
+  return db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${logicalKey}, 0))`
+    );
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext('publication_content'))`
+    );
+    const existing = await tx
+      .select()
+      .from(adminActionReceipts)
+      .where(
+        and(
+          eq(adminActionReceipts.actorAdminId, input.actorAdminId),
+          eq(adminActionReceipts.action, input.action),
+          eq(adminActionReceipts.entityId, input.entityId),
+          eq(adminActionReceipts.idempotencyKey, input.idempotencyKey)
         )
-        .limit(1);
-      const receipt = existing[0];
-      if (receipt) {
-        if (receipt.payloadHash !== payloadHash)
-          throw new Error(
-            "Chiave idempotenza riutilizzata con payload diverso"
-          );
-        if (receipt.status === "completed")
-          return { result: receipt.result as T, replayed: true };
-        if (Date.now() - receipt.createdAt.getTime() <= 300_000)
-          throw new Error("Operazione già in corso");
-        // Legacy pending rows are reclaimed by exact primary key while the
-        // logical advisory lock is held; never delete a concurrent claim.
-        await tx
-          .delete(adminActionReceipts)
-          .where(eq(adminActionReceipts.id, receipt.id));
-      }
-
-      const inserted = await tx
-        .insert(adminActionReceipts)
-        .values({
-          actorAdminId: input.actorAdminId,
-          action: input.action,
-          entityId: input.entityId,
-          idempotencyKey: input.idempotencyKey,
-          payloadHash,
-          status: "pending",
-          result: { state: "started" }
-        })
-        .returning({ id: adminActionReceipts.id });
-      if (!inserted[0]) throw new Error("Receipt non creata");
-
-      const result = await input.effect(tx);
-      const audit = input.audit?.(result);
-      if (audit) {
-        await tx.insert(auditLogs).values({
-          actorAdminId: input.actorAdminId,
-          actorType: "admin",
-          action: audit.action,
-          targetType: audit.targetType,
-          targetId: audit.targetId,
-          metadata: redactAuditMetadata(audit.metadata ?? {}) as Record<
-            string,
-            unknown
-          >
-        });
-      }
+      )
+      .limit(1);
+    const receipt = existing[0];
+    if (receipt) {
+      if (receipt.payloadHash !== payloadHash)
+        throw new Error("Chiave idempotenza riutilizzata con payload diverso");
+      if (receipt.status === "completed")
+        return { result: receipt.result as T, replayed: true };
+      if (Date.now() - receipt.createdAt.getTime() <= 300_000)
+        throw new Error("Operazione già in corso");
+      // Legacy pending rows are reclaimed by exact primary key while the
+      // logical advisory lock is held; never delete a concurrent claim.
       await tx
-        .update(adminActionReceipts)
-        .set({ result, status: "completed" })
-        .where(eq(adminActionReceipts.id, inserted[0].id));
-      return { result, replayed: false };
-    },
-    { isolationLevel: "serializable" }
-  );
+        .delete(adminActionReceipts)
+        .where(eq(adminActionReceipts.id, receipt.id));
+    }
+
+    const inserted = await tx
+      .insert(adminActionReceipts)
+      .values({
+        actorAdminId: input.actorAdminId,
+        action: input.action,
+        entityId: input.entityId,
+        idempotencyKey: input.idempotencyKey,
+        payloadHash,
+        status: "pending",
+        result: { state: "started" }
+      })
+      .returning({ id: adminActionReceipts.id });
+    if (!inserted[0]) throw new Error("Receipt non creata");
+
+    const result = await input.effect(tx);
+    const audit = input.audit?.(result);
+    if (audit) {
+      await tx.insert(auditLogs).values({
+        actorAdminId: input.actorAdminId,
+        actorType: "admin",
+        action: audit.action,
+        targetType: audit.targetType,
+        targetId: audit.targetId,
+        metadata: redactAuditMetadata(audit.metadata ?? {}) as Record<
+          string,
+          unknown
+        >
+      });
+    }
+    await tx
+      .update(adminActionReceipts)
+      .set({ result, status: "completed" })
+      .where(eq(adminActionReceipts.id, inserted[0].id));
+    return { result, replayed: false };
+  });
 }

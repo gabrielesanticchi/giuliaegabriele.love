@@ -55,6 +55,7 @@ import {
 } from "@/db/schema";
 import { getAdminPrincipal } from "@/lib/auth/session";
 import { formatCurrency } from "@/lib/domain/currency";
+import { formatRomeDateTimeLocal } from "@/lib/admin/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -124,7 +125,21 @@ export default async function AdminSectionPage({
       weddingDate?: string;
       displayDate?: string;
       place?: string;
+      locations?: Array<{
+        kind: "ceremony" | "reception";
+        name: string;
+        address: string;
+        time: string;
+        parking?: string;
+        mapsUrl: string;
+      }>;
     };
+    const ceremony = existing.locations?.find(
+      (location) => location.kind === "ceremony"
+    );
+    const reception = existing.locations?.find(
+      (location) => location.kind === "reception"
+    );
     return (
       <>
         <PageHeader section={section} />
@@ -168,7 +183,48 @@ export default async function AdminSectionPage({
                     label: "Luogo",
                     type: "text" as const,
                     defaultValue: existing.place ?? ""
-                  }
+                  },
+                  ...(["ceremony", "reception"] as const).flatMap((kind) => {
+                    const location = kind === "ceremony" ? ceremony : reception;
+                    const prefix =
+                      kind === "ceremony" ? "Cerimonia" : "Ricevimento";
+                    return [
+                      {
+                        name: `${kind}Name`,
+                        label: `${prefix}: nome`,
+                        type: "text" as const,
+                        required: true,
+                        defaultValue: location?.name ?? ""
+                      },
+                      {
+                        name: `${kind}Address`,
+                        label: `${prefix}: indirizzo`,
+                        type: "text" as const,
+                        required: true,
+                        defaultValue: location?.address ?? ""
+                      },
+                      {
+                        name: `${kind}Time`,
+                        label: `${prefix}: orario`,
+                        type: "text" as const,
+                        required: true,
+                        defaultValue: location?.time ?? ""
+                      },
+                      {
+                        name: `${kind}Parking`,
+                        label: `${prefix}: parcheggio`,
+                        type: "textarea" as const,
+                        defaultValue: location?.parking ?? ""
+                      },
+                      {
+                        name: `${kind}MapsUrl`,
+                        label: `${prefix}: link Maps HTTPS`,
+                        type: "text" as const,
+                        required: true,
+                        defaultValue: location?.mapsUrl ?? ""
+                      }
+                    ];
+                  })
                 ]
               : []),
             {
@@ -251,13 +307,15 @@ export default async function AdminSectionPage({
                   label: "Inizio",
                   type: "datetime-local",
                   required: true,
-                  defaultValue: row.startsAt.toISOString().slice(0, 16)
+                  defaultValue: formatRomeDateTimeLocal(row.startsAt)
                 },
                 {
                   name: "endsAt",
                   label: "Fine",
                   type: "datetime-local",
-                  defaultValue: row.endsAt?.toISOString().slice(0, 16) ?? ""
+                  defaultValue: row.endsAt
+                    ? formatRomeDateTimeLocal(row.endsAt)
+                    : ""
                 },
                 {
                   name: "sortOrder",
@@ -289,11 +347,22 @@ export default async function AdminSectionPage({
   }
 
   if (section === "storia") {
-    const rows = await db
-      .select()
-      .from(storyMoments)
-      .where(isNull(storyMoments.archivedAt))
-      .orderBy(asc(storyMoments.sortOrder));
+    const [rows, storyMedia] = await Promise.all([
+      db
+        .select()
+        .from(storyMoments)
+        .where(isNull(storyMoments.archivedAt))
+        .orderBy(asc(storyMoments.sortOrder)),
+      db
+        .select()
+        .from(mediaAssets)
+        .where(isNull(mediaAssets.archivedAt))
+        .orderBy(desc(mediaAssets.createdAt))
+    ]);
+    const mediaOptions = [
+      { label: "Nessun media", value: "" },
+      ...storyMedia.map((asset) => ({ label: asset.altText, value: asset.id }))
+    ];
     return (
       <>
         <PageHeader section={section} />
@@ -304,6 +373,12 @@ export default async function AdminSectionPage({
           fields={[
             { name: "title", label: "Titolo", type: "text", required: true },
             { name: "occurredOn", label: "Data", type: "date" },
+            {
+              name: "mediaAssetId",
+              label: "Media",
+              type: "select",
+              options: mediaOptions
+            },
             {
               name: "sortOrder",
               label: "Ordine",
@@ -348,6 +423,13 @@ export default async function AdminSectionPage({
                   label: "Data",
                   type: "date",
                   defaultValue: row.occurredOn?.toISOString().slice(0, 10) ?? ""
+                },
+                {
+                  name: "mediaAssetId",
+                  label: "Media",
+                  type: "select",
+                  defaultValue: row.mediaAssetId ?? "",
+                  options: mediaOptions
                 },
                 {
                   name: "sortOrder",

@@ -49,6 +49,7 @@ export async function saveGiftCategoryAction(
     sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return { ok: false, message: "Categoria non valida" };
+  const existingId = parsed.data.id;
   const { id = randomUUID(), ...values } = parsed.data;
   await runAuditedAdminMutation({
     actorAdminId: admin.id,
@@ -57,13 +58,14 @@ export async function saveGiftCategoryAction(
     targetId: id,
     metadata: { slug: values.slug, sortOrder: values.sortOrder },
     mutation: async (tx) => {
-      await tx
-        .insert(giftCategories)
-        .values({ id, ...values })
-        .onConflictDoUpdate({
-          target: giftCategories.id,
-          set: { ...values, updatedAt: new Date() }
-        });
+      if (existingId) {
+        const updated = await tx
+          .update(giftCategories)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(giftCategories.id, existingId))
+          .returning({ id: giftCategories.id });
+        if (!updated[0]) throw new Error("Categoria non trovata");
+      } else await tx.insert(giftCategories).values({ id, ...values });
     }
   });
   await refreshAdmin("/admin/regali");
@@ -79,10 +81,12 @@ export async function archiveGiftCategoryAction(id: string) {
     targetType: "gift_category",
     targetId: categoryId,
     mutation: async (tx) => {
-      await tx
+      const updated = await tx
         .update(giftCategories)
         .set({ archivedAt: new Date(), updatedAt: new Date() })
-        .where(eq(giftCategories.id, categoryId));
+        .where(eq(giftCategories.id, categoryId))
+        .returning({ id: giftCategories.id });
+      if (!updated[0]) throw new Error("Categoria non trovata");
     }
   });
   await refreshAdmin("/admin/regali");
@@ -104,6 +108,7 @@ export async function saveGiftAction(
     published: formData.get("published") === "on"
   });
   if (!parsed.success) return { ok: false, message: "Regalo non valido" };
+  const existingId = parsed.data.id;
   const { id = randomUUID(), ...values } = parsed.data;
   await runAuditedAdminMutation({
     actorAdminId: admin.id,
@@ -116,13 +121,14 @@ export async function saveGiftAction(
       sortOrder: values.sortOrder
     },
     mutation: async (tx) => {
-      await tx
-        .insert(gifts)
-        .values({ id, ...values })
-        .onConflictDoUpdate({
-          target: gifts.id,
-          set: { ...values, updatedAt: new Date() }
-        });
+      if (existingId) {
+        const updated = await tx
+          .update(gifts)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(gifts.id, existingId))
+          .returning({ id: gifts.id });
+        if (!updated[0]) throw new Error("Regalo non trovato");
+      } else await tx.insert(gifts).values({ id, ...values });
     }
   });
   await refreshAdmin("/admin/regali");
@@ -171,14 +177,16 @@ export async function archiveGiftAction(id: string) {
     targetType: "gift",
     targetId: giftId,
     mutation: async (tx) => {
-      await tx
+      const updated = await tx
         .update(gifts)
         .set({
           archivedAt: new Date(),
           published: false,
           updatedAt: new Date()
         })
-        .where(eq(gifts.id, giftId));
+        .where(eq(gifts.id, giftId))
+        .returning({ id: gifts.id });
+      if (!updated[0]) throw new Error("Regalo non trovato");
     }
   });
   await refreshAdmin("/admin/regali");
@@ -193,10 +201,12 @@ export async function setGiftPublishedAction(id: string, published: boolean) {
     targetType: "gift",
     targetId: giftId,
     mutation: async (tx) => {
-      await tx
+      const updated = await tx
         .update(gifts)
         .set({ published, archivedAt: null, updatedAt: new Date() })
-        .where(eq(gifts.id, giftId));
+        .where(eq(gifts.id, giftId))
+        .returning({ id: gifts.id });
+      if (!updated[0]) throw new Error("Regalo non trovato");
     }
   });
   await refreshAdmin("/admin/regali");
@@ -212,10 +222,12 @@ export async function reorderGiftsAction(orderedIds: string[]) {
     metadata: { count: ids.length },
     mutation: async (tx) => {
       for (const [sortOrder, id] of ids.entries()) {
-        await tx
+        const updated = await tx
           .update(gifts)
           .set({ sortOrder, updatedAt: new Date() })
-          .where(eq(gifts.id, id));
+          .where(eq(gifts.id, id))
+          .returning({ id: gifts.id });
+        if (!updated[0]) throw new Error("Regalo non trovato");
       }
     }
   });

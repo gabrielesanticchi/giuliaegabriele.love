@@ -13,7 +13,10 @@ import {
   assertGiftReservationAvailable,
   getVerificationAmounts
 } from "@/db/transactions/policies";
-import { deliverVerificationNotification } from "@/lib/email";
+import {
+  deliverQueuedVerificationNotification,
+  enqueueVerificationDelivery
+} from "@/lib/email";
 import { runAdminIdempotentTransaction as executeOnce } from "@/lib/admin/idempotency";
 import { encryptSecret } from "@/lib/security/crypto";
 import { hashEmail, hashFingerprint, hashToken } from "@/lib/security/hashing";
@@ -114,7 +117,15 @@ export async function verifyRequestAction(formData: FormData) {
           .set({ completed: true, updatedAt: now })
           .where(eq(gifts.id, gift.id));
       await tx.delete(giftLocks).where(eq(giftLocks.intentId, intent.id));
-      return { intentId: intent.id, status: updated[0].status };
+      const deliveryId = await enqueueVerificationDelivery(tx, {
+        intentId: intent.id,
+        idempotencyKey: hashFingerprint(
+          `verify:${admin.id}:${parsed.idempotencyKey}`,
+          required("REQUEST_FINGERPRINT_SECRET")
+        ),
+        hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
+      });
+      return { intentId: intent.id, status: updated[0].status, deliveryId };
     },
     audit: (result) => ({
       action: "gift_intent.verified",
@@ -123,12 +134,11 @@ export async function verifyRequestAction(formData: FormData) {
       metadata: { receivedAmountCents: parsed.receivedAmountCents }
     })
   });
-  if (!outcome.replayed)
-    await deliverVerificationNotification(getDatabase(), {
-      intentId: outcome.result.intentId,
-      encryptionKey: required("DATA_ENCRYPTION_KEY"),
-      hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
-    });
+  await deliverQueuedVerificationNotification(getDatabase(), {
+    deliveryId: outcome.result.deliveryId,
+    encryptionKey: required("DATA_ENCRYPTION_KEY"),
+    hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
+  });
   await refreshAdmin("/admin/richieste");
   return outcome;
 }
@@ -240,7 +250,22 @@ export async function unlockRequestAction(formData: FormData) {
     idempotencyKey,
     payload: {},
     effect: async (tx) => {
-      await tx.delete(giftLocks).where(eq(giftLocks.intentId, intentId));
+      await tx.execute(
+        sql`select id from ${giftIntents} where id = ${intentId} for update`
+      );
+      const current = await tx
+        .select({ status: giftIntents.status })
+        .from(giftIntents)
+        .where(eq(giftIntents.id, intentId))
+        .limit(1);
+      if (!current[0]) throw new TransactionError("intent_not_found", 404);
+      if (current[0].status !== "pending")
+        throw new TransactionError("intent_not_pending");
+      const deleted = await tx
+        .delete(giftLocks)
+        .where(eq(giftLocks.intentId, intentId))
+        .returning({ giftId: giftLocks.giftId });
+      if (!deleted[0]) throw new TransactionError("gift_unavailable");
       return { intentId, status: "unlocked" };
     },
     audit: () => ({
@@ -509,19 +534,29 @@ export async function resendRequestEmailAction(formData: FormData) {
     entityId: intentId,
     idempotencyKey,
     payload: {},
-    effect: async () => {
-      await deliverVerificationNotification(getDatabase(), {
+    effect: async (tx) => {
+      const deliveryId = await enqueueVerificationDelivery(tx, {
         intentId,
-        encryptionKey: required("DATA_ENCRYPTION_KEY"),
+        idempotencyKey: hashFingerprint(
+          `resend:${admin.id}:${idempotencyKey}`,
+          required("REQUEST_FINGERPRINT_SECRET")
+        ),
         hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
       });
-      return { intentId, status: "sent" };
+      return { intentId, status: "queued", deliveryId };
     },
     audit: () => ({
       action: "gift_intent.email_resent",
       targetType: "gift_intent",
       targetId: intentId
     })
+  }).then(async (outcome) => {
+    await deliverQueuedVerificationNotification(getDatabase(), {
+      deliveryId: outcome.result.deliveryId,
+      encryptionKey: required("DATA_ENCRYPTION_KEY"),
+      hashingSecret: required("REQUEST_FINGERPRINT_SECRET")
+    });
+    return outcome;
   });
 }
 

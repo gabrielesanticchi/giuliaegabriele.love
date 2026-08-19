@@ -9,6 +9,7 @@ import { emailDeliveries, giftIntents, gifts } from "@/db/schema";
 import { formatCurrency } from "@/lib/domain/currency";
 import { decryptSecret } from "@/lib/security/crypto";
 import { hashEmail, hashFingerprint } from "@/lib/security/hashing";
+import type { AdminTransaction } from "@/lib/admin/idempotency";
 
 import { renderVerificationEmail, type RenderedEmail } from "./templates";
 
@@ -112,6 +113,124 @@ const encryptedGuestSchema = z.object({
   message: z.string().max(500).optional(),
   privacyVersion: z.string().min(1).max(50)
 });
+
+export async function enqueueVerificationDelivery(
+  tx: AdminTransaction,
+  input: { intentId: string; idempotencyKey: string; hashingSecret: string }
+): Promise<string> {
+  const intents = await tx
+    .select({ recipientHash: giftIntents.guestEmailHash })
+    .from(giftIntents)
+    .where(eq(giftIntents.id, input.intentId))
+    .limit(1);
+  if (!intents[0]) throw new Error("Richiesta non trovata");
+  const inserted = await tx
+    .insert(emailDeliveries)
+    .values({
+      intentId: input.intentId,
+      recipientHash:
+        intents[0].recipientHash ??
+        hashFingerprint(input.intentId, input.hashingSecret),
+      templateKey: "gift_verification",
+      idempotencyKey: input.idempotencyKey,
+      status: "pending"
+    })
+    .onConflictDoNothing()
+    .returning({ id: emailDeliveries.id });
+  if (inserted[0]) return inserted[0].id;
+  const existing = await tx
+    .select({ id: emailDeliveries.id })
+    .from(emailDeliveries)
+    .where(eq(emailDeliveries.idempotencyKey, input.idempotencyKey))
+    .limit(1);
+  if (!existing[0]) throw new Error("Consegna email non accodata");
+  return existing[0].id;
+}
+
+export async function deliverQueuedVerificationNotification(
+  db: WeddingDatabase,
+  input: {
+    deliveryId: string;
+    encryptionKey: string;
+    hashingSecret: string;
+  }
+): Promise<void> {
+  const rows = await db
+    .select({
+      deliveryStatus: emailDeliveries.status,
+      idempotencyKey: emailDeliveries.idempotencyKey,
+      encryptedGuest: giftIntents.guestDetailsEncrypted,
+      reference: giftIntents.publicReference,
+      amountCents: giftIntents.appliedAmountCents,
+      giftTitle: gifts.title
+    })
+    .from(emailDeliveries)
+    .innerJoin(giftIntents, eq(giftIntents.id, emailDeliveries.intentId))
+    .innerJoin(gifts, eq(gifts.id, giftIntents.giftId))
+    .where(eq(emailDeliveries.id, input.deliveryId))
+    .limit(1);
+  const queued = rows[0];
+  if (!queued || queued.deliveryStatus === "sent") return;
+  let guest: z.infer<typeof encryptedGuestSchema>;
+  try {
+    guest = encryptedGuestSchema.parse(
+      JSON.parse(decryptSecret(queued.encryptedGuest, input.encryptionKey))
+    );
+  } catch {
+    await db
+      .update(emailDeliveries)
+      .set({ status: "failed", failureCode: "guest_details_unavailable" })
+      .where(eq(emailDeliveries.id, input.deliveryId));
+    return;
+  }
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM;
+  if (!apiKey || !from) {
+    await db
+      .update(emailDeliveries)
+      .set({ status: "skipped", failureCode: "provider_not_configured" })
+      .where(eq(emailDeliveries.id, input.deliveryId));
+    return;
+  }
+  try {
+    const rendered = renderVerificationEmail({
+      firstName: guest.firstName,
+      giftName: queued.giftTitle,
+      reference: queued.reference,
+      amount: formatCurrency(queued.amountCents)
+    });
+    const result = await new Resend(apiKey).emails.send(
+      {
+        from,
+        to: guest.email,
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text
+      },
+      queued.idempotencyKey
+        ? { idempotencyKey: queued.idempotencyKey }
+        : undefined
+    );
+    if (result.error || !result.data?.id) throw new Error("provider_rejected");
+    await db
+      .update(emailDeliveries)
+      .set({
+        status: "sent",
+        failureCode: null,
+        sentAt: new Date(),
+        providerMessageIdHash: hashFingerprint(
+          result.data.id,
+          input.hashingSecret
+        )
+      })
+      .where(eq(emailDeliveries.id, input.deliveryId));
+  } catch {
+    await db
+      .update(emailDeliveries)
+      .set({ status: "failed", failureCode: "provider_unavailable" })
+      .where(eq(emailDeliveries.id, input.deliveryId));
+  }
+}
 
 export async function deliverVerificationNotification(
   db: WeddingDatabase,

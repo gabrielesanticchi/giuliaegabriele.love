@@ -14,6 +14,7 @@ import {
   storyMoments
 } from "@/db/schema";
 import { assertSiteReady, getReadinessChecklist } from "@/lib/admin/readiness";
+import type { AdminTransaction } from "@/lib/admin/idempotency";
 import { decryptSecret, encryptSecret } from "@/lib/security/crypto";
 
 import {
@@ -130,9 +131,7 @@ export async function saveAdminSettingsAction(
   return { ok: true, message: "Impostazioni salvate" };
 }
 
-export async function loadReadiness() {
-  await authorizedAdmin("site.publish");
-  const db = getDatabase();
+async function computeReadiness(db: AdminTransaction) {
   const [
     settings,
     scheduleCount,
@@ -215,6 +214,11 @@ export async function loadReadiness() {
   });
 }
 
+export async function loadReadiness() {
+  await authorizedAdmin("site.publish");
+  return getDatabase().transaction((tx) => computeReadiness(tx));
+}
+
 export async function publishSiteAction(
   formData: FormData
 ): Promise<AdminActionResult> {
@@ -222,12 +226,12 @@ export async function publishSiteAction(
   if (formData.get("confirmation") !== "PUBBLICA") {
     return { ok: false, message: "Conferma la pubblicazione" };
   }
-  const checklist = await loadReadiness();
-  assertSiteReady(checklist);
   const published = await getDatabase().transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext('site_publication'))`
+      sql`select pg_advisory_xact_lock(hashtext('publication_content'))`
     );
+    const checklist = await computeReadiness(tx);
+    assertSiteReady(checklist);
     const current = await tx
       .select({ value: siteSettings.value })
       .from(siteSettings)
@@ -274,7 +278,7 @@ export async function unpublishSiteAction(): Promise<AdminActionResult> {
   const admin = await authorizedAdmin("site.unpublish");
   const unpublished = await getDatabase().transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext('site_publication'))`
+      sql`select pg_advisory_xact_lock(hashtext('publication_content'))`
     );
     const current = await tx
       .select({ value: siteSettings.value })

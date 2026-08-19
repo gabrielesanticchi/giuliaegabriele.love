@@ -12,6 +12,7 @@ import {
   siteSettings,
   storyMoments
 } from "@/db/schema";
+import { parseRomeDateTimeLocal } from "@/lib/admin/datetime";
 
 import {
   type AdminActionResult,
@@ -33,6 +34,19 @@ const settingSchema = z.object({
   weddingDate: z.string().datetime({ offset: true }).optional(),
   displayDate: z.string().trim().max(100).optional(),
   place: z.string().trim().max(200).optional(),
+  locations: z
+    .array(
+      z.object({
+        kind: z.enum(["ceremony", "reception"]),
+        name: z.string().trim().min(1).max(200),
+        address: z.string().trim().min(1).max(300),
+        time: z.string().trim().min(1).max(100),
+        parking: z.string().trim().max(500).optional(),
+        mapsUrl: z.url().refine((value) => new URL(value).protocol === "https:")
+      })
+    )
+    .length(2)
+    .optional(),
   requiredMediaIds: z.array(z.uuid()).max(100).optional(),
   published: z.boolean()
 });
@@ -42,8 +56,8 @@ const scheduleSchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(2_000).optional(),
   locationName: z.string().trim().max(200).optional(),
-  startsAt: z.coerce.date(),
-  endsAt: z.coerce.date().optional(),
+  startsAt: z.string().transform(parseRomeDateTimeLocal),
+  endsAt: z.string().transform(parseRomeDateTimeLocal).optional(),
   sortOrder: z.coerce.number().int().min(0),
   published: z.boolean()
 });
@@ -53,6 +67,7 @@ const storySchema = z.object({
   title: z.string().trim().min(1).max(160),
   body: z.string().trim().min(1).max(4_000),
   occurredOn: z.coerce.date().optional(),
+  mediaAssetId: z.uuid().optional(),
   sortOrder: z.coerce.number().int().min(0),
   published: z.boolean()
 });
@@ -91,6 +106,17 @@ export async function saveStructuredContentAction(
     weddingDate: formData.get("weddingDate") || undefined,
     displayDate: formData.get("displayDate") || undefined,
     place: formData.get("place") || undefined,
+    locations:
+      formData.get("key") === "wedding"
+        ? (["ceremony", "reception"] as const).map((kind) => ({
+            kind,
+            name: formData.get(`${kind}Name`),
+            address: formData.get(`${kind}Address`),
+            time: formData.get(`${kind}Time`),
+            parking: formData.get(`${kind}Parking`) || undefined,
+            mapsUrl: formData.get(`${kind}MapsUrl`)
+          }))
+        : undefined,
     requiredMediaIds: String(formData.get("requiredMediaIds") ?? "")
       .split(",")
       .map((value) => value.trim())
@@ -150,6 +176,7 @@ export async function saveScheduleItemAction(
     published: bool(formData.get("published"))
   });
   if (!parsed.success) return { ok: false, message: "Evento non valido" };
+  const existingId = parsed.data.id;
   const { id = randomUUID(), ...values } = parsed.data;
   await runAuditedAdminMutation({
     actorAdminId: admin.id,
@@ -158,13 +185,14 @@ export async function saveScheduleItemAction(
     targetId: id,
     metadata: { published: values.published, sortOrder: values.sortOrder },
     mutation: async (tx) => {
-      await tx
-        .insert(scheduleItems)
-        .values({ id, ...values })
-        .onConflictDoUpdate({
-          target: scheduleItems.id,
-          set: { ...values, updatedAt: new Date() }
-        });
+      if (existingId) {
+        const updated = await tx
+          .update(scheduleItems)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(scheduleItems.id, existingId))
+          .returning({ id: scheduleItems.id });
+        if (!updated[0]) throw new Error("Evento non trovato");
+      } else await tx.insert(scheduleItems).values({ id, ...values });
     }
   });
   await refreshAdmin("/admin/programma");
@@ -180,14 +208,16 @@ export async function deleteScheduleItemAction(id: string) {
     targetType: "schedule_item",
     targetId: parsedId,
     mutation: async (tx) => {
-      await tx
+      const updated = await tx
         .update(scheduleItems)
         .set({
           archivedAt: new Date(),
           published: false,
           updatedAt: new Date()
         })
-        .where(eq(scheduleItems.id, parsedId));
+        .where(eq(scheduleItems.id, parsedId))
+        .returning({ id: scheduleItems.id });
+      if (!updated[0]) throw new Error("Evento non trovato");
     }
   });
   await refreshAdmin("/admin/programma");
@@ -202,10 +232,12 @@ export async function saveStoryMomentAction(
     title: formData.get("title"),
     body: formData.get("body"),
     occurredOn: formData.get("occurredOn") || undefined,
+    mediaAssetId: formData.get("mediaAssetId") || undefined,
     sortOrder: formData.get("sortOrder") ?? 0,
     published: bool(formData.get("published"))
   });
   if (!parsed.success) return { ok: false, message: "Momento non valido" };
+  const existingId = parsed.data.id;
   const { id = randomUUID(), ...values } = parsed.data;
   await runAuditedAdminMutation({
     actorAdminId: admin.id,
@@ -214,13 +246,14 @@ export async function saveStoryMomentAction(
     targetId: id,
     metadata: { published: values.published, sortOrder: values.sortOrder },
     mutation: async (tx) => {
-      await tx
-        .insert(storyMoments)
-        .values({ id, ...values })
-        .onConflictDoUpdate({
-          target: storyMoments.id,
-          set: { ...values, updatedAt: new Date() }
-        });
+      if (existingId) {
+        const updated = await tx
+          .update(storyMoments)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(storyMoments.id, existingId))
+          .returning({ id: storyMoments.id });
+        if (!updated[0]) throw new Error("Momento non trovato");
+      } else await tx.insert(storyMoments).values({ id, ...values });
     }
   });
   await refreshAdmin("/admin/storia");
@@ -236,14 +269,16 @@ export async function deleteStoryMomentAction(id: string) {
     targetType: "story_moment",
     targetId: parsedId,
     mutation: async (tx) => {
-      await tx
+      const updated = await tx
         .update(storyMoments)
         .set({
           archivedAt: new Date(),
           published: false,
           updatedAt: new Date()
         })
-        .where(eq(storyMoments.id, parsedId));
+        .where(eq(storyMoments.id, parsedId))
+        .returning({ id: storyMoments.id });
+      if (!updated[0]) throw new Error("Momento non trovato");
     }
   });
   await refreshAdmin("/admin/storia");
@@ -260,6 +295,7 @@ export async function saveDressColorAction(
     sortOrder: formData.get("sortOrder") ?? 0
   });
   if (!parsed.success) return { ok: false, message: "Colore non valido" };
+  const existingId = parsed.data.id;
   const { id = randomUUID(), ...values } = parsed.data;
   await runAuditedAdminMutation({
     actorAdminId: admin.id,
@@ -268,13 +304,14 @@ export async function saveDressColorAction(
     targetId: id,
     metadata: { name: values.name, sortOrder: values.sortOrder },
     mutation: async (tx) => {
-      await tx
-        .insert(dressCodeColors)
-        .values({ id, ...values })
-        .onConflictDoUpdate({
-          target: dressCodeColors.id,
-          set: { ...values, updatedAt: new Date() }
-        });
+      if (existingId) {
+        const updated = await tx
+          .update(dressCodeColors)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(dressCodeColors.id, existingId))
+          .returning({ id: dressCodeColors.id });
+        if (!updated[0]) throw new Error("Colore non trovato");
+      } else await tx.insert(dressCodeColors).values({ id, ...values });
     }
   });
   await refreshAdmin("/admin/dress-code");
@@ -290,10 +327,12 @@ export async function deleteDressColorAction(id: string) {
     targetType: "dress_code_color",
     targetId: parsedId,
     mutation: async (tx) => {
-      await tx
+      const updated = await tx
         .update(dressCodeColors)
         .set({ archivedAt: new Date(), updatedAt: new Date() })
-        .where(eq(dressCodeColors.id, parsedId));
+        .where(eq(dressCodeColors.id, parsedId))
+        .returning({ id: dressCodeColors.id });
+      if (!updated[0]) throw new Error("Colore non trovato");
     }
   });
   await refreshAdmin("/admin/dress-code");
@@ -311,6 +350,7 @@ export async function saveMediaMetadataAction(
     altText: formData.get("altText")
   });
   if (!parsed.success) return { ok: false, message: "Media non valido" };
+  const existingId = parsed.data.id;
   const { id = randomUUID(), ...values } = parsed.data;
   await runAuditedAdminMutation({
     actorAdminId: admin.id,
@@ -322,13 +362,14 @@ export async function saveMediaMetadataAction(
       sizeBytes: values.sizeBytes
     },
     mutation: async (tx) => {
-      await tx
-        .insert(mediaAssets)
-        .values({ id, ...values })
-        .onConflictDoUpdate({
-          target: mediaAssets.id,
-          set: { ...values, updatedAt: new Date() }
-        });
+      if (existingId) {
+        const updated = await tx
+          .update(mediaAssets)
+          .set({ ...values, updatedAt: new Date() })
+          .where(eq(mediaAssets.id, existingId))
+          .returning({ id: mediaAssets.id });
+        if (!updated[0]) throw new Error("Media non trovato");
+      } else await tx.insert(mediaAssets).values({ id, ...values });
     }
   });
   await refreshAdmin("/admin/media");
@@ -344,10 +385,12 @@ export async function deleteMediaMetadataAction(id: string) {
     targetType: "media_asset",
     targetId: parsedId,
     mutation: async (tx) => {
-      await tx
+      const updated = await tx
         .update(mediaAssets)
         .set({ archivedAt: new Date(), updatedAt: new Date() })
-        .where(eq(mediaAssets.id, parsedId));
+        .where(eq(mediaAssets.id, parsedId))
+        .returning({ id: mediaAssets.id });
+      if (!updated[0]) throw new Error("Media non trovato");
     }
   });
   await refreshAdmin("/admin/media");

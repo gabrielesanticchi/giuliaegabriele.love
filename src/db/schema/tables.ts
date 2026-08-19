@@ -388,6 +388,7 @@ export const emailDeliveries = pgTable(
     }),
     recipientHash: varchar("recipient_hash", { length: 64 }).notNull(),
     templateKey: varchar("template_key", { length: 100 }).notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 128 }),
     providerMessageIdHash: varchar("provider_message_id_hash", { length: 64 }),
     status: emailDeliveryStatus("status").default("pending").notNull(),
     failureCode: varchar("failure_code", { length: 80 }),
@@ -399,6 +400,7 @@ export const emailDeliveries = pgTable(
   (table) => [
     index("email_deliveries_intent_idx").on(table.intentId),
     index("email_deliveries_recipient_hash_idx").on(table.recipientHash),
-    index("email_deliveries_status_idx").on(table.status)
+    index("email_deliveries_status_idx").on(table.status),
+    uniqueIndex("email_deliveries_idempotency_unique").on(table.idempotencyKey)
   ]
 );

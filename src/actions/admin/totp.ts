@@ -23,41 +23,58 @@ export type TotpEnrollmentState = {
 
 export async function beginTotpEnrollmentAction(): Promise<TotpEnrollmentState> {
   const admin = await authorizedAdmin("totp.enroll");
-  const rows = await getDatabase()
-    .select({
-      emailEncrypted: adminUsers.emailEncrypted,
-      totpEnabled: adminUsers.totpEnabled
-    })
-    .from(adminUsers)
-    .where(eq(adminUsers.id, admin.id))
-    .limit(1);
-  if (!rows[0]) return { ok: false, message: "Account non disponibile" };
-  if (rows[0].totpEnabled)
-    return { ok: false, message: "TOTP già attivo: usa il reset protetto" };
   const secrets = authSecrets();
-  const email = decryptSecret(rows[0].emailEncrypted, secrets.encryptionKey);
-  const enrollment = createTotpEnrollment({
-    email,
-    encryptionKey: secrets.encryptionKey,
-    recoveryPepper: secrets.recoveryPepper
+  const enrollment = await getDatabase().transaction(async (tx) => {
+    await tx.execute(
+      sql`select id from ${adminUsers} where id = ${admin.id} for update`
+    );
+    const rows = await tx
+      .select()
+      .from(adminUsers)
+      .where(eq(adminUsers.id, admin.id))
+      .limit(1);
+    const row = rows[0];
+    if (!row) return { error: "Account non disponibile" } as const;
+    if (row.totpEnabled)
+      return { error: "TOTP già attivo: usa il reset protetto" } as const;
+    if (row.pendingTotpSecretEncrypted)
+      return { error: "Configurazione TOTP già in corso" } as const;
+    const created = createTotpEnrollment({
+      email: decryptSecret(row.emailEncrypted, secrets.encryptionKey),
+      encryptionKey: secrets.encryptionKey,
+      recoveryPepper: secrets.recoveryPepper
+    });
+    const updated = await tx
+      .update(adminUsers)
+      .set({
+        pendingTotpSecretEncrypted: created.secretEncrypted,
+        pendingRecoveryCodeHashes: created.recoveryCodeHashes,
+        updatedAt: new Date()
+      })
+      .where(eq(adminUsers.id, admin.id))
+      .returning({ id: adminUsers.id });
+    if (!updated[0]) throw new Error("Account non aggiornato");
+    await tx.insert(auditLogs).values({
+      actorAdminId: admin.id,
+      actorType: "admin",
+      action: "admin.totp_enrollment_started",
+      targetType: "admin_user",
+      targetId: admin.id,
+      metadata: {}
+    });
+    return { created } as const;
   });
-  await getDatabase()
-    .update(adminUsers)
-    .set({
-      pendingTotpSecretEncrypted: enrollment.secretEncrypted,
-      pendingRecoveryCodeHashes: enrollment.recoveryCodeHashes,
-      updatedAt: new Date()
-    })
-    .where(eq(adminUsers.id, admin.id));
+  if ("error" in enrollment)
+    return { ok: false, message: enrollment.error ?? "Errore TOTP" };
   return {
     ok: true,
     message: "Scansiona il QR e conserva i codici in un luogo sicuro",
-    qrDataUrl: await QRCode.toDataURL(enrollment.uri, {
+    qrDataUrl: await QRCode.toDataURL(enrollment.created.uri, {
       errorCorrectionLevel: "M",
       margin: 1,
       width: 280
     }),
-    recoveryCodes: enrollment.recoveryCodes
+    recoveryCodes: enrollment.created.recoveryCodes
   };
 }
 

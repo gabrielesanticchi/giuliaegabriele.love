@@ -62,6 +62,7 @@ CREATE TABLE "email_deliveries" (
 	"intent_id" uuid,
 	"recipient_hash" varchar(64) NOT NULL,
 	"template_key" varchar(100) NOT NULL,
+	"idempotency_key" varchar(128),
 	"provider_message_id_hash" varchar(64),
 	"status" "email_delivery_status" DEFAULT 'pending' NOT NULL,
 	"failure_code" varchar(80),
@@ -211,6 +212,7 @@ CREATE INDEX "audit_logs_created_at_idx" ON "audit_logs" USING btree ("created_a
 CREATE INDEX "email_deliveries_intent_idx" ON "email_deliveries" USING btree ("intent_id");--> statement-breakpoint
 CREATE INDEX "email_deliveries_recipient_hash_idx" ON "email_deliveries" USING btree ("recipient_hash");--> statement-breakpoint
 CREATE INDEX "email_deliveries_status_idx" ON "email_deliveries" USING btree ("status");--> statement-breakpoint
+CREATE UNIQUE INDEX "email_deliveries_idempotency_unique" ON "email_deliveries" USING btree ("idempotency_key");--> statement-breakpoint
 CREATE UNIQUE INDEX "gift_categories_slug_unique" ON "gift_categories" USING btree ("slug");--> statement-breakpoint
 CREATE UNIQUE INDEX "gift_intents_public_reference_unique" ON "gift_intents" USING btree ("public_reference");--> statement-breakpoint
 CREATE UNIQUE INDEX "gift_intents_idempotency_key_unique" ON "gift_intents" USING btree ("idempotency_key");--> statement-breakpoint
