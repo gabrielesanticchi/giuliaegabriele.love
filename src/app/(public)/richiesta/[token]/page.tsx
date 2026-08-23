@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "La tua richiesta | Gabriele & Giulia",
+  title: "La tua richiesta | Giulia & Gabriele",
   robots: { index: false, follow: false }
 };
 
@@ -30,7 +30,7 @@ export default async function GuestRequestPage({
           <h1>Link non disponibile</h1>
           <p>
             Il collegamento non è valido oppure non è più attivo. Contatta
-            Gabriele e Giulia se hai bisogno di aiuto.
+            Giulia e Gabriele se hai bisogno di aiuto.
           </p>
           <a href="/">Torna al sito</a>
         </section>

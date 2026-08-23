@@ -22,7 +22,7 @@ describe("PublicHome", () => {
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(
-      screen.getByRole("heading", { level: 1, name: "Gabriele & Giulia" })
+      screen.getByRole("heading", { level: 1, name: "Giulia & Gabriele" })
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Vai al contenuto principale" })
@@ -43,11 +43,10 @@ describe("PublicHome", () => {
       "datetime",
       "11:00"
     );
-    expect(screen.getByText("A seguire").tagName).toBe("SPAN");
-    expect(screen.getByText("23:00", { selector: "time" })).toBeInTheDocument();
-    expect(screen.getByText("23:00", { selector: "time" })).toHaveAttribute(
+    expect(screen.getByText("13:00", { selector: "time" })).toBeInTheDocument();
+    expect(screen.getByText("21:30", { selector: "time" })).toHaveAttribute(
       "datetime",
-      "23:00"
+      "21:30"
     );
   });
 
@@ -97,7 +96,7 @@ describe("PublicHome", () => {
           description: "Il racconto del nostro primo viaggio",
           media: {
             url: "https://store.public.blob.vercel-storage.com/storia/uno.jpg",
-            alt: "Gabriele e Giulia al primo viaggio",
+            alt: "Giulia e Gabriele al primo viaggio",
             focalPoint: { x: 40, y: 60 }
           }
         }
@@ -110,7 +109,7 @@ describe("PublicHome", () => {
       name: "Un sentiero da raccontare"
     });
     const image = within(story).getByRole("img", {
-      name: "Gabriele e Giulia al primo viaggio"
+      name: "Giulia e Gabriele al primo viaggio"
     });
     expect(image).toHaveStyle({ objectPosition: "40% 60%" });
     expect(image.getAttribute("src")).toContain("storia/uno.jpg");

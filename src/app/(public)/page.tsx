@@ -19,7 +19,6 @@ export default async function HomePage() {
         process.env.NODE_ENV !== "production" &&
         process.env.WEDDING_DEMO_MODE === "true"
       }
-      turnstileSiteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
     />
   );
 }

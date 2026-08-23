@@ -8,7 +8,6 @@ import {
 
 const token = "a".repeat(43);
 const body = {
-  turnstileToken: "verified-token",
   honeypot: "",
   idempotencyKey: "123e4567-e89b-42d3-a456-426614174000"
 };
@@ -40,7 +39,6 @@ function dependencies(
     siteOrigin: "https://giuliaegabriele.love",
     fingerprintSecret: "fingerprint-secret",
     guestTokenSecret: "token-secret",
-    verifyTurnstile: vi.fn().mockResolvedValue({ success: true }),
     consumeRateLimit: vi.fn().mockResolvedValue({
       allowed: true,
       remaining: 7,
@@ -230,7 +228,6 @@ describe("personal request action route", () => {
     );
 
     expect(response.status).toBe(503);
-    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
     expect(deps.complete).not.toHaveBeenCalled();
   });
 });

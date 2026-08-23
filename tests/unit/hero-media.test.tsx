@@ -79,14 +79,14 @@ describe("HeroMedia", () => {
         media={{
           kind: "image",
           src: "/graphics/hero-photo.jpg",
-          alt: "Gabriele e Giulia nel bosco",
+          alt: "Giulia e Gabriele nel bosco",
           focalPoint: { x: 35, y: 62 }
         }}
       />
     );
 
     expect(
-      screen.getByRole("img", { name: "Gabriele e Giulia nel bosco" })
+      screen.getByRole("img", { name: "Giulia e Gabriele nel bosco" })
     ).toHaveStyle({ objectPosition: "35% 62%" });
   });
 

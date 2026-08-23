@@ -14,7 +14,6 @@ export interface PublicHomeProps {
   content: PublicContent;
   demoMode?: boolean;
   allowDemoSubmission?: boolean;
-  turnstileSiteKey?: string;
   initialNow?: string;
 }
 
@@ -22,7 +21,6 @@ export function PublicHome({
   content,
   demoMode = false,
   allowDemoSubmission = false,
-  turnstileSiteKey = "",
   initialNow = new Date().toISOString()
 }: PublicHomeProps) {
   return (
@@ -68,13 +66,12 @@ export function PublicHome({
             gifts={content.gifts}
             demoMode={demoMode}
             allowDemoSubmission={allowDemoSubmission}
-            turnstileSiteKey={turnstileSiteKey}
           />
         </section>
       </main>
       <footer className="site-footer">
         <Monogram />
-        <p>Gabriele & Giulia</p>
+        <p>Giulia & Gabriele</p>
         <p>24 · 10 · 2026</p>
         <a href="/privacy">Privacy</a>
       </footer>
@@ -95,7 +92,7 @@ function Hero({
       <div className="hero-content">
         <Monogram className="hero-monogram" />
         <p className="hero-kicker">Ci sposiamo</p>
-        <h1 id="hero-title">Gabriele & Giulia</h1>
+        <h1 id="hero-title">Giulia & Gabriele</h1>
         {content.displayDate ? (
           <p className="hero-details">
             <time dateTime={content.weddingDate ?? undefined}>

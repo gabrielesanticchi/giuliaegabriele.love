@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { vi } from "vitest";
@@ -7,7 +7,6 @@ import { GuestRequestView } from "@/app/(public)/richiesta/[token]/guest-request
 
 afterEach(() => {
   cleanup();
-  delete window.turnstile;
   vi.unstubAllGlobals();
 });
 
@@ -19,8 +18,7 @@ const pending = {
   status: "pending" as const,
   amountCents: 5000,
   expiresAt: new Date("2026-08-21T12:00:00.000Z"),
-  paymentDeclaredAt: null,
-  turnstileSiteKey: "site-key"
+  paymentDeclaredAt: null
 };
 
 describe("GuestRequestView", () => {
@@ -83,36 +81,29 @@ describe("GuestRequestView", () => {
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
-  it("resetta Turnstile dopo un tentativo di azione", async () => {
+  it("invia la dichiarazione di completamento senza anti-spam", async () => {
     const user = userEvent.setup();
-    let issueToken: ((token: string) => void) | undefined;
-    const reset = vi.fn();
-    window.turnstile = {
-      render: vi.fn((_element, options) => {
-        issueToken = options.callback;
-        return "guest-widget";
-      }),
-      reset
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: { code: "retryable" } }), {
-          status: 503,
-          headers: { "content-type": "application/json" }
-        })
-      )
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, status: "payment_declared" }), {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      })
     );
+    vi.stubGlobal("fetch", fetchMock);
     render(<GuestRequestView request={pending} />);
-    act(() => issueToken?.("verified-token"));
 
     await user.click(
       screen.getByRole("button", { name: "Dichiara il completamento" })
     );
 
-    await waitFor(() => expect(reset).toHaveBeenCalledWith("guest-widget"));
-    expect(document.querySelector('input[name="turnstileToken"]')).toHaveValue(
-      ""
-    );
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(
+      fetchMock.mock.calls[0]?.[1]?.body as string
+    ) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("turnstileToken");
+    expect(body.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(
+      await screen.findByText("Completamento dichiarato. Grazie!")
+    ).toBeInTheDocument();
   });
 });

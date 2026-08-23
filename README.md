@@ -1,6 +1,6 @@
-# Gabriele & Giulia — sito del matrimonio
+# Giulia & Gabriele — sito del matrimonio
 
-Applicazione Next.js full-stack per il matrimonio di Gabriele e Giulia
+Applicazione Next.js full-stack per il matrimonio di Giulia e Gabriele
 (24 ottobre 2026, fuso `Europe/Rome`). Include un sito pubblico editoriale, una
 Lista Nozze transazionale **senza pagamenti online** e un'area amministrativa
 protetta da password + TOTP.
@@ -14,8 +14,8 @@ Vercel, ma **questa repository non esegue deploy, push o provisioning**.
 - **PostgreSQL** via **Drizzle ORM** + driver `postgres`
 - **Auth.js (next-auth)** Credentials + **TOTP** (otplib) e Argon2id
 - **Zod** per la validazione, **React Hook Form** per i form
-- **Vercel Blob** per i media, **Resend** per le email (opzionale)
-- **Cloudflare Turnstile** anti-abuso sui form pubblici
+- **Vercel Blob** per i media, **Resend** per le email admin (opzionale)
+- Anti-abuso dei form pubblici via honeypot + rate limiting PostgreSQL
 - **Vitest** + Testing Library (unit/integration), **Playwright** + axe (E2E/a11y)
 - **Tailwind CSS v4** e sistema grafico originale “Bosco Incantato Editoriale”
 
@@ -51,10 +51,11 @@ manca una l'app **non si avvia** (fail-closed). Obbligatorie:
 `AUTH_RECOVERY_PEPPER`, `DATA_ENCRYPTION_KEY`, `GUEST_TOKEN_SECRET`,
 `REQUEST_FINGERPRINT_SECRET`, `NEXT_PUBLIC_SITE_URL`.
 
-Opzionali: `BLOB_READ_WRITE_TOKEN`, Turnstile (`*_TURNSTILE_*`), Resend
-(`RESEND_API_KEY`, `EMAIL_FROM`, `ADMIN_NOTIFICATION_EMAIL`). Se Resend non è
-configurato le email vengono registrate come `skipped` e **nessuna transazione
-viene annullata**.
+Opzionali: `BLOB_READ_WRITE_TOKEN`, Resend (`RESEND_API_KEY`, `EMAIL_FROM`,
+`ADMIN_NOTIFICATION_EMAIL`). I form pubblici raccolgono solo nome e telefono
+(nessuna email invitato) e sono protetti da honeypot + rate limiting, senza
+Turnstile. Se Resend non è configurato le email admin vengono registrate come
+`skipped` e **nessuna transazione viene annullata**.
 
 ## Script
 
@@ -97,8 +98,8 @@ viene annullata**.
 Monolite Next.js (App Router) su Vercel: Server Components per contenuti e
 dashboard, Client Components solo per navigazione, countdown, filtri, dialog e
 form. Drizzle parla con PostgreSQL tramite transazioni e vincoli univoci; i
-servizi esterni (Blob, Resend, Turnstile) degradano in modo controllato quando
-non configurati.
+servizi esterni (Blob, Resend) degradano in modo controllato quando non
+configurati.
 
 ```mermaid
 flowchart TB
@@ -113,7 +114,7 @@ flowchart TB
     ADM["app/admin<br/>login · TOTP · dashboard · CRUD"]
     API["app/api<br/>health · gifts reserve/contribute<br/>requests · media/upload · auth"]
     SA["actions/admin<br/>Server Actions (effect+audit+receipt)"]
-    LIB["lib<br/>security (AES-256-GCM) · auth · rate-limit<br/>email · blob · turnstile · public-content"]
+    LIB["lib<br/>security (AES-256-GCM) · auth · rate-limit<br/>email · blob · public-content"]
     DBX["db<br/>Drizzle schema + transazioni<br/>reserveGift · contributeToGift · verifyIntent"]
   end
 
@@ -124,7 +125,6 @@ flowchart TB
   subgraph ext["Servizi esterni (opzionali)"]
     BLOB["Vercel Blob"]
     RESEND["Resend"]
-    TS["Cloudflare Turnstile"]
   end
 
   G --> PUB
@@ -137,8 +137,7 @@ flowchart TB
   LIB --> DBX
   DBX --> PG
   LIB -.->|upload firmato, no SVG| BLOB
-  LIB -.->|email best-effort, no rollback| RESEND
-  API -.->|verifica anti-abuso| TS
+  LIB -.->|email admin best-effort, no rollback| RESEND
 
   instr["instrumentation.ts<br/>fail-closed env al boot"] -.-> next
 ```
@@ -167,7 +166,7 @@ giuliaegabriele.love/
 │   │   ├── admin/               # policy azioni, idempotenza, audit, datetime
 │   │   ├── config/              # validazione env di produzione (fail-closed)
 │   │   ├── public-content/      # adapter DB → modello pubblico
-│   │   ├── turnstile/ · domain/ # anti-abuso · valuta, countdown, URL, schemi
+│   │   ├── domain/              # valuta, countdown, URL, schemi
 │   ├── styles/                  # design tokens + CSS “Bosco Incantato Editoriale”
 │   └── data/demo-content.ts     # contenuti demo (solo dev/test)
 ├── scripts/                     # migrate, seed (dev/test), admin CLI
@@ -190,7 +189,7 @@ sequenceDiagram
   participant API as /api/gifts/[id]/(reserve|contribute)
   participant TX as reserveGift / contributeToGift
   participant PG as PostgreSQL
-  U->>API: POST (Zod, origin, honeypot, Turnstile, idempotency)
+  U->>API: POST (Zod, origin, honeypot, idempotency)
   API->>TX: transazione SERIALIZABLE
   TX->>PG: lock regalo + somma verified/pending
   alt disponibile

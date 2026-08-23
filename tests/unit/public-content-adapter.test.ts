@@ -108,7 +108,7 @@ describe("database public content adapter", () => {
             ...snapshot.story[0],
             mediaUrl:
               "https://store.public.blob.vercel-storage.com/storia/uno.jpg",
-            mediaAlt: "Gabriele e Giulia al primo viaggio"
+            mediaAlt: "Giulia e Gabriele al primo viaggio"
           }
         ]
       },
@@ -116,7 +116,7 @@ describe("database public content adapter", () => {
     );
     expect(content?.story[0].media).toEqual({
       url: "https://store.public.blob.vercel-storage.com/storia/uno.jpg",
-      alt: "Gabriele e Giulia al primo viaggio",
+      alt: "Giulia e Gabriele al primo viaggio",
       focalPoint: { x: 50, y: 50 }
     });
   });

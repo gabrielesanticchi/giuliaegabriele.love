@@ -20,10 +20,6 @@ import {
   parseEuroAmountToCents,
   reserveGiftRequestSchema
 } from "@/lib/public-api/validation";
-import {
-  TurnstileWidget,
-  type TurnstileWidgetHandle
-} from "@/lib/turnstile/widget";
 
 type GiftFilter = "all" | "available" | "reserved" | "gifted";
 type GiftAction = "gift" | "contribute";
@@ -33,7 +29,6 @@ export interface GiftRegistryProps {
   demoMode?: boolean;
   allowDemoSubmission?: boolean;
   privacyVersion?: string;
-  turnstileSiteKey?: string;
   onDemoAction?: (gift: PublicGift, action: GiftAction) => void;
 }
 
@@ -55,7 +50,6 @@ export function GiftRegistry({
   demoMode = false,
   allowDemoSubmission = false,
   privacyVersion = "draft-2026-08-19",
-  turnstileSiteKey = "",
   onDemoAction
 }: GiftRegistryProps) {
   const [filter, setFilter] = useState<GiftFilter>("all");
@@ -180,7 +174,6 @@ export function GiftRegistry({
         demoMode={demoMode}
         allowDemoSubmission={allowDemoSubmission}
         privacyVersion={privacyVersion}
-        turnstileSiteKey={turnstileSiteKey}
         onDemoAction={onDemoAction}
         invokerRef={invokerRef}
       />
@@ -194,7 +187,6 @@ interface GiftActionDialogProps {
   demoMode: boolean;
   allowDemoSubmission: boolean;
   privacyVersion: string;
-  turnstileSiteKey: string;
   onDemoAction?: (gift: PublicGift, action: GiftAction) => void;
   invokerRef: RefObject<HTMLButtonElement | null>;
 }
@@ -205,7 +197,6 @@ function GiftActionDialog({
   demoMode,
   allowDemoSubmission,
   privacyVersion,
-  turnstileSiteKey,
   onDemoAction,
   invokerRef
 }: GiftActionDialogProps) {
@@ -263,7 +254,6 @@ function GiftActionDialog({
               demoMode={demoMode}
               allowDemoSubmission={allowDemoSubmission}
               privacyVersion={privacyVersion}
-              turnstileSiteKey={turnstileSiteKey}
               onDemoAction={onDemoAction}
             />
           ) : null}
@@ -277,14 +267,11 @@ type GiftFormValues = {
   guest: {
     firstName: string;
     lastName: string;
-    email: string;
-    emailConfirmation: string;
-    phone?: string;
+    phone: string;
     message?: string;
   };
   privacyAccepted: boolean;
   privacyVersion: string;
-  turnstileToken: string;
   honeypot: string;
   idempotencyKey: string;
   method: "external_purchase" | "bank_transfer";
@@ -321,20 +308,17 @@ function GiftIntentForm({
   demoMode,
   allowDemoSubmission,
   privacyVersion,
-  turnstileSiteKey,
   onDemoAction
 }: {
   selection: { gift: PublicGift; action: GiftAction };
   demoMode: boolean;
   allowDemoSubmission: boolean;
   privacyVersion: string;
-  turnstileSiteKey: string;
   onDemoAction?: (gift: PublicGift, action: GiftAction) => void;
 }) {
   const isContribution = selection.action === "contribute";
   const formId = useId();
   const summaryRef = useRef<HTMLDivElement>(null);
-  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const [idempotencyKey, setIdempotencyKey] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{
     kind: "error" | "success";
@@ -346,7 +330,6 @@ function GiftIntentForm({
   ) as Resolver<GiftFormValues>;
   const {
     register,
-    setValue,
     handleSubmit,
     formState: { errors, isSubmitting }
   } = useForm<GiftFormValues>({
@@ -357,21 +340,11 @@ function GiftIntentForm({
       guest: {
         firstName: "",
         lastName: "",
-        email: "",
-        emailConfirmation: "",
         phone: "",
         message: ""
       },
       privacyAccepted: false,
       privacyVersion,
-      turnstileToken:
-        demoMode &&
-        allowDemoSubmission &&
-        process.env.NODE_ENV === "development"
-          ? "development-demo"
-          : process.env.NODE_ENV === "test" && turnstileSiteKey
-            ? "turnstile-test-token"
-            : "",
       honeypot: "",
       idempotencyKey: "pending-idempotency-key",
       ...(isContribution
@@ -403,7 +376,6 @@ function GiftIntentForm({
         guest: values.guest,
         privacyAccepted: true as const,
         privacyVersion,
-        turnstileToken: values.turnstileToken,
         honeypot: values.honeypot,
         idempotencyKey: requestKey
       };
@@ -451,9 +423,6 @@ function GiftIntentForm({
           kind: "error",
           message: "Connessione non disponibile. Riprova."
         });
-      } finally {
-        turnstileRef.current?.reset();
-        setValue("turnstileToken", "");
       }
     },
     () => {
@@ -474,16 +443,6 @@ function GiftIntentForm({
       inputId: `${formId}-last-name`,
       errorId: `${formId}-last-name-error`,
       message: errors.guest?.lastName?.message
-    },
-    {
-      inputId: `${formId}-email`,
-      errorId: `${formId}-email-error`,
-      message: errors.guest?.email?.message
-    },
-    {
-      inputId: `${formId}-email-confirmation`,
-      errorId: `${formId}-email-confirmation-error`,
-      message: errors.guest?.emailConfirmation?.message
     },
     {
       inputId: `${formId}-phone`,
@@ -509,11 +468,6 @@ function GiftIntentForm({
       inputId: `${formId}-privacy`,
       errorId: `${formId}-privacy-error`,
       message: errors.privacyAccepted?.message
-    },
-    {
-      inputId: `${formId}-turnstile`,
-      errorId: `${formId}-turnstile-error`,
-      message: errors.turnstileToken?.message
     }
   ].filter(
     (entry): entry is { inputId: string; errorId: string; message: string } =>
@@ -620,45 +574,13 @@ function GiftIntentForm({
               )}
             </label>
           </div>
-          <label htmlFor={`${formId}-email`}>
-            Email
-            <input
-              id={`${formId}-email`}
-              type="email"
-              autoComplete="email"
-              aria-invalid={Boolean(errors.guest?.email)}
-              aria-describedby={
-                errors.guest?.email ? `${formId}-email-error` : undefined
-              }
-              {...register("guest.email")}
-            />
-            {fieldError(errors.guest?.email?.message, `${formId}-email-error`)}
-          </label>
-          <label htmlFor={`${formId}-email-confirmation`}>
-            Conferma email
-            <input
-              id={`${formId}-email-confirmation`}
-              type="email"
-              autoComplete="email"
-              aria-invalid={Boolean(errors.guest?.emailConfirmation)}
-              aria-describedby={
-                errors.guest?.emailConfirmation
-                  ? `${formId}-email-confirmation-error`
-                  : undefined
-              }
-              {...register("guest.emailConfirmation")}
-            />
-            {fieldError(
-              errors.guest?.emailConfirmation?.message,
-              `${formId}-email-confirmation-error`
-            )}
-          </label>
           <label htmlFor={`${formId}-phone`}>
-            Telefono (facoltativo)
+            Telefono
             <input
               id={`${formId}-phone`}
               type="tel"
               autoComplete="tel"
+              required
               aria-invalid={Boolean(errors.guest?.phone)}
               aria-describedby={
                 errors.guest?.phone ? `${formId}-phone-error` : undefined
@@ -741,7 +663,6 @@ function GiftIntentForm({
             errors.privacyAccepted?.message,
             `${formId}-privacy-error`
           )}
-          <input type="hidden" {...register("turnstileToken")} />
           <input type="hidden" {...register("privacyVersion")} />
           <input type="hidden" {...register("idempotencyKey")} />
           <div className="honeypot-field" aria-hidden="true">
@@ -753,31 +674,6 @@ function GiftIntentForm({
               {...register("honeypot")}
             />
           </div>
-          {!(
-            demoMode &&
-            allowDemoSubmission &&
-            process.env.NODE_ENV === "development"
-          ) ? (
-            <div
-              id={`${formId}-turnstile`}
-              aria-invalid={Boolean(errors.turnstileToken)}
-              aria-describedby={
-                errors.turnstileToken ? `${formId}-turnstile-error` : undefined
-              }
-            >
-              <TurnstileWidget
-                ref={turnstileRef}
-                siteKey={turnstileSiteKey}
-                onToken={(token) =>
-                  setValue("turnstileToken", token, { shouldValidate: true })
-                }
-              />
-            </div>
-          ) : null}
-          {fieldError(
-            errors.turnstileToken?.message,
-            `${formId}-turnstile-error`
-          )}
           <button
             className="primary-action"
             type="submit"

@@ -5,7 +5,7 @@ export interface MonogramProps {
 
 export function Monogram({
   className,
-  title = "Monogramma Gabriele e Giulia"
+  title = "Monogramma Giulia e Gabriele"
 }: MonogramProps) {
   return (
     <svg

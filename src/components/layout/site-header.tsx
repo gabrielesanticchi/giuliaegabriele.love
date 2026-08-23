@@ -32,7 +32,7 @@ export function SiteHeader() {
         <a
           className="brand-mark"
           href="#home"
-          aria-label="Gabriele e Giulia, Home"
+          aria-label="Giulia e Gabriele, Home"
         >
           <Monogram />
         </a>

@@ -1,20 +1,19 @@
 import type { NextConfig } from "next";
 
-const TURNSTILE = "https://challenges.cloudflare.com";
 const BLOB = "https://*.public.blob.vercel-storage.com";
 
 // No `unsafe-eval`. `unsafe-inline` is retained for scripts/styles because the
-// app relies on Next.js inline hydration/styles; Turnstile is scoped to its own
-// origin, and Blob media is allowed for images only.
+// app relies on Next.js inline hydration/styles; Blob media is allowed for
+// images/video only.
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${TURNSTILE}`,
+  "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: ${BLOB}`,
   `media-src 'self' ${BLOB}`,
   "font-src 'self'",
-  `connect-src 'self' ${TURNSTILE} ${BLOB}`,
-  `frame-src ${TURNSTILE}`,
+  `connect-src 'self' ${BLOB}`,
+  "frame-src 'none'",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",

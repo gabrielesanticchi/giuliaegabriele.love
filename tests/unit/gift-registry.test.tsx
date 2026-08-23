@@ -14,7 +14,6 @@ import { demoPublicContent } from "@/data/demo-content";
 
 afterEach(() => {
   cleanup();
-  delete window.turnstile;
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -23,8 +22,7 @@ describe("GiftRegistry", () => {
   async function fillGuestForm(user: ReturnType<typeof userEvent.setup>) {
     await user.type(screen.getByLabelText("Nome"), "Ada");
     await user.type(screen.getByLabelText("Cognome"), "Lovelace");
-    await user.type(screen.getByLabelText("Email"), "ada@example.com");
-    await user.type(screen.getByLabelText("Conferma email"), "ada@example.com");
+    await user.type(screen.getByLabelText("Telefono"), "+39 333 1234567");
     await user.click(
       screen.getByRole("checkbox", { name: /Ho letto e accetto/ })
     );
@@ -146,7 +144,7 @@ describe("GiftRegistry", () => {
       within(summary).getByRole("link", { name: "Inserisci il nome" })
     ).toHaveAttribute("href", `#${name.id}`);
     expect(summary).toHaveTextContent("Inserisci il cognome");
-    expect(summary).toHaveTextContent("Inserisci un indirizzo email valido");
+    expect(summary).toHaveTextContent("Inserisci un numero di telefono");
     expect(summary).toHaveTextContent("Accetta l’informativa privacy");
   });
 
@@ -154,7 +152,7 @@ describe("GiftRegistry", () => {
     const user = userEvent.setup();
     render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
-    const phone = screen.getByLabelText("Telefono (facoltativo)");
+    const phone = screen.getByLabelText("Telefono");
     const message = screen.getByLabelText("Messaggio (facoltativo)");
     fireEvent.change(phone, { target: { value: "1".repeat(31) } });
     fireEvent.change(message, { target: { value: "x".repeat(501) } });
@@ -184,12 +182,7 @@ describe("GiftRegistry", () => {
       )
     );
     vi.stubGlobal("fetch", fetchMock);
-    render(
-      <GiftRegistry
-        gifts={demoPublicContent.gifts}
-        turnstileSiteKey="test-site-key"
-      />
-    );
+    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
     await user.click(
       screen.getAllByRole("button", { name: "Contribuisci" })[0]
     );
@@ -212,17 +205,8 @@ describe("GiftRegistry", () => {
     expect(sent.amountCents).toBe(1234);
   });
 
-  it("resetta Turnstile dopo un errore e conserva la idempotency key al retry", async () => {
+  it("conserva la idempotency key al retry dopo un errore", async () => {
     const user = userEvent.setup();
-    let issueToken: ((token: string) => void) | undefined;
-    const resetTurnstile = vi.fn();
-    window.turnstile = {
-      render: vi.fn((_element, options) => {
-        issueToken = options.callback;
-        return "widget-1";
-      }),
-      reset: resetTurnstile
-    };
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -244,28 +228,16 @@ describe("GiftRegistry", () => {
         )
       );
     vi.stubGlobal("fetch", fetchMock);
-    render(
-      <GiftRegistry
-        gifts={demoPublicContent.gifts}
-        turnstileSiteKey="test-site-key"
-      />
-    );
+    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     await fillGuestForm(user);
     await user.click(screen.getByRole("button", { name: "Continua" }));
     await screen.findByText(
       "Non è stato possibile salvare la richiesta. Riprova."
     );
-    const tokenInput = document.querySelector<HTMLInputElement>(
-      'input[name="turnstileToken"]'
-    );
-    expect(tokenInput).toHaveValue("");
-    expect(resetTurnstile).toHaveBeenCalledWith("widget-1");
 
-    issueToken?.("renewed-token");
     await user.click(screen.getByRole("button", { name: "Continua" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(resetTurnstile).toHaveBeenCalledTimes(2);
     const keys = fetchMock.mock.calls.map((call) =>
       JSON.parse(call[1]?.body as string)
     ) as Array<{ idempotencyKey: string }>;
@@ -288,7 +260,6 @@ describe("GiftRegistry", () => {
         gifts={demoPublicContent.gifts}
         demoMode
         allowDemoSubmission
-        turnstileSiteKey="test-site-key"
         onDemoAction={onDemoAction}
       />
     );
@@ -316,12 +287,7 @@ describe("GiftRegistry", () => {
         )
       )
     );
-    render(
-      <GiftRegistry
-        gifts={demoPublicContent.gifts}
-        turnstileSiteKey="test-site-key"
-      />
-    );
+    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     await fillGuestForm(user);
     await user.click(screen.getByRole("button", { name: "Continua" }));
@@ -346,12 +312,7 @@ describe("GiftRegistry", () => {
       });
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(
-      <GiftRegistry
-        gifts={demoPublicContent.gifts}
-        turnstileSiteKey="test-site-key"
-      />
-    );
+    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
 
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     await fillGuestForm(user);

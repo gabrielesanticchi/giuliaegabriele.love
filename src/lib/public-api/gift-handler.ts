@@ -5,11 +5,7 @@ import { z } from "zod";
 
 import { TransactionError } from "@/db/transactions/errors";
 import { buildTransferReason } from "@/lib/domain/references";
-import { hashEmail, hashFingerprint, hashToken } from "@/lib/security/hashing";
-import {
-  TurnstileUnavailableError,
-  type TurnstileDecision
-} from "@/lib/turnstile";
+import { hashFingerprint, hashToken } from "@/lib/security/hashing";
 
 import {
   ClientIdentityUnavailableError,
@@ -48,7 +44,7 @@ export type MutationInput = {
   requestFingerprintHash: string;
   guestTokenHash: string;
   guestDetailsEncrypted: string;
-  guestEmailHash: string;
+  guestEmailHash?: string;
   fingerprintHash: string;
   expiresAt: Date;
   beforeCommit?: () => Promise<void>;
@@ -80,10 +76,6 @@ export type GiftIntentHandlerDependencies = {
   fingerprintSecret: string;
   guestTokenSecret: string;
   clientIdentityPolicy?: ClientIdentityPolicy;
-  verifyTurnstile: (input: {
-    token: string;
-    remoteIp?: string;
-  }) => Promise<TurnstileDecision>;
   consumeRateLimit: (input: {
     fingerprintHash: string;
     bucketKey: string;
@@ -99,8 +91,7 @@ export type GiftIntentHandlerDependencies = {
   encryptGuestDetails: (details: {
     firstName: string;
     lastName: string;
-    email: string;
-    phone?: string;
+    phone: string;
     message?: string;
     privacyVersion: string;
   }) => string;
@@ -177,8 +168,7 @@ function requestFingerprint(
     giftId,
     firstName: request.guest.firstName,
     lastName: request.guest.lastName,
-    email: request.guest.email.toLowerCase(),
-    phone: request.guest.phone ?? null,
+    phone: request.guest.phone,
     message: request.guest.message ?? null,
     method: "method" in request ? request.method : "bank_transfer",
     amountCents: "amountCents" in request ? request.amountCents : undefined,
@@ -189,7 +179,6 @@ function requestFingerprint(
 
 function mapError(error: unknown): Response {
   if (
-    error instanceof TurnstileUnavailableError ||
     error instanceof ClientIdentityUnavailableError ||
     error instanceof PublicServiceUnavailableError
   ) {
@@ -237,11 +226,6 @@ export function createGiftIntentHandler(
         request,
         dependencies.clientIdentityPolicy ?? { production: false }
       );
-      const turnstile = await dependencies.verifyTurnstile({
-        token: parsed.data.turnstileToken,
-        remoteIp: client.remoteIp
-      });
-      if (!turnstile.success) return publicError(403, "forbidden");
 
       if (!dependencies.fingerprintSecret || !dependencies.guestTokenSecret) {
         throw new PublicServiceUnavailableError();
@@ -291,15 +275,10 @@ export function createGiftIntentHandler(
         guestDetailsEncrypted: dependencies.encryptGuestDetails({
           firstName: parsed.data.guest.firstName,
           lastName: parsed.data.guest.lastName,
-          email: parsed.data.guest.email,
           phone: parsed.data.guest.phone,
           message: parsed.data.guest.message,
           privacyVersion: parsed.data.privacyVersion
         }),
-        guestEmailHash: hashEmail(
-          parsed.data.guest.email,
-          dependencies.fingerprintSecret
-        ),
         fingerprintHash,
         expiresAt: new Date(
           now.getTime() + (dependencies.holdDurationMs ?? GIFT_HOLD_MS)

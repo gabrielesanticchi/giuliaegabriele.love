@@ -14,14 +14,11 @@ const requestBody = {
   guest: {
     firstName: "Ada",
     lastName: "Lovelace",
-    email: "ada@example.com",
-    emailConfirmation: "ada@example.com",
-    phone: "",
+    phone: "+39 333 1234567",
     message: "Auguri!"
   },
   privacyAccepted: true,
   privacyVersion: "2026-08-19",
-  turnstileToken: "verified-token",
   honeypot: "",
   idempotencyKey: "123e4567-e89b-42d3-a456-426614174000",
   method: "bank_transfer"
@@ -53,7 +50,6 @@ function dependencies(
     siteOrigin: "https://giuliaegabriele.love",
     fingerprintSecret: "fingerprint-secret",
     guestTokenSecret: "token-secret",
-    verifyTurnstile: vi.fn().mockResolvedValue({ success: true }),
     consumeRateLimit: vi.fn().mockResolvedValue({
       allowed: true,
       remaining: 7,
@@ -109,7 +105,6 @@ describe("public gift route", () => {
     expect(await errorCode(wrongType)).toBe("invalid_request");
     expect(oversized.status).toBe(400);
     expect(await errorCode(oversized)).toBe("invalid_request");
-    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
     expect(deps.mutate).not.toHaveBeenCalled();
   });
 
@@ -169,7 +164,7 @@ describe("public gift route", () => {
 
     expect(response.status).toBe(400);
     expect(cancel).toHaveBeenCalledTimes(1);
-    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
+    expect(deps.mutate).not.toHaveBeenCalled();
   });
 
   it("rifiuta origin estranea, validazione e honeypot prima del database", async () => {
@@ -186,6 +181,10 @@ describe("public gift route", () => {
       post({ ...requestBody, guest: { ...requestBody.guest, firstName: "" } }),
       { giftId }
     );
+    const noPhone = await handler(
+      post({ ...requestBody, guest: { ...requestBody.guest, phone: "" } }),
+      { giftId }
+    );
     const bot = await handler(post({ ...requestBody, honeypot: "website" }), {
       giftId
     });
@@ -194,22 +193,14 @@ describe("public gift route", () => {
     expect(await errorCode(origin)).toBe("forbidden");
     expect(invalid.status).toBe(422);
     expect(await errorCode(invalid)).toBe("validation_failed");
+    expect(noPhone.status).toBe(422);
+    expect(await errorCode(noPhone)).toBe("validation_failed");
     expect(bot.status).toBe(403);
     expect(await errorCode(bot)).toBe("forbidden");
     expect(deps.mutate).not.toHaveBeenCalled();
   });
 
-  it("applica Turnstile e rate limit prima della mutation", async () => {
-    const deniedTurnstile = dependencies({
-      verifyTurnstile: vi.fn().mockResolvedValue({ success: false })
-    });
-    const turnstileResponse = await createGiftIntentHandler(
-      "reserve",
-      deniedTurnstile
-    )(post(), { giftId });
-    expect(turnstileResponse.status).toBe(403);
-    expect(deniedTurnstile.consumeRateLimit).not.toHaveBeenCalled();
-
+  it("applica il rate limit prima della mutation", async () => {
     const limited = dependencies({
       consumeRateLimit: vi.fn().mockResolvedValue({
         allowed: false,
@@ -282,7 +273,8 @@ describe("public gift route", () => {
     expect(JSON.stringify(mutationInput)).not.toContain("203.0.113.7");
     expect(mutationInput?.fingerprintHash).toMatch(/^[a-f0-9]{64}$/);
     expect(mutationInput?.guestTokenHash).toMatch(/^[a-f0-9]{64}$/);
-    expect(mutationInput?.guestEmailHash).toMatch(/^[a-f0-9]{64}$/);
+    // Nessuna email raccolta: nessun hash email associato all'intento.
+    expect(mutationInput?.guestEmailHash).toBeUndefined();
     expect(mutationInput).toHaveProperty(
       "guestDetailsEncrypted",
       "encrypted-guest-details"
@@ -296,6 +288,23 @@ describe("public gift route", () => {
       "banking-decrypted",
       "mutation-committed"
     ]);
+  });
+
+  it("cifra i dettagli invitato con telefono e senza email", async () => {
+    const encryptGuestDetails = vi
+      .fn()
+      .mockReturnValue("encrypted-guest-details");
+    const deps = dependencies({ encryptGuestDetails });
+
+    await createGiftIntentHandler("reserve", deps)(post(), { giftId });
+
+    const details = encryptGuestDetails.mock.calls[0]?.[0];
+    expect(details).toMatchObject({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      phone: "+39 333 1234567"
+    });
+    expect(details).not.toHaveProperty("email");
   });
 
   it("carica il blob bancario una volta prima della mutation e non interroga il pool in beforeCommit", async () => {
@@ -438,7 +447,7 @@ describe("public gift route", () => {
     expect(deps.decryptBankInstructions).toHaveBeenCalledTimes(1);
   });
 
-  it("se la decifratura beforeCommit fallisce non conferma intent, token o email", async () => {
+  it("se la decifratura beforeCommit fallisce non conferma intent, token o istruzioni", async () => {
     const events: string[] = [];
     const deps = dependencies({
       mutate: vi.fn(async (input) => {
@@ -495,7 +504,6 @@ describe("public gift route", () => {
 
     expect(response.status).toBe(503);
     expect(await errorCode(response)).toBe("service_unavailable");
-    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
     expect(deps.mutate).not.toHaveBeenCalled();
   });
 
@@ -520,12 +528,11 @@ describe("public gift route", () => {
 
     expect(missing.status).toBe(503);
     expect(malformed.status).toBe(503);
-    expect(deps.verifyTurnstile).not.toHaveBeenCalled();
+    expect(deps.mutate).not.toHaveBeenCalled();
   });
 
   it("usa soltanto il trusted header configurato in production", async () => {
-    const verifyTurnstile = vi.fn().mockResolvedValue({ success: true });
-    const deps = dependencies({ verifyTurnstile });
+    const deps = dependencies();
     Object.assign(deps, {
       clientIdentityPolicy: {
         production: true,
@@ -542,10 +549,6 @@ describe("public gift route", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(verifyTurnstile).toHaveBeenCalledWith({
-      token: "verified-token",
-      remoteIp: "203.0.113.42"
-    });
   });
 
   it("ignora x-forwarded-for fuori dal boundary Vercel", async () => {
@@ -554,8 +557,7 @@ describe("public gift route", () => {
       remaining: 7,
       retryAfterSeconds: 0
     });
-    const verifyTurnstile = vi.fn().mockResolvedValue({ success: true });
-    const deps = dependencies({ consumeRateLimit, verifyTurnstile });
+    const deps = dependencies({ consumeRateLimit });
     Object.assign(deps, {
       clientIdentityPolicy: { production: false }
     });
@@ -575,10 +577,6 @@ describe("public gift route", () => {
       { giftId }
     );
 
-    expect(verifyTurnstile).toHaveBeenNthCalledWith(1, {
-      token: "verified-token",
-      remoteIp: undefined
-    });
     expect(consumeRateLimit.mock.calls[0]?.[0].fingerprintHash).toBe(
       consumeRateLimit.mock.calls[1]?.[0].fingerprintHash
     );

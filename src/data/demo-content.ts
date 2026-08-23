@@ -108,7 +108,7 @@ export const demoPublicContent: PublicContent = {
       kind: "ceremony",
       name: "Chiesa San Giovanni Bosco",
       place: "Caleppio di Settala",
-      time: "11:00",
+      time: "11:00 – 12:30",
       note: "Vi aspettiamo qualche minuto prima dell'inizio della cerimonia.",
       mapsUrl:
         "https://www.google.com/maps/search/?api=1&query=Chiesa%20San%20Giovanni%20Bosco%20Caleppio%20di%20Settala"
@@ -118,7 +118,7 @@ export const demoPublicContent: PublicContent = {
       name: "Villa Cavenago",
       place: "Trezzo sull'Adda",
       address: "Via Giuseppe Carcassola 15, Trezzo sull'Adda",
-      time: "A seguire, fino alle 23:00",
+      time: "Dalle 13:00 alle 21:30",
       note: "Parcheggio in loco: lungo la strada troverete il cartello con il nome della location.",
       mapsUrl:
         "https://www.google.com/maps/search/?api=1&query=Villa%20Cavenago%20Via%20Giuseppe%20Carcassola%2015%20Trezzo%20sull%27Adda"
@@ -129,16 +129,17 @@ export const demoPublicContent: PublicContent = {
       time: "11:00",
       dateTime: "11:00",
       title: "Cerimonia",
-      description: "Chiesa San Giovanni Bosco, Caleppio di Settala"
+      description: "Chiesa San Giovanni Bosco · fino alle 12.30"
     },
     {
-      time: "A seguire",
+      time: "13:00",
+      dateTime: "13:00",
       title: "Ricevimento",
       description: "Villa Cavenago, Trezzo sull'Adda"
     },
     {
-      time: "23:00",
-      dateTime: "23:00",
+      time: "21:30",
+      dateTime: "21:30",
       title: "Saluti",
       description: "La conclusione della nostra giornata insieme"
     }
@@ -172,10 +173,10 @@ export const demoPublicContent: PublicContent = {
     }
   ],
   dressCode: {
-    name: "Colori autunnali",
+    name: "Vestitevi come state comodi",
     description:
-      "Se vi fa piacere, lasciatevi ispirare dai toni caldi del bosco in autunno.",
-    note: "Scegliete prima di tutto qualcosa che vi faccia sentire a vostro agio: è un invito gentile, non una regola.",
+      "Non c'è un vero dress code: indossate ciò che vi mette più a vostro agio.",
+    note: "Se vi fa piacere, lasciatevi ispirare dai colori caldi dell'autunno.",
     colors: [
       { name: "Verde bosco", value: "#20342c" },
       { name: "Salvia", value: "#748476" },

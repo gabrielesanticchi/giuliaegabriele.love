@@ -12,16 +12,11 @@ import {
   reserveGift
 } from "@/db/transactions";
 import { deliverTransactionalEmail } from "@/lib/email";
-import {
-  renderAdminIntentEmail,
-  renderContributionEmail,
-  renderReservationEmail
-} from "@/lib/email/templates";
+import { renderAdminIntentEmail } from "@/lib/email/templates";
 import { formatCurrency } from "@/lib/domain/currency";
 import { decryptSecret } from "@/lib/security/crypto";
 import { encryptSecret } from "@/lib/security/crypto";
 import { consumeRateLimit } from "@/lib/security/rate-limit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
 
 import {
   type BankInstructions,
@@ -100,22 +95,6 @@ function decryptBankInstructions(encrypted: string): BankInstructions {
   }
 }
 
-function instructionText(instructions: Record<string, string | undefined>) {
-  return [
-    instructions.accountHolder
-      ? `Intestatario: ${instructions.accountHolder}`
-      : undefined,
-    instructions.iban ? `IBAN: ${instructions.iban}` : undefined,
-    instructions.bankName ? `Banca: ${instructions.bankName}` : undefined,
-    instructions.transferReason
-      ? `Causale: ${instructions.transferReason}`
-      : undefined,
-    instructions.instructions
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
 export function createGiftRuntimeDependencies(
   kind: "reserve" | "contribute"
 ): GiftIntentHandlerDependencies {
@@ -131,7 +110,6 @@ export function createGiftRuntimeDependencies(
   return {
     ...config,
     holdDurationMs: holdHours * 60 * 60 * 1_000,
-    verifyTurnstile: verifyTurnstileToken,
     consumeRateLimit: (input) =>
       consumeRateLimit(db, {
         ...input,
@@ -163,45 +141,9 @@ export function createGiftRuntimeDependencies(
         requiredEnvironment("DATA_ENCRYPTION_KEY")
       ),
     notify: async (input) => {
+      // Gli invitati forniscono solo il telefono: nessuna email di conferma al
+      // guest. Resta la notifica agli sposi, se configurata.
       const siteOrigin = new URL(config.siteOrigin).origin;
-      const personalUrl = new URL(input.personalLink, siteOrigin).toString();
-      const instructions = instructionText(input.instructions);
-      const expiresAt = new Intl.DateTimeFormat("it-IT", {
-        dateStyle: "long",
-        timeStyle: "short",
-        timeZone: "Europe/Rome"
-      }).format(input.expiresAt);
-      const guestEmail =
-        kind === "reserve"
-          ? renderReservationEmail({
-              firstName: input.request.guest.firstName,
-              giftName: input.gift.title,
-              reference: input.reference,
-              expiresAt,
-              instructions,
-              personalUrl
-            })
-          : renderContributionEmail({
-              firstName: input.request.guest.firstName,
-              giftName: input.gift.title,
-              amount: formatCurrency(
-                "amountCents" in input.request
-                  ? input.request.amountCents
-                  : input.gift.priceCents
-              ),
-              reference: input.reference,
-              instructions,
-              personalUrl
-            });
-      await deliverTransactionalEmail(db, {
-        intentId: input.intentId,
-        recipient: input.request.guest.email,
-        templateKey:
-          kind === "reserve" ? "gift_reservation" : "gift_contribution",
-        email: guestEmail,
-        hashingSecret: config.fingerprintSecret
-      });
-
       const admin = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
       if (admin) {
         await deliverTransactionalEmail(db, {
@@ -249,7 +191,6 @@ export function createRequestRuntimeDependencies(): RequestActionDependencies {
   );
   return {
     ...config,
-    verifyTurnstile: verifyTurnstileToken,
     consumeRateLimit: (input) =>
       consumeRateLimit(db, {
         ...input,

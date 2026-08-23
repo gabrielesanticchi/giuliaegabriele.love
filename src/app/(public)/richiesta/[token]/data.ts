@@ -54,8 +54,7 @@ export async function loadGuestRequest(
       status: request.status,
       amountCents: request.amountCents,
       expiresAt: request.expiresAt,
-      paymentDeclaredAt: request.paymentDeclaredAt,
-      turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? ""
+      paymentDeclaredAt: request.paymentDeclaredAt
     };
   } catch {
     return null;

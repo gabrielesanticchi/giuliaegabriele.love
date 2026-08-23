@@ -4,10 +4,6 @@ import { z } from "zod";
 
 import { TransactionError } from "@/db/transactions/errors";
 import { hashFingerprint, hashToken } from "@/lib/security/hashing";
-import {
-  TurnstileUnavailableError,
-  type TurnstileDecision
-} from "@/lib/turnstile";
 
 import { PublicServiceUnavailableError, publicError } from "./gift-handler";
 import {
@@ -34,10 +30,6 @@ export type RequestActionDependencies = {
   fingerprintSecret: string;
   guestTokenSecret: string;
   clientIdentityPolicy?: ClientIdentityPolicy;
-  verifyTurnstile: (input: {
-    token: string;
-    remoteIp?: string;
-  }) => Promise<TurnstileDecision>;
   consumeRateLimit: (input: {
     fingerprintHash: string;
     bucketKey: string;
@@ -92,7 +84,6 @@ function terminalTokenIsValid(intent: GuestIntent, now: Date): boolean {
 
 function mapRequestError(error: unknown): Response {
   if (
-    error instanceof TurnstileUnavailableError ||
     error instanceof ClientIdentityUnavailableError ||
     error instanceof PublicServiceUnavailableError
   ) {
@@ -146,11 +137,6 @@ export function createRequestActionHandler(
         request,
         dependencies.clientIdentityPolicy ?? { production: false }
       );
-      const turnstile = await dependencies.verifyTurnstile({
-        token: parsed.data.turnstileToken,
-        remoteIp: client.remoteIp
-      });
-      if (!turnstile.success) return publicError(403, "forbidden");
 
       const fingerprintHash = hashFingerprint(
         client.fingerprintMaterial,

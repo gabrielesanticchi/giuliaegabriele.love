@@ -18,7 +18,7 @@ test.describe("visual QA screenshots", () => {
       await page.setViewportSize({ width: bp.width, height: bp.height });
       await page.goto("/");
       await expect(
-        page.getByRole("heading", { level: 1, name: "Gabriele & Giulia" })
+        page.getByRole("heading", { level: 1, name: "Giulia & Gabriele" })
       ).toBeVisible();
       await page.screenshot({
         path: `artifacts/screenshots/home-${bp.name}.png`,

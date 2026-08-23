@@ -22,18 +22,18 @@ const siteUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: "Gabriele & Giulia",
-  description: "Il matrimonio di Gabriele e Giulia, 24 ottobre 2026.",
-  applicationName: "Gabriele & Giulia",
+  title: "Giulia & Gabriele",
+  description: "Il matrimonio di Giulia e Gabriele, 24 ottobre 2026.",
+  applicationName: "Giulia & Gabriele",
   robots: { index: false, follow: false },
   icons: { icon: "/graphics/monogram-mark.svg" },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     locale: "it_IT",
-    siteName: "Gabriele & Giulia",
-    title: "Gabriele & Giulia",
-    description: "Il matrimonio di Gabriele e Giulia, 24 ottobre 2026.",
+    siteName: "Giulia & Gabriele",
+    title: "Giulia & Gabriele",
+    description: "Il matrimonio di Giulia e Gabriele, 24 ottobre 2026.",
     url: siteUrl
   }
 };

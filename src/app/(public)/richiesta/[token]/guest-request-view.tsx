@@ -4,10 +4,6 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 import { formatCurrency } from "@/lib/domain/currency";
-import {
-  TurnstileWidget,
-  type TurnstileWidgetHandle
-} from "@/lib/turnstile/widget";
 
 export type GuestRequestSnapshot = {
   token: string;
@@ -18,11 +14,9 @@ export type GuestRequestSnapshot = {
   amountCents: number;
   expiresAt: Date;
   paymentDeclaredAt: Date | null;
-  turnstileSiteKey: string;
 };
 
 type ActionForm = {
-  turnstileToken: string;
   honeypot: string;
 };
 
@@ -43,19 +37,16 @@ export function GuestRequestView({
   const [declared, setDeclared] = useState(request.paymentDeclaredAt !== null);
   const [feedback, setFeedback] = useState("");
   const summaryRef = useRef<HTMLDivElement>(null);
-  const turnstileRef = useRef<TurnstileWidgetHandle>(null);
   const [idempotencyKeys, setIdempotencyKeys] = useState<
     Record<"complete" | "cancel", string | null>
   >({ complete: null, cancel: null });
   const formId = useId();
   const {
     register,
-    setValue,
-    getValues,
     handleSubmit,
     formState: { isSubmitting }
   } = useForm<ActionForm>({
-    defaultValues: { turnstileToken: "", honeypot: "" }
+    defaultValues: { honeypot: "" }
   });
 
   useEffect(() => {
@@ -68,11 +59,6 @@ export function GuestRequestView({
     const action = submitter?.dataset.action as
       "complete" | "cancel" | undefined;
     if (!action) return;
-    const turnstileToken = getValues("turnstileToken");
-    if (!turnstileToken) {
-      setFeedback("Completa la verifica anti-spam prima di continuare.");
-      return;
-    }
 
     const requestKey = idempotencyKeys[action] ?? crypto.randomUUID();
     if (!idempotencyKeys[action]) {
@@ -86,7 +72,6 @@ export function GuestRequestView({
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            turnstileToken,
             honeypot: "",
             idempotencyKey: requestKey
           })
@@ -110,9 +95,6 @@ export function GuestRequestView({
       }
     } catch {
       setFeedback("Connessione non disponibile. Riprova.");
-    } finally {
-      turnstileRef.current?.reset();
-      setValue("turnstileToken", "");
     }
   });
 
@@ -156,7 +138,6 @@ export function GuestRequestView({
 
         {clientStatus === "pending" ? (
           <form className="guest-request-actions" onSubmit={submit} noValidate>
-            <input type="hidden" {...register("turnstileToken")} />
             <div className="honeypot-field" aria-hidden="true">
               <label htmlFor={`${formId}-website`}>Sito web</label>
               <input
@@ -166,13 +147,6 @@ export function GuestRequestView({
                 {...register("honeypot")}
               />
             </div>
-            <TurnstileWidget
-              ref={turnstileRef}
-              siteKey={request.turnstileSiteKey}
-              onToken={(token) =>
-                setValue("turnstileToken", token, { shouldValidate: true })
-              }
-            />
             {feedback ? (
               <div
                 ref={summaryRef}

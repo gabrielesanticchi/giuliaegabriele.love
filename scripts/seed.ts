@@ -15,6 +15,7 @@ const IDS = {
   media: "11111111-1111-4111-8111-111111111111",
   scheduleCeremony: "22222222-2222-4222-8222-222222222221",
   scheduleReception: "22222222-2222-4222-8222-222222222222",
+  scheduleFarewell: "22222222-2222-4222-8222-222222222223",
   story1: "33333333-3333-4333-8333-333333333331",
   story2: "33333333-3333-4333-8333-333333333332",
   color1: "44444444-4444-4444-8444-444444444441",
@@ -65,7 +66,7 @@ async function main() {
         key: "hero",
         value: {
           key: "hero",
-          title: "Gabriele & Giulia",
+          title: "Giulia & Gabriele",
           description: "Ci sposiamo il 24 ottobre 2026.",
           published: true,
           media: { kind: "art", label: "Bosco editoriale" }
@@ -86,7 +87,7 @@ async function main() {
               kind: "ceremony",
               name: "Chiesa San Giovanni Bosco",
               address: "Caleppio di Settala",
-              time: "11:00",
+              time: "11:00 – 12:30",
               parking: "Vi aspettiamo qualche minuto prima.",
               mapsUrl:
                 "https://www.google.com/maps/search/?api=1&query=Chiesa%20San%20Giovanni%20Bosco%20Caleppio%20di%20Settala"
@@ -95,7 +96,7 @@ async function main() {
               kind: "reception",
               name: "Villa Cavenago",
               address: "Via Giuseppe Carcassola 15, Trezzo sull'Adda",
-              time: "A seguire, fino alle 23:00",
+              time: "Dalle 13:00 alle 21:30",
               parking: "Parcheggio in loco.",
               mapsUrl:
                 "https://www.google.com/maps/search/?api=1&query=Villa%20Cavenago%20Trezzo%20sull%27Adda"
@@ -107,9 +108,10 @@ async function main() {
         key: "dress_code",
         value: {
           key: "dress_code",
-          title: "Colori autunnali",
-          description: "Lasciatevi ispirare dai toni caldi del bosco.",
-          note: "Un invito gentile, non una regola.",
+          title: "Vestitevi come state comodi",
+          description:
+            "Non c'è un vero dress code: indossate ciò che vi mette più a vostro agio.",
+          note: "Se vi fa piacere, lasciatevi ispirare dai colori caldi dell'autunno.",
           published: true
         }
       },
@@ -130,7 +132,7 @@ async function main() {
         value: { configured: true },
         encryptedValue: encryptSecret(
           JSON.stringify({
-            holder: "Gabriele e Giulia",
+            holder: "Giulia e Gabriele",
             iban: "IT00X0000000000000000000000",
             bank: "Banca dimostrativa"
           }),
@@ -159,7 +161,7 @@ async function main() {
         {
           id: IDS.scheduleCeremony,
           title: "Cerimonia",
-          description: "Chiesa San Giovanni Bosco, Caleppio di Settala",
+          description: "Chiesa San Giovanni Bosco · fino alle 12.30",
           startsAt: new Date("2026-10-24T09:00:00Z"),
           sortOrder: 0,
           published: true
@@ -170,6 +172,14 @@ async function main() {
           description: "Villa Cavenago, Trezzo sull'Adda",
           startsAt: new Date("2026-10-24T11:00:00Z"),
           sortOrder: 1,
+          published: true
+        },
+        {
+          id: IDS.scheduleFarewell,
+          title: "Saluti",
+          description: "La conclusione della nostra giornata insieme",
+          startsAt: new Date("2026-10-24T19:30:00Z"),
+          sortOrder: 2,
           published: true
         }
       ])
