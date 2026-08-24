@@ -28,14 +28,44 @@ Vercel, ma **questa repository non esegue deploy, push o provisioning**.
 
 ## Setup
 
+> Esegui i comandi **una riga alla volta** (senza i commenti `#`): incollarli
+> tutti insieme può confondere la shell.
+
+### Solo per vedere il sito (nessun database)
+
 ```bash
 pnpm install
-cp .env.example .env.local   # compila i valori (vedi sotto)
-pnpm db:migrate              # applica le migrazioni Drizzle
-pnpm db:seed                 # (solo dev/test) contenuti dimostrativi idempotenti
-pnpm admin:create --email tu@example.com --role owner --password-stdin
 pnpm dev
 ```
+
+In sviluppo, se il database non è raggiungibile l'app ricade in modo controllato
+sui **contenuti dimostrativi**, quindi `pnpm dev` mostra il sito anche senza DB.
+
+### Con un database reale (persistenza + area admin)
+
+Serve un **PostgreSQL in esecuzione**. Copia le variabili e metti un
+`DATABASE_URL` valido in `.env.local` (gli script `db:*`/`admin:*` leggono
+automaticamente `.env.local`):
+
+```bash
+cp .env.example .env.local
+```
+
+```bash
+pnpm db:migrate
+```
+
+```bash
+pnpm db:seed
+```
+
+```bash
+pnpm admin:create --email tu@example.com --role owner --password-stdin
+```
+
+Non hai un PostgreSQL a portata di mano? Usa il cluster effimero locale della
+sezione [Test](#test) (Homebrew `postgresql@15`, senza Docker) e punta
+`DATABASE_URL` a quello.
 
 Il primo accesso admin richiede la configurazione TOTP; se perdi il QR o i
 recovery code puoi ripartire in sicurezza dal pulsante **“Ricomincia la
