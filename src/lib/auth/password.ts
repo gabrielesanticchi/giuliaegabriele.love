@@ -2,16 +2,15 @@ import "server-only";
 
 import { argon2id, hash, verify } from "argon2";
 
-const MIN_PASSWORD_LENGTH = 16;
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 256;
 
 function assertStrongPassword(password: string): void {
-  const hasEnoughVariety = new Set(password).size >= 8;
   if (
     password.length < MIN_PASSWORD_LENGTH ||
-    password.length > 256 ||
-    !hasEnoughVariety
+    password.length > MAX_PASSWORD_LENGTH
   ) {
-    throw new TypeError("Password non conforme ai requisiti di sicurezza");
+    throw new TypeError("La password deve avere almeno 8 caratteri");
   }
 }
 

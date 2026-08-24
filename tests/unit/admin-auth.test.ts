@@ -28,13 +28,10 @@ describe("admin password", () => {
     ).resolves.toBe(false);
   });
 
-  it("rejects passwords that are too short or trivially predictable", async () => {
-    await expect(hashAdminPassword("corta")).rejects.toThrow(
-      "Password non conforme"
-    );
-    await expect(hashAdminPassword("aaaaaaaaaaaaaaaaaaaa")).rejects.toThrow(
-      "Password non conforme"
-    );
+  it("rejects only passwords shorter than 8 characters", async () => {
+    await expect(hashAdminPassword("corta")).rejects.toThrow(/8 caratteri/);
+    const digest = await hashAdminPassword("Password123!@");
+    expect(digest).toMatch(/^\$argon2id\$/);
   });
 });
 

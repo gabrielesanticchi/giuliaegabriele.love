@@ -78,6 +78,15 @@ async function hiddenSecret(prompt: string): Promise<string> {
 }
 
 export async function readAdminPassword(args: AdminCliArgs): Promise<string> {
+  // `--password-stdin` reads until EOF: on an interactive TTY with nothing
+  // piped it would hang forever. Fail fast with a usage hint instead.
+  if (args.passwordStdin && process.stdin.isTTY) {
+    throw new Error(
+      "Con --password-stdin passa la password via pipe, es.: " +
+        "printf 'password' | pnpm admin:create ... --password-stdin. " +
+        "Per l'inserimento interattivo ometti --password-stdin."
+    );
+  }
   const password = args.passwordStdin
     ? await stdinSecret()
     : await hiddenSecret("Password: ");
