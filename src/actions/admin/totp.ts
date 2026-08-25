@@ -179,7 +179,8 @@ export async function completeTotpEnrollmentAction(
         recoveryCodeHashes: row.pendingRecoveryCodeHashes,
         pendingRecoveryCodeHashes: [],
         totpEnabled: true,
-        sessionVersion: row.sessionVersion + 1,
+        // Non bumpare sessionVersion: attivare il TOTP non deve invalidare la
+        // sessione corrente dell'admin (totpPending diventa false da solo).
         updatedAt: new Date()
       })
       .where(eq(adminUsers.id, admin.id));
