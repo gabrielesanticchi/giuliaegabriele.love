@@ -15,5 +15,9 @@ export function authSecrets() {
 }
 
 export function isTotpRequired(): boolean {
-  return process.env.NODE_ENV === "production";
+  // Sempre in produzione; in dev/test attivabile con FORCE_TOTP=true per provare
+  // l'onboarding del QR in locale.
+  return (
+    process.env.NODE_ENV === "production" || process.env.FORCE_TOTP === "true"
+  );
 }
