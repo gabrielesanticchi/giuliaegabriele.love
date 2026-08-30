@@ -13,13 +13,11 @@ import { hashEmail } from "@/lib/security/hashing";
 
 import { authSecrets } from "./environment";
 import { hashAdminPassword } from "./password";
-import { createRecoveryCodes } from "./totp";
 
 export type AdminCliArgs = {
   email?: string;
   role: "owner" | "editor";
   passwordStdin: boolean;
-  resetRecovery: boolean;
 };
 
 export function parseAdminCliArgs(args: string[]): AdminCliArgs {
@@ -31,8 +29,7 @@ export function parseAdminCliArgs(args: string[]): AdminCliArgs {
   }
   const result: AdminCliArgs = {
     role: "editor",
-    passwordStdin: args.includes("--password-stdin"),
-    resetRecovery: args.includes("--reset-recovery")
+    passwordStdin: args.includes("--password-stdin")
   };
   for (let index = 0; index < args.length; index += 1) {
     if (args[index] === "--email")
@@ -131,12 +128,8 @@ export async function createAdminAccount(input: {
 export async function resetAdminPassword(input: {
   email: string;
   password: string;
-  resetRecovery: boolean;
 }) {
   const secrets = authSecrets();
-  const recovery = input.resetRecovery
-    ? createRecoveryCodes(secrets.recoveryPepper)
-    : undefined;
   const passwordHash = await hashAdminPassword(input.password);
   return getDatabase().transaction(async (tx) => {
     const rows = await tx
@@ -144,7 +137,6 @@ export async function resetAdminPassword(input: {
       .set({
         passwordHash,
         sessionVersion: sql`${adminUsers.sessionVersion} + 1`,
-        recoveryCodeHashes: recovery?.recoveryCodeHashes,
         updatedAt: new Date()
       })
       .where(
@@ -158,9 +150,9 @@ export async function resetAdminPassword(input: {
       action: "admin.password_reset",
       targetType: "admin_user",
       targetId: rows[0].id,
-      metadata: { recoveryReset: Boolean(recovery) }
+      metadata: {}
     });
-    return { id: rows[0].id, recoveryCodes: recovery?.recoveryCodes };
+    return { id: rows[0].id };
   });
 }
 
@@ -171,7 +163,6 @@ export async function listAdminAccounts() {
     id: row.id,
     email: decryptSecret(row.emailEncrypted, secrets.encryptionKey),
     role: row.role,
-    active: row.disabledAt === null,
-    totp: row.totpEnabled
+    active: row.disabledAt === null
   }));
 }

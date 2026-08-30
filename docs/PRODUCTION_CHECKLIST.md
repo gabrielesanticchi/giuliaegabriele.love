@@ -15,15 +15,14 @@ automaticamente da questa repository.
 
 - [ ] `pnpm db:migrate` eseguito sul database di produzione.
 - [ ] **Nessun** `pnpm db:seed` in produzione (rifiutato per NODE_ENV).
-- [ ] Almeno un amministratore `owner` creato con `pnpm admin:create` e TOTP
-      attivato.
+- [ ] Almeno un amministratore `owner` creato con `pnpm admin:create`.
 - [ ] Istruzioni bancarie inserite dall'area admin (cifrate), non da seed.
 - [ ] Contenuti hero/matrimonio/programma/storia/dress code/regali pubblicati e
       media richiesti caricati; modello privacy revisionato.
 
 ## Sicurezza
 
-- [ ] TOTP obbligatorio e attivo per tutti gli admin.
+- [ ] Password admin robuste (Argon2id) per tutti gli account.
 - [ ] CSP e header di sicurezza verificati in produzione (niente `unsafe-eval`).
 - [ ] Turnstile configurato (site key + secret + hostname atteso).
 - [ ] Identità client fidata dietro proxy (`TRUSTED_PROXY_IP_HEADER`).

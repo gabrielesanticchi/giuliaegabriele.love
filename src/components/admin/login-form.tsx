@@ -17,7 +17,6 @@ export function LoginForm() {
     const result = await signIn("credentials", {
       email: form.get("email"),
       password: form.get("password"),
-      code: form.get("code"),
       callbackUrl: searchParams.get("callbackUrl") || "/admin",
       redirect: false
     });
@@ -43,10 +42,6 @@ export function LoginForm() {
           autoComplete="current-password"
           required
         />
-      </label>
-      <label>
-        <span>Codice autenticatore o recupero</span>
-        <input name="code" autoComplete="one-time-code" />
       </label>
       <button type="submit" disabled={pending}>
         {pending ? "Accesso…" : "Accedi"}

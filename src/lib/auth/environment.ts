@@ -9,15 +9,6 @@ function required(name: string): string {
 export function authSecrets() {
   return {
     hmacPepper: required("AUTH_HMAC_PEPPER"),
-    encryptionKey: required("AUTH_ENCRYPTION_KEY"),
-    recoveryPepper: required("AUTH_RECOVERY_PEPPER")
+    encryptionKey: required("AUTH_ENCRYPTION_KEY")
   };
-}
-
-export function isTotpRequired(): boolean {
-  // Sempre in produzione; in dev/test attivabile con FORCE_TOTP=true per provare
-  // l'onboarding del QR in locale.
-  return (
-    process.env.NODE_ENV === "production" || process.env.FORCE_TOTP === "true"
-  );
 }

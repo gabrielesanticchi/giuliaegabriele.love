@@ -11,14 +11,9 @@ async function main() {
   const password = await readAdminPassword(args);
   const result = await resetAdminPassword({
     email: args.email,
-    password,
-    resetRecovery: args.resetRecovery
+    password
   });
   process.stdout.write(`Password aggiornata: ${result.id}\n`);
-  if (result.recoveryCodes)
-    process.stdout.write(
-      `Nuovi recovery code (mostrati una volta):\n${result.recoveryCodes.join("\n")}\n`
-    );
 }
 
 main()

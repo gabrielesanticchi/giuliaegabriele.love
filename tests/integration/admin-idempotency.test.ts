@@ -13,9 +13,6 @@ import {
   siteSettings
 } from "@/db/schema";
 import { runAdminIdempotentTransaction } from "@/lib/admin/idempotency";
-import { beginTotpEnrollmentAction } from "@/actions/admin/totp";
-import { withAdminAuthDependencies } from "@/actions/admin/shared";
-import { encryptSecret } from "@/lib/security/crypto";
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const integration = databaseUrl ? describe : describe.skip;
@@ -181,44 +178,6 @@ integration(
         { sequence: 1 },
         { sequence: 1 }
       ]);
-    });
-
-    it("serializes concurrent initial TOTP enrollment", async () => {
-      const adminId = randomUUID();
-      const encryptionKey = randomBytes(32).toString("base64");
-      process.env.DATABASE_URL = databaseUrl!;
-      process.env.AUTH_HMAC_PEPPER = randomBytes(32).toString("hex");
-      process.env.AUTH_ENCRYPTION_KEY = encryptionKey;
-      process.env.AUTH_RECOVERY_PEPPER = randomBytes(32).toString("hex");
-      await db.insert(adminUsers).values({
-        id: adminId,
-        emailHash: randomBytes(32).toString("hex"),
-        emailEncrypted: encryptSecret("admin@example.test", encryptionKey),
-        passwordHash: "test",
-        role: "owner"
-      });
-      const principal = {
-        id: adminId,
-        role: "owner" as const,
-        sessionVersion: 1,
-        isActive: true,
-        totpPending: true
-      };
-      const results = await withAdminAuthDependencies(
-        { getPrincipal: async () => principal },
-        () =>
-          Promise.all([
-            beginTotpEnrollmentAction(),
-            beginTotpEnrollmentAction()
-          ])
-      );
-      expect(results.filter((result) => result.ok)).toHaveLength(1);
-      expect(results.filter((result) => !result.ok)).toHaveLength(1);
-      expect(
-        await db.select().from(auditLogs).where(eq(auditLogs.targetId, adminId))
-      ).toHaveLength(1);
-      await db.delete(auditLogs).where(eq(auditLogs.targetId, adminId));
-      await db.delete(adminUsers).where(eq(adminUsers.id, adminId));
     });
   }
 );

@@ -16,7 +16,6 @@ export default async function AdminPanelLayout({
 }) {
   const principal = await getAdminPrincipal();
   if (!principal?.isActive) redirect("/admin/login");
-  if (principal.totpPending) redirect("/admin/totp");
   return (
     <div className="admin-shell">
       <a className="skip-link" href="#admin-content">

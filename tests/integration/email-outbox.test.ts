@@ -50,8 +50,7 @@ integration(
       id: adminId,
       role: "owner",
       sessionVersion: 1,
-      isActive: true,
-      totpPending: false
+      isActive: true
     };
 
     async function insertIntent(reference: string): Promise<string> {

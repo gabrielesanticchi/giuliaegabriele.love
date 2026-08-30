@@ -26,10 +26,9 @@ export async function getAdminPrincipal(): Promise<AdminPrincipal | null> {
 }
 
 export async function requireAdmin(
-  requiredRole: AdminRole = "editor",
-  options: { allowTotpPending?: boolean } = {}
+  requiredRole: AdminRole = "editor"
 ): Promise<AdminPrincipal> {
   const principal = await getAdminPrincipal();
-  assertAdminPrincipal(principal, requiredRole, options);
+  assertAdminPrincipal(principal, requiredRole);
   return principal;
 }

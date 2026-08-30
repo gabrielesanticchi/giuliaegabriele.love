@@ -31,8 +31,7 @@ export const authOptions: NextAuthOptions = {
       name: "Amministrazione",
       credentials: {
         email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-        code: { label: "Codice TOTP o recupero", type: "text" }
+        password: { label: "Password", type: "password" }
       },
       async authorize(credentials, request) {
         if (!credentials?.email || !credentials.password) return null;
@@ -56,7 +55,6 @@ export const authOptions: NextAuthOptions = {
         const principal = await authenticateAdmin({
           email: credentials.email,
           password: credentials.password,
-          code: credentials.code,
           clientIdentity
         });
         if (!principal) return null;
@@ -64,8 +62,7 @@ export const authOptions: NextAuthOptions = {
           id: principal.id,
           adminId: principal.id,
           role: principal.role,
-          sessionVersion: principal.sessionVersion,
-          totpPending: principal.totpPending
+          sessionVersion: principal.sessionVersion
         };
       }
     })
@@ -76,20 +73,14 @@ export const authOptions: NextAuthOptions = {
         token.adminId = user.adminId;
         token.role = user.role;
         token.sessionVersion = user.sessionVersion;
-        token.totpPending = user.totpPending;
       }
       if (token.adminId) {
         const current = await loadAdminPrincipal(token.adminId);
-        if (
-          !current?.isActive ||
-          current.sessionVersion !== token.sessionVersion ||
-          current.role !== token.role
-        ) {
-          token.invalid = true;
-        } else {
-          token.invalid = false;
-          token.totpPending = current.totpPending;
-        }
+        token.invalid = !(
+          current?.isActive &&
+          current.sessionVersion === token.sessionVersion &&
+          current.role === token.role
+        );
       }
       return token;
     },
@@ -106,8 +97,7 @@ export const authOptions: NextAuthOptions = {
         ...session.user,
         adminId: token.adminId,
         role: token.role,
-        sessionVersion: token.sessionVersion,
-        totpPending: Boolean(token.totpPending)
+        sessionVersion: token.sessionVersion
       };
       return session;
     }

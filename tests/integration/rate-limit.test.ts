@@ -98,7 +98,6 @@ integration(
       const pepper = randomBytes(32).toString("hex");
       process.env.AUTH_HMAC_PEPPER = pepper;
       process.env.AUTH_ENCRYPTION_KEY = randomBytes(32).toString("base64");
-      process.env.AUTH_RECOVERY_PEPPER = randomBytes(32).toString("hex");
       const email = `missing-${randomUUID()}@example.test`;
       const identity = `integration-ip-${randomUUID()}`;
       const ipHash = hashFingerprint(identity, pepper);

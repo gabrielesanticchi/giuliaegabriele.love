@@ -7,7 +7,6 @@ declare module "next-auth" {
       adminId: string;
       role: AdminRole;
       sessionVersion: number;
-      totpPending: boolean;
     };
   }
 
@@ -15,7 +14,6 @@ declare module "next-auth" {
     adminId: string;
     role: AdminRole;
     sessionVersion: number;
-    totpPending: boolean;
   }
 }
 
@@ -24,7 +22,6 @@ declare module "next-auth/jwt" {
     adminId?: string;
     role?: AdminRole;
     sessionVersion?: number;
-    totpPending?: boolean;
     invalid?: boolean;
   }
 }

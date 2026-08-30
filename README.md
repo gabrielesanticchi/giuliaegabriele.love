@@ -3,7 +3,7 @@
 Applicazione Next.js full-stack per il matrimonio di Giulia e Gabriele
 (24 ottobre 2026, fuso `Europe/Rome`). Include un sito pubblico editoriale, una
 Lista Nozze transazionale **senza pagamenti online** e un'area amministrativa
-protetta da password + TOTP.
+protetta da email + password.
 
 Interfaccia e contenuti sono in italiano. Il progetto è pensato per il deploy su
 Vercel, ma **questa repository non esegue deploy, push o provisioning**.
@@ -12,7 +12,7 @@ Vercel, ma **questa repository non esegue deploy, push o provisioning**.
 
 - **Next.js 16** (App Router, React 19, TypeScript strict)
 - **PostgreSQL** via **Drizzle ORM** + driver `postgres`
-- **Auth.js (next-auth)** Credentials + **TOTP** (otplib) e Argon2id
+- **Auth.js (next-auth)** Credentials (email + password) con Argon2id
 - **Zod** per la validazione, **React Hook Form** per i form
 - **Vercel Blob** per i media, **Resend** per le email admin (opzionale)
 - Anti-abuso dei form pubblici via honeypot + rate limiting PostgreSQL
@@ -67,9 +67,8 @@ Non hai un PostgreSQL a portata di mano? Usa il cluster effimero locale della
 sezione [Test](#test) (Homebrew `postgresql@15`, senza Docker) e punta
 `DATABASE_URL` a quello.
 
-Il primo accesso admin richiede la configurazione TOTP; se perdi il QR o i
-recovery code puoi ripartire in sicurezza dal pulsante **“Ricomincia la
-configurazione”** (non tocca mai le credenziali di un account già abilitato).
+L'accesso admin avviene con email + password; se dimentichi la password puoi
+reimpostarla dalla CLI con `pnpm admin:reset-password`.
 
 ## Variabili d'ambiente
 
@@ -78,7 +77,7 @@ le variabili obbligatorie sono verificate al boot (`instrumentation.ts`): se ne
 manca una l'app **non si avvia** (fail-closed). Obbligatorie:
 
 `DATABASE_URL`, `AUTH_SECRET`, `AUTH_HMAC_PEPPER`, `AUTH_ENCRYPTION_KEY`,
-`AUTH_RECOVERY_PEPPER`, `DATA_ENCRYPTION_KEY`, `GUEST_TOKEN_SECRET`,
+`DATA_ENCRYPTION_KEY`, `GUEST_TOKEN_SECRET`,
 `REQUEST_FINGERPRINT_SECRET`, `NEXT_PUBLIC_SITE_URL`.
 
 Opzionali: `BLOB_READ_WRITE_TOKEN`, Resend (`RESEND_API_KEY`, `EMAIL_FROM`,
@@ -102,9 +101,8 @@ Turnstile. Se Resend non è configurato le email admin vengono registrate come
 | `pnpm admin:create` · `admin:list` · `admin:reset-password` | CLI amministratori                                         |
 
 ## Test
-
 - **Unit**: `pnpm test`.
-- **Integration** (concorrenza, transazioni, outbox, TOTP): serve un PostgreSQL
+- **Integration** (concorrenza, transazioni, outbox, auth): serve un PostgreSQL
   reale. Esempio con un cluster effimero locale (senza Docker):
 
   ```bash
@@ -141,7 +139,7 @@ flowchart TB
   subgraph next["Next.js App Router — Vercel"]
     direction TB
     PUB["app/(public)<br/>home · privacy · /richiesta/[token]"]
-    ADM["app/admin<br/>login · TOTP · dashboard · CRUD"]
+    ADM["app/admin<br/>login · dashboard · CRUD"]
     API["app/api<br/>health · gifts reserve/contribute<br/>requests · media/upload · auth"]
     SA["actions/admin<br/>Server Actions (effect+audit+receipt)"]
     LIB["lib<br/>security (AES-256-GCM) · auth · rate-limit<br/>email · blob · public-content"]
@@ -179,18 +177,18 @@ giuliaegabriele.love/
 ├── src/
 │   ├── app/
 │   │   ├── (public)/            # home editoriale, privacy, pagina invitato
-│   │   ├── admin/               # login, onboarding TOTP, dashboard, CRUD
+│   │   ├── admin/               # login, dashboard, CRUD
 │   │   ├── api/                 # health, gifts, requests, media/upload, auth
 │   │   ├── layout.tsx           # metadata, OG, canonical, font
 │   │   ├── robots.ts · sitemap.ts · manifest.ts
-│   ├── actions/admin/           # Server Actions (content, gifts, requests, totp, settings)
+│   ├── actions/admin/           # Server Actions (content, gifts, requests, settings)
 │   ├── components/              # graphics, layout, sections (pubblico), admin (UI)
 │   ├── db/
 │   │   ├── schema/              # tabelle Drizzle + enum e vincoli
 │   │   └── transactions/        # reserveGift, contributeToGift, verifyIntent, errori
 │   ├── lib/
 │   │   ├── security/            # AES-256-GCM, hashing, rate-limit
-│   │   ├── auth/                # Auth.js, TOTP, password (Argon2id), CLI
+│   │   ├── auth/                # Auth.js, password (Argon2id), CLI
 │   │   ├── email/               # template + outbox (Resend opzionale)
 │   │   ├── blob/                # policy upload (allowlist MIME, no SVG)
 │   │   ├── admin/               # policy azioni, idempotenza, audit, datetime

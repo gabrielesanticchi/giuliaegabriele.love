@@ -55,17 +55,6 @@ export const adminUsers = pgTable(
     passwordHash: text("password_hash").notNull(),
     role: varchar("role", { length: 20 }).default("editor").notNull(),
     sessionVersion: integer("session_version").default(1).notNull(),
-    totpSecretEncrypted: text("totp_secret_encrypted"),
-    pendingTotpSecretEncrypted: text("pending_totp_secret_encrypted"),
-    pendingRecoveryCodeHashes: jsonb("pending_recovery_code_hashes")
-      .$type<string[]>()
-      .default([])
-      .notNull(),
-    recoveryCodeHashes: jsonb("recovery_code_hashes")
-      .$type<string[]>()
-      .default([])
-      .notNull(),
-    totpEnabled: boolean("totp_enabled").default(false).notNull(),
     disabledAt: timestamp("disabled_at", { withTimezone: true }),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     ...timestamps

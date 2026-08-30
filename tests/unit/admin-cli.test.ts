@@ -15,8 +15,7 @@ describe("admin CLI argument safety", () => {
     ).toEqual({
       email: "admin@example.com",
       role: "owner",
-      passwordStdin: true,
-      resetRecovery: false
+      passwordStdin: true
     });
   });
 
@@ -36,8 +35,7 @@ describe("admin CLI argument safety", () => {
       await expect(
         readAdminPassword({
           role: "owner",
-          passwordStdin: true,
-          resetRecovery: false
+          passwordStdin: true
         })
       ).rejects.toThrow(/pipe/i);
     } finally {

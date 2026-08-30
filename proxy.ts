@@ -17,9 +17,6 @@ export async function proxy(request: NextRequest) {
     );
     return NextResponse.redirect(login);
   }
-  if (token.totpPending && pathname !== "/admin/totp") {
-    return NextResponse.redirect(new URL("/admin/totp", request.url));
-  }
   return NextResponse.next();
 }
 

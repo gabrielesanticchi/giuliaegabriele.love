@@ -23,7 +23,7 @@ test PostgreSQL non realmente eseguiti.
 - Task 3: sito pubblico e design system — review PASS.
 - Task 4: API reserve/contribute, Turnstile, bearer guest, email e form —
   security review PASS.
-- Task 5: Auth.js, TOTP, CLI e admin implementati, ma review non ancora PASS.
+- Task 5: Auth.js (email + password), CLI e admin implementati, ma review non ancora PASS.
 
 Non fare push, deploy, provisioning Vercel o modifiche DNS senza autorizzazione
 esplicita.
@@ -80,17 +80,13 @@ implementare il minimo, rieseguire test mirati e suite completa.
   fallback elegante.
 - Testare asset valido, UUID inesistente e asset archiviato.
 
-### 2. Onboarding TOTP pending recuperabile
+### 2. Autenticazione admin email + password
 
-- `beginTotpEnrollmentAction` è già serializzato e auditato, ma oggi rifiuta un
-  secondo begin quando esiste un pending; una risposta HTTP persa può bloccare
-  per sempre l'account.
-- Per un account `totpEnabled=false`, consentire la ripresa sicura: decifrare il
-  secret pending per rigenerare il QR e sostituire atomicamente i recovery hash
-  con nuovi codici plaintext restituiti una sola volta; in alternativa fare un
-  restart autenticato, serializzato e auditato.
-- Non modificare mai il secret/recovery attivo di un account già abilitato.
-- Aggiungere test concorrenti e test “lost response → begin again → complete”.
+- Login via Auth.js Credentials con verifica della password Argon2id e sessione
+  server-side; nessun fattore aggiuntivo richiesto.
+- Reset password da CLI (`pnpm admin:reset-password`) senza toccare gli altri
+  account; le password sono sempre salvate come hash Argon2id.
+- Aggiungere test su login valido/non valido, sessione e reset password.
 
 ### 3. Validazione datetime Europe/Rome
 

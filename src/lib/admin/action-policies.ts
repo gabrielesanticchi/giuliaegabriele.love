@@ -35,9 +35,7 @@ export const ADMIN_ACTION_POLICIES = {
   "banking.view": "owner",
   "banking.save": "owner",
   "site.publish": "owner",
-  "site.unpublish": "owner",
-  "totp.enroll": "editor",
-  "totp.reset-recovery": "owner"
+  "site.unpublish": "owner"
 } as const satisfies Record<string, AdminRole>;
 
 export type AdminActionName = keyof typeof ADMIN_ACTION_POLICIES;
@@ -51,7 +49,6 @@ export function authorizeAdminAction(
   }
   assertAdminPrincipal(
     principal,
-    ADMIN_ACTION_POLICIES[action as AdminActionName],
-    { allowTotpPending: action === "totp.enroll" }
+    ADMIN_ACTION_POLICIES[action as AdminActionName]
   );
 }

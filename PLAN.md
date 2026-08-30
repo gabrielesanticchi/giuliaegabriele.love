@@ -8,7 +8,7 @@
 | 2. PostgreSQL, cifratura e transazioni Lista Nozze | Completata | Commit `dd3d929` → `0ce1834`; review PASS |
 | 3. Sistema grafico e sito pubblico | Completata | Commit `76e74b9` → `04f04e1`; review PASS |
 | 4. API pubbliche e pagina invitato | Completata | Commit `cde0076` → `892b7a4`; security review PASS |
-| 5. Auth.js, TOTP e amministrazione | Completata | Fix round 4; code+security review PASS (0 CRITICAL/HIGH) |
+| 5. Auth.js (email + password) e amministrazione | Completata | Fix round 4; code+security review PASS (0 CRITICAL/HIGH) |
 | 6. Blob, privacy, SEO e hardening finale | Completata | Blob upload, CSP/header, SEO, health, `.env.example`, scan segreti |
 | 7. E2E, QA visuale e documentazione | Completata | migrate/seed/admin operativi, Playwright+axe 7/7, screenshot 390/768/1440, README/AGENTS |
 
@@ -46,9 +46,8 @@ eseguita. Corretti con i test falliti come riproduzione:
 1. Media della storia end-to-end: validazione stessa transazione (esiste e non
    archiviato), adapter pubblico con `{url, alt, focalPoint}` e resa timeline con
    `next/image`. Test valido/inesistente/archiviato.
-2. Onboarding TOTP ripristinabile: `restartTotpEnrollmentAction` serializzata,
-   auditata, che non tocca mai le credenziali attive. Test lost-response,
-   concorrenza e completamento.
+2. Autenticazione admin con credenziali email + password (Argon2id), sessioni
+   Auth.js e reset password via CLI. Test su login, sessione e reset.
 3. Datetime Europe/Rome: transform Zod con `ctx.addIssue` (niente eccezioni fuori
    da `safeParse`); la Server Action restituisce “Evento non valido”.
 4. Email outbox: `intentId` nella delivery key, verifica identità sul conflict

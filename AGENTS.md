@@ -5,7 +5,7 @@ Guida concisa per agenti che lavorano su questo repository.
 ## Contesto
 
 Sito di matrimonio full-stack (Next.js 16 App Router, TypeScript strict,
-Drizzle/PostgreSQL, Auth.js + TOTP). Italiano, fuso `Europe/Rome`, importi in
+Drizzle/PostgreSQL, Auth.js con credenziali email + password). Italiano, fuso `Europe/Rome`, importi in
 **centesimi interi**, nessun pagamento online.
 
 ## Comandi (Corepack pnpm guasto: usa `~/Library/pnpm/pnpm` o `node_modules/.bin`)

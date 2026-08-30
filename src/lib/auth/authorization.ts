@@ -7,7 +7,6 @@ export type AdminPrincipal = {
   role: AdminRole;
   sessionVersion: number;
   isActive: boolean;
-  totpPending: boolean;
 };
 
 export type AdminTokenClaims = {
@@ -43,13 +42,9 @@ export async function validateAdminSession(
 
 export function assertAdminPrincipal(
   principal: AdminPrincipal | null,
-  requiredRole: AdminRole = "editor",
-  options: { allowTotpPending?: boolean } = {}
+  requiredRole: AdminRole = "editor"
 ): asserts principal is AdminPrincipal {
   if (!principal?.isActive) throw new AdminAuthorizationError();
-  if (principal.totpPending && !options.allowTotpPending) {
-    throw new AdminAuthorizationError("Configurazione TOTP richiesta");
-  }
   if (requiredRole === "owner" && principal.role !== "owner") {
     throw new AdminAuthorizationError("Permessi insufficienti");
   }

@@ -39,8 +39,7 @@ describe("saveScheduleItemAction datetime validation", () => {
     id: "11111111-1111-1111-1111-111111111111",
     role: "editor",
     sessionVersion: 1,
-    isActive: true,
-    totpPending: false
+    isActive: true
   };
 
   function scheduleForm(startsAt: string): FormData {

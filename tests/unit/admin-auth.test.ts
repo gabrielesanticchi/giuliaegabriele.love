@@ -1,13 +1,5 @@
-import { randomBytes } from "node:crypto";
-
-import { generate } from "otplib";
 import { describe, expect, it } from "vitest";
 
-import {
-  createTotpEnrollment,
-  verifyRecoveryCode,
-  verifyTotpCode
-} from "@/lib/auth/totp";
 import { hashAdminPassword, verifyAdminPassword } from "@/lib/auth/password";
 import {
   AdminAuthorizationError,
@@ -35,74 +27,12 @@ describe("admin password", () => {
   });
 });
 
-describe("admin TOTP", () => {
-  const encryptionKey = randomBytes(32).toString("base64");
-  const recoveryPepper = "pepper-di-recupero-amministratori";
-
-  it("encrypts the secret and accepts the current six-digit code", async () => {
-    const enrollment = createTotpEnrollment({
-      email: "admin@example.com",
-      encryptionKey,
-      recoveryPepper
-    });
-    const epoch = 1_787_119_200;
-    const token = await generate({ secret: enrollment.secret, epoch });
-
-    expect(enrollment.secretEncrypted).not.toContain(enrollment.secret);
-    expect(enrollment.uri).toContain("otpauth://totp/");
-    expect(enrollment.recoveryCodes).toHaveLength(8);
-    expect(enrollment.recoveryCodeHashes).toHaveLength(8);
-    await expect(
-      verifyTotpCode({
-        code: token,
-        secretEncrypted: enrollment.secretEncrypted,
-        encryptionKey,
-        epoch
-      })
-    ).resolves.toBe(true);
-    await expect(
-      verifyTotpCode({
-        code: "000000",
-        secretEncrypted: enrollment.secretEncrypted,
-        encryptionKey,
-        epoch
-      })
-    ).resolves.toBe(false);
-  });
-
-  it("matches a recovery code once without persisting the plaintext", () => {
-    const enrollment = createTotpEnrollment({
-      email: "admin@example.com",
-      encryptionKey,
-      recoveryPepper
-    });
-    const code = enrollment.recoveryCodes[2]!;
-
-    expect(enrollment.recoveryCodeHashes.join(" ")).not.toContain(code);
-    const consumed = verifyRecoveryCode({
-      code,
-      recoveryCodeHashes: enrollment.recoveryCodeHashes,
-      recoveryPepper
-    });
-    expect(consumed).toMatchObject({ valid: true, remainingHashes: 7 });
-    expect(consumed.hashes).not.toContain(enrollment.recoveryCodeHashes[2]);
-    expect(
-      verifyRecoveryCode({
-        code: "codice-non-valido",
-        recoveryCodeHashes: enrollment.recoveryCodeHashes,
-        recoveryPepper
-      })
-    ).toEqual({ valid: false, remainingHashes: 8 });
-  });
-});
-
 describe("admin session authorization", () => {
   const activeAdmin = {
     id: "8f11c2bf-995a-4fc2-aaf8-f7539ccdf047",
     role: "owner" as const,
     sessionVersion: 4,
-    isActive: true,
-    totpPending: false
+    isActive: true
   };
 
   it("accepts only a current active server-side session", async () => {
@@ -127,11 +57,8 @@ describe("admin session authorization", () => {
     ).resolves.toBeNull();
   });
 
-  it("rejects missing, onboarding-only and insufficient-role principals", () => {
+  it("rejects missing and insufficient-role principals", () => {
     expect(() => assertAdminPrincipal(null)).toThrow(AdminAuthorizationError);
-    expect(() =>
-      assertAdminPrincipal({ ...activeAdmin, totpPending: true })
-    ).toThrow("Configurazione TOTP richiesta");
     expect(() =>
       assertAdminPrincipal({ ...activeAdmin, role: "editor" }, "owner")
     ).toThrow("Permessi insufficienti");
