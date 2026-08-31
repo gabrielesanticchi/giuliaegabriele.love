@@ -209,6 +209,9 @@ giuliaegabriele.love/
 `gifts`, `gift_intents`, `gift_locks`, `admin_action_receipts`, `audit_logs`,
 `rate_limit_buckets`, `email_deliveries`.
 
+Diagramma ER completo (relazioni, foreign key, regole `on delete`):
+[`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md).
+
 ### Flusso critico — prenotazione / contributo
 
 ```mermaid
