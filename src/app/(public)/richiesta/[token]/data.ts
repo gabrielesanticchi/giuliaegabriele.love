@@ -26,7 +26,7 @@ export async function loadGuestRequest(
         giftTitle: gifts.title,
         kind: giftIntents.kind,
         status: giftIntents.status,
-        amountCents: giftIntents.amountCents,
+        amountEuros: giftIntents.amountEuros,
         expiresAt: giftIntents.expiresAt,
         paymentDeclaredAt: giftIntents.paymentDeclaredAt,
         verifiedAt: giftIntents.verifiedAt,
@@ -52,7 +52,7 @@ export async function loadGuestRequest(
       giftTitle: request.giftTitle,
       kind: request.kind,
       status: request.status,
-      amountCents: request.amountCents,
+      amountEuros: request.amountEuros,
       expiresAt: request.expiresAt,
       paymentDeclaredAt: request.paymentDeclaredAt
     };

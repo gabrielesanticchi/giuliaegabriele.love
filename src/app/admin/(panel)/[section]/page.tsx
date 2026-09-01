@@ -608,7 +608,7 @@ export default async function AdminSectionPage({
         />
         <StructuredEditor
           title="Nuovo regalo"
-          description="Importi sempre espressi in centesimi."
+          description="Importi sempre espressi in euro interi."
           action={saveGiftAction}
           fields={[
             {
@@ -632,8 +632,8 @@ export default async function AdminSectionPage({
               ]
             },
             {
-              name: "priceCents",
-              label: "Prezzo (centesimi)",
+              name: "priceEuros",
+              label: "Prezzo (euro)",
               type: "number",
               required: true
             },
@@ -707,7 +707,7 @@ export default async function AdminSectionPage({
             {giftRows.map((row) => (
               <tr key={row.id}>
                 <td>{row.title}</td>
-                <td>{formatCurrency(row.priceCents)}</td>
+                <td>{formatCurrency(row.priceEuros)}</td>
                 <td>{row.published ? "Pubblicato" : "Nascosto"}</td>
                 <td>
                   <details>
@@ -746,11 +746,11 @@ export default async function AdminSectionPage({
                           ]
                         },
                         {
-                          name: "priceCents",
-                          label: "Prezzo (centesimi)",
+                          name: "priceEuros",
+                          label: "Prezzo (euro)",
                           type: "number",
                           required: true,
-                          defaultValue: row.priceCents
+                          defaultValue: row.priceEuros
                         },
                         {
                           name: "progressMode",
@@ -859,8 +859,8 @@ export default async function AdminSectionPage({
               ]
             },
             {
-              name: "amountCents",
-              label: "Importo ricevuto (centesimi)",
+              name: "amountEuros",
+              label: "Importo ricevuto (euro)",
               type: "number",
               required: true
             },
@@ -891,11 +891,11 @@ export default async function AdminSectionPage({
                 <td>{row.publicReference}</td>
                 <td>{row.kind}</td>
                 <td>{row.status}</td>
-                <td>{formatCurrency(row.amountCents)}</td>
+                <td>{formatCurrency(row.amountEuros)}</td>
                 <td>
-                  {row.receivedAmountCents == null
+                  {row.receivedAmountEuros == null
                     ? "—"
-                    : formatCurrency(row.receivedAmountCents)}
+                    : formatCurrency(row.receivedAmountEuros)}
                 </td>
                 <td>
                   <form
@@ -907,8 +907,8 @@ export default async function AdminSectionPage({
                     <input type="hidden" name="intentId" value={row.id} />
                     <input
                       type="number"
-                      name="receivedAmountCents"
-                      defaultValue={row.receivedAmountCents ?? row.amountCents}
+                      name="receivedAmountEuros"
+                      defaultValue={row.receivedAmountEuros ?? row.amountEuros}
                       min={0}
                       aria-label={`Importo ricevuto ${row.publicReference}`}
                       required

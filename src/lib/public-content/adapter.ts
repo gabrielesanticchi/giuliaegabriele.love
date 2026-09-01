@@ -44,7 +44,7 @@ type Snapshot = {
     id: string;
     title: string;
     description: string | null;
-    priceCents: number;
+    priceEuros: number;
     progressMode: string;
     completed: boolean;
     published: boolean;
@@ -52,8 +52,8 @@ type Snapshot = {
     sortOrder: number;
     categoryName: string | null;
     hasLock: boolean;
-    verifiedCents: number;
-    pendingCents: number;
+    verifiedEuros: number;
+    pendingEuros: number;
   }>;
 };
 
@@ -181,15 +181,15 @@ export function mapPublicContentSnapshot(
         room: gift.categoryName ?? "La nostra casa",
         name: gift.title,
         description: gift.description ?? "",
-        priceCents: gift.priceCents,
+        priceEuros: gift.priceEuros,
         status: getPublicGiftStatus({
-          completed: gift.completed || gift.verifiedCents >= gift.priceCents,
+          completed: gift.completed || gift.verifiedEuros >= gift.priceEuros,
           hasFullGiftLock: gift.hasLock
         }),
         allowFullGift: true,
         allowContributions: true,
-        contributionMinimumCents: 2500,
-        confirmedContributionCents: gift.verifiedCents,
+        contributionMinimumEuros: 25,
+        confirmedContributionEuros: gift.verifiedEuros,
         discreetProgress: gift.progressMode !== "exact"
       }))
   };
@@ -245,7 +245,7 @@ export async function loadPublicContent(
         id: gifts.id,
         title: gifts.title,
         description: gifts.description,
-        priceCents: gifts.priceCents,
+        priceEuros: gifts.priceEuros,
         progressMode: gifts.progressMode,
         completed: gifts.completed,
         published: gifts.published,
@@ -268,8 +268,8 @@ export async function loadPublicContent(
         giftId: giftIntents.giftId,
         kind: giftIntents.kind,
         status: giftIntents.status,
-        amountCents: giftIntents.amountCents,
-        appliedAmountCents: giftIntents.appliedAmountCents,
+        amountEuros: giftIntents.amountEuros,
+        appliedAmountEuros: giftIntents.appliedAmountEuros,
         expiresAt: giftIntents.expiresAt
       })
       .from(giftIntents)
@@ -298,17 +298,17 @@ export async function loadPublicContent(
       hasLock: lockRows.some(
         (lock) => lock.giftId === gift.id && lock.expiresAt > now
       ),
-      verifiedCents: intents
+      verifiedEuros: intents
         .filter((intent) => intent.status === "verified")
-        .reduce((sum, intent) => sum + intent.appliedAmountCents, 0),
-      pendingCents: intents
+        .reduce((sum, intent) => sum + intent.appliedAmountEuros, 0),
+      pendingEuros: intents
         .filter(
           (intent) =>
             intent.kind === "contribution" &&
             intent.status === "pending" &&
             intent.expiresAt > now
         )
-        .reduce((sum, intent) => sum + intent.amountCents, 0)
+        .reduce((sum, intent) => sum + intent.amountEuros, 0)
     };
   });
   return mapPublicContentSnapshot(

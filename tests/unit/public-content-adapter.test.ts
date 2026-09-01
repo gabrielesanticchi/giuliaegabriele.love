@@ -68,7 +68,7 @@ describe("database public content adapter", () => {
         id: "g1",
         title: "Tavolo",
         description: "Casa",
-        priceCents: 10000,
+        priceEuros: 10000,
         progressMode: "discreet",
         completed: false,
         published: true,
@@ -76,8 +76,8 @@ describe("database public content adapter", () => {
         sortOrder: 0,
         categoryName: "Cucina",
         hasLock: true,
-        verifiedCents: 2500,
-        pendingCents: 1000
+        verifiedEuros: 2500,
+        pendingEuros: 1000
       }
     ]
   };
@@ -94,7 +94,7 @@ describe("database public content adapter", () => {
     });
     expect(content?.gifts[0]).toMatchObject({
       status: "reserved",
-      confirmedContributionCents: 2500,
+      confirmedContributionEuros: 2500,
       category: "Cucina"
     });
   });

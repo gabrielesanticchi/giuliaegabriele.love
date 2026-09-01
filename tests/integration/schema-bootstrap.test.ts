@@ -91,11 +91,11 @@ integration(
         publicReference: `G-${giftId}`,
         title: "Regalo bootstrap",
         published: true,
-        priceCents: 10_000
+        priceEuros: 10_000
       });
       const input = {
         giftId,
-        amountCents: 10_000,
+        amountEuros: 10_000,
         idempotencyKey: randomUUID(),
         requestFingerprintHash: randomBytes(32).toString("hex"),
         publicReference: `I-${randomUUID()}`,

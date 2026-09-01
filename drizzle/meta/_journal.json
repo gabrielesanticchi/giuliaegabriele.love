@@ -15,6 +15,13 @@
       "when": 1788123546056,
       "tag": "0001_abnormal_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788900000000,
+      "tag": "0002_euro_amounts",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   contributionRequestSchema,
-  parseEuroAmountToCents,
+  parseEuroAmount,
   reserveGiftRequestSchema,
   requestActionSchema
 } from "@/lib/public-api/validation";
@@ -23,12 +23,13 @@ const common = {
 };
 
 describe("public API validation", () => {
-  it("converte importi decimali in centesimi senza arrotondare", () => {
-    expect(parseEuroAmountToCents("12.34")).toBe(1234);
-    expect(parseEuroAmountToCents("12,34")).toBe(1234);
-    expect(parseEuroAmountToCents("12.345")).toBeNull();
-    expect(parseEuroAmountToCents("1e2")).toBeNull();
-    expect(parseEuroAmountToCents("0")).toBeNull();
+  it("accetta solo importi in euro interi positivi", () => {
+    expect(parseEuroAmount("50")).toBe(50);
+    expect(parseEuroAmount("1234")).toBe(1234);
+    expect(parseEuroAmount("12.34")).toBeNull();
+    expect(parseEuroAmount("12,34")).toBeNull();
+    expect(parseEuroAmount("1e2")).toBeNull();
+    expect(parseEuroAmount("0")).toBeNull();
   });
 
   it("normalizza il payload di prenotazione con solo nome e telefono", () => {
@@ -79,16 +80,16 @@ describe("public API validation", () => {
     expect(parsed.success).toBe(false);
   });
 
-  it("accetta soltanto contributi in centesimi interi positivi", () => {
+  it("accetta soltanto contributi in euro interi positivi", () => {
     expect(
-      contributionRequestSchema.safeParse({ ...common, amountCents: 0 }).success
+      contributionRequestSchema.safeParse({ ...common, amountEuros: 0 }).success
     ).toBe(false);
     expect(
-      contributionRequestSchema.safeParse({ ...common, amountCents: 12.5 })
+      contributionRequestSchema.safeParse({ ...common, amountEuros: 12.5 })
         .success
     ).toBe(false);
     expect(
-      contributionRequestSchema.safeParse({ ...common, amountCents: 1250 })
+      contributionRequestSchema.safeParse({ ...common, amountEuros: 1250 })
         .success
     ).toBe(true);
   });

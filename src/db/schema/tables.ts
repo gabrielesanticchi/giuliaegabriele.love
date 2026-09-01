@@ -175,7 +175,7 @@ export const gifts = pgTable(
     }),
     title: text("title").notNull(),
     description: text("description"),
-    priceCents: integer("price_cents").notNull(),
+    priceEuros: integer("price_euros").notNull(),
     progressMode: varchar("progress_mode", { length: 20 })
       .default("discreet")
       .notNull(),
@@ -189,7 +189,7 @@ export const gifts = pgTable(
     uniqueIndex("gifts_public_reference_unique").on(table.publicReference),
     index("gifts_category_idx").on(table.categoryId),
     index("gifts_completed_idx").on(table.completed),
-    check("gifts_price_nonnegative", sql`${table.priceCents} >= 0`),
+    check("gifts_price_nonnegative", sql`${table.priceEuros} >= 0`),
     check(
       "gifts_progress_mode_valid",
       sql`${table.progressMode} in ('hidden', 'discreet', 'exact')`
@@ -208,9 +208,9 @@ export const giftIntents = pgTable(
     kind: giftIntentKind("kind").notNull(),
     method: giftIntentMethod("method").notNull(),
     status: giftIntentStatus("status").default("pending").notNull(),
-    amountCents: integer("amount_cents").notNull(),
-    receivedAmountCents: integer("received_amount_cents"),
-    appliedAmountCents: integer("applied_amount_cents").default(0).notNull(),
+    amountEuros: integer("amount_euros").notNull(),
+    receivedAmountEuros: integer("received_amount_euros"),
+    appliedAmountEuros: integer("applied_amount_euros").default(0).notNull(),
     idempotencyKey: varchar("idempotency_key", { length: 128 }).notNull(),
     requestFingerprintHash: varchar("request_fingerprint_hash", {
       length: 64
@@ -255,18 +255,18 @@ export const giftIntents = pgTable(
     index("gift_intents_request_fingerprint_idx").on(
       table.requestFingerprintHash
     ),
-    check("gift_intents_amount_nonnegative", sql`${table.amountCents} >= 0`),
+    check("gift_intents_amount_nonnegative", sql`${table.amountEuros} >= 0`),
     check(
       "gift_intents_received_nonnegative",
-      sql`${table.receivedAmountCents} is null or ${table.receivedAmountCents} >= 0`
+      sql`${table.receivedAmountEuros} is null or ${table.receivedAmountEuros} >= 0`
     ),
     check(
       "gift_intents_applied_nonnegative",
-      sql`${table.appliedAmountCents} >= 0`
+      sql`${table.appliedAmountEuros} >= 0`
     ),
     check(
       "gift_intents_applied_lte_received",
-      sql`${table.receivedAmountCents} is null or ${table.appliedAmountCents} <= ${table.receivedAmountCents}`
+      sql`${table.receivedAmountEuros} is null or ${table.appliedAmountEuros} <= ${table.receivedAmountEuros}`
     )
   ]
 );

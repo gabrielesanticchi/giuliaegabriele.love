@@ -32,7 +32,7 @@ const giftSchema = z.object({
   categoryId: z.uuid().optional(),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2_000).optional(),
-  priceCents: z.coerce.number().int().min(0).max(100_000_000),
+  priceEuros: z.coerce.number().int().min(0).max(1_000_000),
   progressMode: z.enum(["hidden", "discreet", "exact"]),
   sortOrder: z.coerce.number().int().min(0),
   published: z.boolean()
@@ -102,7 +102,7 @@ export async function saveGiftAction(
     categoryId: formData.get("categoryId") || undefined,
     title: formData.get("title"),
     description: formData.get("description") || undefined,
-    priceCents: formData.get("priceCents"),
+    priceEuros: formData.get("priceEuros"),
     progressMode: formData.get("progressMode"),
     sortOrder: formData.get("sortOrder") ?? 0,
     published: formData.get("published") === "on"
@@ -116,7 +116,7 @@ export async function saveGiftAction(
     targetType: "gift",
     targetId: id,
     metadata: {
-      priceCents: values.priceCents,
+      priceEuros: values.priceEuros,
       published: values.published,
       sortOrder: values.sortOrder
     },

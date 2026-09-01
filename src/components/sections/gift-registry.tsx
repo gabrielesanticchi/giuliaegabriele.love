@@ -17,7 +17,7 @@ import type { PublicGift } from "@/data/demo-content";
 import { formatCurrency } from "@/lib/domain/currency";
 import {
   contributionGiftFormSchema,
-  parseEuroAmountToCents,
+  parseEuroAmount,
   reserveGiftRequestSchema
 } from "@/lib/public-api/validation";
 
@@ -94,7 +94,7 @@ export function GiftRegistry({
           const progress = Math.min(
             100,
             Math.round(
-              (gift.confirmedContributionCents / gift.priceCents) * 100
+              (gift.confirmedContributionEuros / gift.priceEuros) * 100
             )
           );
           return (
@@ -118,10 +118,10 @@ export function GiftRegistry({
                   {statusLabels[gift.status]}
                 </p>
                 <p className="gift-price">
-                  Valore indicativo {formatCurrency(gift.priceCents)}
+                  Valore indicativo {formatCurrency(gift.priceEuros)}
                 </p>
                 {gift.allowContributions &&
-                gift.confirmedContributionCents > 0 ? (
+                gift.confirmedContributionEuros > 0 ? (
                   <div className="gift-progress">
                     <p>La nostra casa sta prendendo forma</p>
                     <div
@@ -382,7 +382,7 @@ function GiftIntentForm({
       const payload = isContribution
         ? {
             ...common,
-            amountCents: parseEuroAmountToCents(values.amount ?? "")
+            amountEuros: parseEuroAmount(values.amount ?? "")
           }
         : { ...common, method: values.method };
 

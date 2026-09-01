@@ -9,34 +9,34 @@ export function getPublicGiftStatus(input: {
   return "available";
 }
 
-function assertValidCents(value: number, field: string): void {
+function assertValidEuros(value: number, field: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${field} deve essere un intero non negativo sicuro`);
   }
 }
 
 export function getGiftFunding(input: {
-  priceCents: number;
-  verifiedContributionCents: number;
-  pendingContributionCents: number;
+  priceEuros: number;
+  verifiedContributionEuros: number;
+  pendingContributionEuros: number;
 }) {
-  assertValidCents(input.priceCents, "priceCents");
-  assertValidCents(
-    input.verifiedContributionCents,
-    "verifiedContributionCents"
+  assertValidEuros(input.priceEuros, "priceEuros");
+  assertValidEuros(
+    input.verifiedContributionEuros,
+    "verifiedContributionEuros"
   );
-  assertValidCents(input.pendingContributionCents, "pendingContributionCents");
+  assertValidEuros(input.pendingContributionEuros, "pendingContributionEuros");
 
-  const confirmedCents = Math.max(0, input.verifiedContributionCents);
-  const pendingCents = Math.max(0, input.pendingContributionCents);
-  const remainingCents = Math.max(0, input.priceCents - confirmedCents);
-  const committableCents = Math.max(0, remainingCents - pendingCents);
+  const confirmedEuros = Math.max(0, input.verifiedContributionEuros);
+  const pendingEuros = Math.max(0, input.pendingContributionEuros);
+  const remainingEuros = Math.max(0, input.priceEuros - confirmedEuros);
+  const committableEuros = Math.max(0, remainingEuros - pendingEuros);
 
   return {
-    confirmedCents,
-    pendingCents,
-    remainingCents,
-    committableCents,
-    complete: remainingCents === 0
+    confirmedEuros,
+    pendingEuros,
+    remainingEuros,
+    committableEuros,
+    complete: remainingEuros === 0
   };
 }

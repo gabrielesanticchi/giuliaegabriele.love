@@ -57,12 +57,12 @@ export interface PublicGift {
   room: string;
   name: string;
   description: string;
-  priceCents: number;
+  priceEuros: number;
   status: PublicGiftStatus;
   allowFullGift: boolean;
   allowContributions: boolean;
-  contributionMinimumCents?: number;
-  confirmedContributionCents: number;
+  contributionMinimumEuros?: number;
+  confirmedContributionEuros: number;
   discreetProgress: boolean;
   featured?: boolean;
   label?: string;
@@ -89,12 +89,12 @@ export interface PublicContent {
 
 const gift = (
   id: string,
-  input: Omit<PublicGift, "id" | "confirmedContributionCents"> & {
-    confirmedContributionCents?: number;
+  input: Omit<PublicGift, "id" | "confirmedContributionEuros"> & {
+    confirmedContributionEuros?: number;
   }
 ): PublicGift => ({
   id,
-  confirmedContributionCents: 0,
+  confirmedContributionEuros: 0,
   ...input
 });
 
@@ -192,12 +192,12 @@ export const demoPublicContent: PublicContent = {
       name: "Tavolo per le cene insieme",
       description:
         "Un luogo quotidiano per ritrovarsi, raccontarsi e ospitare.",
-      priceCents: 120000,
+      priceEuros: 1200,
       status: "available",
       allowFullGift: true,
       allowContributions: true,
-      contributionMinimumCents: 2500,
-      confirmedContributionCents: 35000,
+      contributionMinimumEuros: 25,
+      confirmedContributionEuros: 350,
       discreetProgress: true,
       featured: true,
       label: "Un mattone importante",
@@ -209,7 +209,7 @@ export const demoPublicContent: PublicContent = {
       room: "Spazi da condividere",
       name: "Libreria modulare",
       description: "Una parete per libri, fotografie e piccoli ricordi.",
-      priceCents: 78000,
+      priceEuros: 780,
       status: "available",
       allowFullGift: true,
       allowContributions: false,
@@ -220,7 +220,7 @@ export const demoPublicContent: PublicContent = {
       room: "La stanza quieta",
       name: "Set tessili naturali",
       description: "Tessuti morbidi e durevoli per il riposo di ogni giorno.",
-      priceCents: 32000,
+      priceEuros: 320,
       status: "available",
       allowFullGift: true,
       allowContributions: false,
@@ -232,11 +232,11 @@ export const demoPublicContent: PublicContent = {
       name: "Piccolo giardino aromatico",
       description:
         "Vasi, erbe e attrezzi per coltivare il nostro angolo verde.",
-      priceCents: 45000,
+      priceEuros: 450,
       status: "available",
       allowFullGift: true,
       allowContributions: true,
-      contributionMinimumCents: 2500,
+      contributionMinimumEuros: 25,
       discreetProgress: true
     }),
     gift("tecnologia-05", {
@@ -244,7 +244,7 @@ export const demoPublicContent: PublicContent = {
       room: "La casa che suona",
       name: "Diffusore per la musica",
       description: "La colonna sonora delle domeniche lente e delle feste.",
-      priceCents: 26000,
+      priceEuros: 260,
       status: "reserved",
       allowFullGift: true,
       allowContributions: false,
@@ -255,7 +255,7 @@ export const demoPublicContent: PublicContent = {
       room: "Rituali quotidiani",
       name: "Specchio da parete",
       description: "Una linea semplice per dare luce alla stanza.",
-      priceCents: 18000,
+      priceEuros: 180,
       status: "gifted",
       allowFullGift: true,
       allowContributions: false,
@@ -266,7 +266,7 @@ export const demoPublicContent: PublicContent = {
       room: "Il cuore della casa",
       name: "Servizio per gli ospiti",
       description: "Piatti e bicchieri per apparecchiare senza fretta.",
-      priceCents: 24000,
+      priceEuros: 240,
       status: "gifted",
       allowFullGift: true,
       allowContributions: false,
@@ -277,7 +277,7 @@ export const demoPublicContent: PublicContent = {
       room: "Un progetto futuro",
       name: "Angolo studio",
       description: "Una scrivania condivisa per idee, progetti e nuovi inizi.",
-      priceCents: 65000,
+      priceEuros: 650,
       status: "available",
       allowFullGift: true,
       allowContributions: false,

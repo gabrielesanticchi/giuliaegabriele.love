@@ -12,7 +12,7 @@ describe("admin CSV export", () => {
         guest: " \t+Mario",
         note: "-formula",
         status: "@pending",
-        amountCents: 12_500,
+        amountEuros: 12_500,
         iban: "IT00BANKINGSECRET"
       }
     ]);
@@ -31,7 +31,7 @@ describe("audit minimization", () => {
     expect(
       redactAuditMetadata({
         action: "updated",
-        amountCents: 4_500,
+        amountEuros: 4_500,
         password: "secret",
         totpSecret: "secret",
         encryptedValue: "ciphertext",
@@ -41,7 +41,7 @@ describe("audit minimization", () => {
       })
     ).toEqual({
       action: "updated",
-      amountCents: 4_500,
+      amountEuros: 4_500,
       nested: { note: "nota consentita" }
     });
   });

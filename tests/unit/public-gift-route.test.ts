@@ -59,7 +59,7 @@ function dependencies(
       id: giftId,
       publicReference: "TAVOLO-01",
       title: "Tavolo per la cucina",
-      priceCents: 120000
+      priceEuros: 120000
     }),
     mutate: vi.fn(async (input) => {
       await input.beforeCommit?.();

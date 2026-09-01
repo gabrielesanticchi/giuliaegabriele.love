@@ -12,8 +12,8 @@ import {
 import { isSafeExternalUrl } from "@/lib/domain/urls";
 
 describe("formatCurrency", () => {
-  it("formatta i centesimi in euro italiani", () => {
-    expect(formatCurrency(123456)).toBe("1234,56 €");
+  it("formatta gli importi in euro interi italiani", () => {
+    expect(formatCurrency(50)).toBe("50 €");
   });
 });
 
@@ -77,44 +77,44 @@ describe("gift domain", () => {
     ).toBe("gifted");
   });
 
-  it("calcola confermato, pending e residuo impegnabile in centesimi", () => {
+  it("calcola confermato, pending e residuo impegnabile in euro", () => {
     expect(
       getGiftFunding({
-        priceCents: 90000,
-        verifiedContributionCents: 35000,
-        pendingContributionCents: 10000
+        priceEuros: 90000,
+        verifiedContributionEuros: 35000,
+        pendingContributionEuros: 10000
       })
     ).toEqual({
-      confirmedCents: 35000,
-      pendingCents: 10000,
-      remainingCents: 55000,
-      committableCents: 45000,
+      confirmedEuros: 35000,
+      pendingEuros: 10000,
+      remainingEuros: 55000,
+      committableEuros: 45000,
       complete: false
     });
   });
 
   it.each([
-    ["priceCents", -1],
-    ["priceCents", 1.5],
-    ["priceCents", Number.NaN],
-    ["priceCents", Number.POSITIVE_INFINITY],
-    ["priceCents", 9007199254740992],
-    ["verifiedContributionCents", -1],
-    ["verifiedContributionCents", 1.5],
-    ["verifiedContributionCents", Number.NaN],
-    ["verifiedContributionCents", Number.POSITIVE_INFINITY],
-    ["verifiedContributionCents", 9007199254740992],
-    ["pendingContributionCents", -1],
-    ["pendingContributionCents", 1.5],
-    ["pendingContributionCents", Number.NaN],
-    ["pendingContributionCents", Number.POSITIVE_INFINITY],
-    ["pendingContributionCents", 9007199254740992]
+    ["priceEuros", -1],
+    ["priceEuros", 1.5],
+    ["priceEuros", Number.NaN],
+    ["priceEuros", Number.POSITIVE_INFINITY],
+    ["priceEuros", 9007199254740992],
+    ["verifiedContributionEuros", -1],
+    ["verifiedContributionEuros", 1.5],
+    ["verifiedContributionEuros", Number.NaN],
+    ["verifiedContributionEuros", Number.POSITIVE_INFINITY],
+    ["verifiedContributionEuros", 9007199254740992],
+    ["pendingContributionEuros", -1],
+    ["pendingContributionEuros", 1.5],
+    ["pendingContributionEuros", Number.NaN],
+    ["pendingContributionEuros", Number.POSITIVE_INFINITY],
+    ["pendingContributionEuros", 9007199254740992]
   ] as const)("rifiuta l'importo non valido %s=%s", (field, value) => {
     expect(() =>
       getGiftFunding({
-        priceCents: 90000,
-        verifiedContributionCents: 35000,
-        pendingContributionCents: 10000,
+        priceEuros: 90000,
+        verifiedContributionEuros: 35000,
+        pendingContributionEuros: 10000,
         [field]: value
       })
     ).toThrow(TypeError);

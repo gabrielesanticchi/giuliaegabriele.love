@@ -188,21 +188,21 @@ describe("GiftRegistry", () => {
     );
     await fillGuestForm(user);
     const amount = screen.getByLabelText("Importo in euro");
-    await user.type(amount, "12.345");
+    await user.type(amount, "12,34");
     await user.click(screen.getByRole("button", { name: "Continua" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Usa al massimo due decimali"
+      "Inserisci un importo in euro interi"
     );
     expect(fetchMock).not.toHaveBeenCalled();
 
     await user.clear(amount);
-    await user.type(amount, "12,34");
+    await user.type(amount, "1234");
     await user.click(screen.getByRole("button", { name: "Continua" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const sent = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as {
-      amountCents: number;
+      amountEuros: number;
     };
-    expect(sent.amountCents).toBe(1234);
+    expect(sent.amountEuros).toBe(1234);
   });
 
   it("conserva la idempotency key al retry dopo un errore", async () => {

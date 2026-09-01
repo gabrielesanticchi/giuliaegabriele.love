@@ -14,14 +14,14 @@ describe("gift transaction policies", () => {
   it("applies only the remaining target while retaining the received amount", () => {
     expect(
       getVerificationAmounts({
-        priceCents: 10_000,
-        alreadyAppliedCents: 8_000,
-        intentAmountCents: 3_000,
-        receivedAmountCents: 3_000
+        priceEuros: 10_000,
+        alreadyAppliedEuros: 8_000,
+        intentAmountEuros: 3_000,
+        receivedAmountEuros: 3_000
       })
     ).toEqual({
-      receivedAmountCents: 3_000,
-      appliedAmountCents: 2_000,
+      receivedAmountEuros: 3_000,
+      appliedAmountEuros: 2_000,
       completesGift: true
     });
   });
@@ -29,14 +29,14 @@ describe("gift transaction policies", () => {
   it("never applies more than the amount committed by the intent", () => {
     expect(
       getVerificationAmounts({
-        priceCents: 10_000,
-        alreadyAppliedCents: 0,
-        intentAmountCents: 6_000,
-        receivedAmountCents: 10_000
+        priceEuros: 10_000,
+        alreadyAppliedEuros: 0,
+        intentAmountEuros: 6_000,
+        receivedAmountEuros: 10_000
       })
     ).toEqual({
-      receivedAmountCents: 10_000,
-      appliedAmountCents: 6_000,
+      receivedAmountEuros: 10_000,
+      appliedAmountEuros: 6_000,
       completesGift: false
     });
   });
@@ -106,8 +106,8 @@ describe("gift transaction policies", () => {
           {
             status: commitment.status,
             expiresAt: commitment.expiresAt,
-            amountCents: 1_000,
-            appliedAmountCents: commitment.status === "verified" ? 1_000 : 0
+            amountEuros: 1_000,
+            appliedAmountEuros: commitment.status === "verified" ? 1_000 : 0
           }
         ]
       })
@@ -124,8 +124,8 @@ describe("gift transaction policies", () => {
           {
             status: "pending",
             expiresAt: new Date("2026-08-19T09:00:00.000Z"),
-            amountCents: 1_000,
-            appliedAmountCents: 0
+            amountEuros: 1_000,
+            appliedAmountEuros: 0
           }
         ]
       })
@@ -136,7 +136,7 @@ describe("gift transaction policies", () => {
     ["giftId", "gift-2"],
     ["kind", "contribution"],
     ["method", "external_purchase"],
-    ["amountCents", 4_000],
+    ["amountEuros", 4_000],
     ["requestFingerprintHash", "b".repeat(64)]
   ] as const)(
     "rejects idempotency-key reuse when %s changes",
@@ -145,7 +145,7 @@ describe("gift transaction policies", () => {
         giftId: "gift-1",
         kind: "full_gift" as const,
         method: "bank_transfer" as const,
-        amountCents: 5_000,
+        amountEuros: 5_000,
         requestFingerprintHash: "a".repeat(64)
       };
 
@@ -165,7 +165,7 @@ describe("gift transaction policies", () => {
       giftId: "gift-1",
       kind: "contribution" as const,
       method: "bank_transfer" as const,
-      amountCents: 5_000,
+      amountEuros: 5_000,
       requestFingerprintHash: "a".repeat(64)
     };
 

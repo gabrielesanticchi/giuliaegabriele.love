@@ -36,12 +36,12 @@ export async function verifyRequestAction(formData: FormData) {
   const parsed = z
     .object({
       intentId: intentIdSchema,
-      receivedAmountCents: z.coerce.number().int().min(0),
+      receivedAmountEuros: z.coerce.number().int().min(0),
       idempotencyKey: idempotencySchema
     })
     .parse({
       intentId: formData.get("intentId"),
-      receivedAmountCents: formData.get("receivedAmountCents"),
+      receivedAmountEuros: formData.get("receivedAmountEuros"),
       idempotencyKey: formData.get("idempotencyKey")
     });
   const outcome = await executeOnce({
@@ -49,7 +49,7 @@ export async function verifyRequestAction(formData: FormData) {
     action: "request.verify",
     entityId: parsed.intentId,
     idempotencyKey: parsed.idempotencyKey,
-    payload: { receivedAmountCents: parsed.receivedAmountCents },
+    payload: { receivedAmountEuros: parsed.receivedAmountEuros },
     effect: async (tx) => {
       const initial = await tx
         .select({ giftId: giftIntents.giftId })
@@ -80,7 +80,7 @@ export async function verifyRequestAction(formData: FormData) {
       if (intent.status !== "pending")
         throw new TransactionError("intent_not_pending");
       const verified = await tx
-        .select({ appliedAmountCents: giftIntents.appliedAmountCents })
+        .select({ appliedAmountEuros: giftIntents.appliedAmountEuros })
         .from(giftIntents)
         .where(
           and(
@@ -89,21 +89,21 @@ export async function verifyRequestAction(formData: FormData) {
           )
         );
       const amounts = getVerificationAmounts({
-        priceCents: gift.priceCents,
-        alreadyAppliedCents: verified.reduce(
-          (sum, row) => sum + row.appliedAmountCents,
+        priceEuros: gift.priceEuros,
+        alreadyAppliedEuros: verified.reduce(
+          (sum, row) => sum + row.appliedAmountEuros,
           0
         ),
-        intentAmountCents: intent.amountCents,
-        receivedAmountCents: parsed.receivedAmountCents
+        intentAmountEuros: intent.amountEuros,
+        receivedAmountEuros: parsed.receivedAmountEuros
       });
       const now = new Date();
       const updated = await tx
         .update(giftIntents)
         .set({
           status: "verified",
-          receivedAmountCents: amounts.receivedAmountCents,
-          appliedAmountCents: amounts.appliedAmountCents,
+          receivedAmountEuros: amounts.receivedAmountEuros,
+          appliedAmountEuros: amounts.appliedAmountEuros,
           verifiedAt: now,
           updatedAt: now
         })
@@ -132,7 +132,7 @@ export async function verifyRequestAction(formData: FormData) {
       action: "gift_intent.verified",
       targetType: "gift_intent",
       targetId: result.intentId,
-      metadata: { receivedAmountCents: parsed.receivedAmountCents }
+      metadata: { receivedAmountEuros: parsed.receivedAmountEuros }
     })
   });
   await deliverQueuedVerificationNotification(getDatabase(), {
@@ -391,7 +391,7 @@ export async function createManualRequestAction(
       giftId: z.uuid(),
       kind: z.enum(["full_gift", "contribution"]),
       method: z.enum(["external_purchase", "bank_transfer"]),
-      amountCents: z.coerce.number().int().positive(),
+      amountEuros: z.coerce.number().int().positive(),
       firstName: z.string().trim().min(1).max(80),
       lastName: z.string().trim().min(1).max(80),
       email: z.email(),
@@ -407,7 +407,7 @@ export async function createManualRequestAction(
     publicReference: `M-${randomUUID()}`,
     giftId: parsed.data.giftId,
     method: parsed.data.method,
-    amountCents: parsed.data.amountCents,
+    amountEuros: parsed.data.amountEuros,
     idempotencyKey: randomUUID(),
     requestFingerprintHash: hashFingerprint(`manual:${intentId}`, pepper),
     guestTokenHash: hashToken(guestToken, required("GUEST_TOKEN_SECRET")),
@@ -431,7 +431,7 @@ export async function createManualRequestAction(
     payload: {
       kind: parsed.data.kind,
       method: parsed.data.method,
-      amountCents: parsed.data.amountCents,
+      amountEuros: parsed.data.amountEuros,
       identityHash: hashFingerprint(
         JSON.stringify({
           firstName: parsed.data.firstName,
@@ -457,14 +457,14 @@ export async function createManualRequestAction(
         .select({
           kind: giftIntents.kind,
           status: giftIntents.status,
-          amountCents: giftIntents.amountCents,
-          appliedAmountCents: giftIntents.appliedAmountCents,
+          amountEuros: giftIntents.amountEuros,
+          appliedAmountEuros: giftIntents.appliedAmountEuros,
           expiresAt: giftIntents.expiresAt
         })
         .from(giftIntents)
         .where(eq(giftIntents.giftId, gift.id));
       if (parsed.data.kind === "full_gift") {
-        if (parsed.data.amountCents !== gift.priceCents)
+        if (parsed.data.amountEuros !== gift.priceEuros)
           throw new TransactionError("gift_unavailable");
         assertGiftReservationAvailable({
           now: new Date(),
@@ -478,20 +478,20 @@ export async function createManualRequestAction(
           .limit(1);
         if (fullLock[0]) throw new TransactionError("gift_unavailable");
         const now = new Date();
-        const verifiedCents = commitments
+        const verifiedEuros = commitments
           .filter((item) => item.status === "verified")
-          .reduce((sum, item) => sum + item.appliedAmountCents, 0);
-        const pendingCents = commitments
+          .reduce((sum, item) => sum + item.appliedAmountEuros, 0);
+        const pendingEuros = commitments
           .filter(
             (item) =>
               item.kind === "contribution" &&
               item.status === "pending" &&
               item.expiresAt > now
           )
-          .reduce((sum, item) => sum + item.amountCents, 0);
+          .reduce((sum, item) => sum + item.amountEuros, 0);
         if (
-          parsed.data.amountCents >
-          Math.max(0, gift.priceCents - verifiedCents - pendingCents)
+          parsed.data.amountEuros >
+          Math.max(0, gift.priceEuros - verifiedEuros - pendingEuros)
         )
           throw new TransactionError("amount_unavailable");
       }
@@ -516,7 +516,7 @@ export async function createManualRequestAction(
       action: "gift_intent.manual_created",
       targetType: "gift_intent",
       targetId: result.intentId,
-      metadata: { kind: parsed.data.kind, amountCents: parsed.data.amountCents }
+      metadata: { kind: parsed.data.kind, amountEuros: parsed.data.amountEuros }
     })
   });
   await refreshAdmin("/admin/richieste");

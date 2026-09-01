@@ -20,9 +20,9 @@ export async function loadDashboardSummary() {
         ),
       db
         .select({
-          requestedCents: sql<number>`coalesce(sum(${giftIntents.amountCents}), 0)`,
-          receivedCents: sql<number>`coalesce(sum(${giftIntents.receivedAmountCents}), 0)`,
-          appliedCents: sql<number>`coalesce(sum(${giftIntents.appliedAmountCents}), 0)`
+          requestedEuros: sql<number>`coalesce(sum(${giftIntents.amountEuros}), 0)`,
+          receivedEuros: sql<number>`coalesce(sum(${giftIntents.receivedAmountEuros}), 0)`,
+          appliedEuros: sql<number>`coalesce(sum(${giftIntents.appliedAmountEuros}), 0)`
         })
         .from(giftIntents),
       db
@@ -30,7 +30,7 @@ export async function loadDashboardSummary() {
           id: giftIntents.id,
           reference: giftIntents.publicReference,
           status: giftIntents.status,
-          amountCents: giftIntents.amountCents,
+          amountEuros: giftIntents.amountEuros,
           createdAt: giftIntents.createdAt
         })
         .from(giftIntents)
@@ -41,9 +41,9 @@ export async function loadDashboardSummary() {
     giftCount: giftRows[0]?.count ?? 0,
     intentCount: intentRows[0]?.count ?? 0,
     expiredCount: expiredRows[0]?.count ?? 0,
-    requestedCents: Number(valueRows[0]?.requestedCents ?? 0),
-    receivedCents: Number(valueRows[0]?.receivedCents ?? 0),
-    appliedCents: Number(valueRows[0]?.appliedCents ?? 0),
+    requestedEuros: Number(valueRows[0]?.requestedEuros ?? 0),
+    receivedEuros: Number(valueRows[0]?.receivedEuros ?? 0),
+    appliedEuros: Number(valueRows[0]?.appliedEuros ?? 0),
     recent
   };
 }

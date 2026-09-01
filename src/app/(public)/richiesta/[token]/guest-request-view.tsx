@@ -11,7 +11,7 @@ export type GuestRequestSnapshot = {
   giftTitle: string;
   kind: "full_gift" | "contribution";
   status: "pending" | "verified" | "cancelled" | "expired" | "rejected";
-  amountCents: number;
+  amountEuros: number;
   expiresAt: Date;
   paymentDeclaredAt: Date | null;
 };
@@ -124,7 +124,7 @@ export function GuestRequestView({
           </div>
           <div>
             <dt>Importo</dt>
-            <dd>{formatCurrency(request.amountCents)}</dd>
+            <dd>{formatCurrency(request.amountEuros)}</dd>
           </div>
           <div>
             <dt>Riferimento</dt>

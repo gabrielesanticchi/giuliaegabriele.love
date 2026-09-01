@@ -16,7 +16,7 @@ const pending = {
   giftTitle: "Lampada per l’angolo lettura",
   kind: "contribution" as const,
   status: "pending" as const,
-  amountCents: 5000,
+  amountEuros: 50,
   expiresAt: new Date("2026-08-21T12:00:00.000Z"),
   paymentDeclaredAt: null
 };
@@ -31,7 +31,7 @@ describe("GuestRequestView", () => {
     expect(
       screen.getByText("Lampada per l’angolo lettura")
     ).toBeInTheDocument();
-    expect(screen.getByText("50,00 €")).toBeInTheDocument();
+    expect(screen.getByText("50 €")).toBeInTheDocument();
     expect(screen.getByText(/REQ-ABC123/)).toBeInTheDocument();
     expect(screen.getByText(/21 agosto 2026/)).toBeInTheDocument();
     expect(container.textContent?.toLowerCase()).not.toContain("iban");

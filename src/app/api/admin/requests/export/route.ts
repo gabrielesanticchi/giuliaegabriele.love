@@ -36,8 +36,8 @@ export async function GET() {
       guest: guestLabel(row.guestDetailsEncrypted),
       note: row.adminNote,
       status: row.status,
-      amountCents: row.amountCents,
-      receivedAmountCents: row.receivedAmountCents,
+      amountEuros: row.amountEuros,
+      receivedAmountEuros: row.receivedAmountEuros,
       createdAt: row.createdAt.toISOString(),
       expiresAt: row.expiresAt.toISOString()
     }))
