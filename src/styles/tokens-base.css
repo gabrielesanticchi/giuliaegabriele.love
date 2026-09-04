@@ -1,19 +1,22 @@
 :root {
-  --color-ivory: #f4efe7;
-  --color-paper: #fbf8f2;
-  --color-forest: #20342c;
-  --color-deep: #14231d;
-  --color-sage: #748476;
-  --color-moss: #53675b;
-  --color-clay: #b6754e;
-  --color-clay-text: #8a4e2e;
-  --color-on-clay: #101d18;
-  --color-focus-inner: #fbf8f2;
-  --color-focus-outer: #14231d;
-  --color-stone: #d8cbb9;
-  --color-ink: #191d1a;
-  --color-muted: #5c635e;
-  --color-line: rgb(32 52 44 / 18%);
+  /* Palette Matrimonio — rosa antico, arancio bruciato e accenti caldi d'autunno */
+  --color-ivory: #f4ebdd; /* Avorio champagne */
+  --color-paper: #fbf6ec;
+  --color-forest: #3b2a20; /* dark warm brown (dark surfaces) */
+  --color-deep: #2a1d15;
+  --color-sage: #a8a28e; /* Salvia polverosa */
+  --color-moss: #7c7660;
+  --color-clay: #c86a3a; /* Arancio bruciato */
+  --color-clay-text: #97431f;
+  --color-on-clay: #241209;
+  --color-rose: #c98a8a; /* Rosa antico */
+  --color-gold: #c7a14a; /* Oro caldo */
+  --color-focus-inner: #fbf6ec;
+  --color-focus-outer: #2a1d15;
+  --color-stone: #b79e8c; /* Tortora caldo */
+  --color-ink: #2e211a;
+  --color-muted: #6e5f52;
+  --color-line: rgb(59 42 32 / 18%);
   --page-pad: clamp(1.25rem, 5vw, 6rem);
   --content-max: 90rem;
 }

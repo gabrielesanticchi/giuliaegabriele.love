@@ -34,7 +34,7 @@ export function SiteHeader() {
           href="#home"
           aria-label="Giulia e Gabriele, Home"
         >
-          <Monogram />
+          <Monogram className="monogram--mark" title="Giulia e Gabriele" />
         </a>
         <ul className="desktop-nav">
           {navigation.map(([label, href]) => (

@@ -1,14 +1,16 @@
 export const designTokens = {
-  ivory: "#f4efe7",
-  paper: "#fbf8f2",
-  forest: "#20342c",
-  deep: "#14231d",
-  sage: "#748476",
-  clay: "#b6754e",
-  clayText: "#8a4e2e",
-  onClay: "#101d18",
-  focusInner: "#fbf8f2",
-  focusOuter: "#14231d"
+  ivory: "#f4ebdd",
+  paper: "#fbf6ec",
+  forest: "#3b2a20",
+  deep: "#2a1d15",
+  sage: "#a8a28e",
+  clay: "#c86a3a",
+  clayText: "#97431f",
+  onClay: "#241209",
+  rose: "#c98a8a",
+  gold: "#c7a14a",
+  focusInner: "#fbf6ec",
+  focusOuter: "#2a1d15"
 } as const;
 
 function channelToLinear(channel: number): number {

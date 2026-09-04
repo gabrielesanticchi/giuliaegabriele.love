@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   description: "Il matrimonio di Giulia e Gabriele, 24 ottobre 2026.",
   applicationName: "Giulia & Gabriele",
   robots: { index: false, follow: false },
-  icons: { icon: "/graphics/monogram-mark.svg" },
+  icons: { icon: "/graphics/logo-couple.png" },
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",

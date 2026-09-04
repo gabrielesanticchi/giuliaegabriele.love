@@ -178,11 +178,11 @@ export const demoPublicContent: PublicContent = {
       "Non c'è un vero dress code: indossate ciò che vi mette più a vostro agio.",
     note: "Se vi fa piacere, lasciatevi ispirare dai colori caldi dell'autunno.",
     colors: [
-      { name: "Verde bosco", value: "#20342c" },
-      { name: "Salvia", value: "#748476" },
-      { name: "Terracotta", value: "#b6754e" },
-      { name: "Bordeaux", value: "#6f3237" },
-      { name: "Ocra", value: "#a87932" }
+      { name: "Rosa antico", value: "#c98a8a" },
+      { name: "Arancio bruciato", value: "#c86a3a" },
+      { name: "Oro caldo", value: "#c7a14a" },
+      { name: "Tortora caldo", value: "#b79e8c" },
+      { name: "Salvia polverosa", value: "#a8a28e" }
     ]
   },
   gifts: [

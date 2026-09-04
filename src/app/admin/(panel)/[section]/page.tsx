@@ -521,7 +521,7 @@ export default async function AdminSectionPage({
               label: "Colore",
               type: "color",
               required: true,
-              defaultValue: "#20342c"
+              defaultValue: "#c86a3a"
             },
             {
               name: "sortOrder",

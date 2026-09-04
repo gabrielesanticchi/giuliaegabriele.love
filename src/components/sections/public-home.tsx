@@ -137,10 +137,21 @@ function WeddingSection({ content }: { content: PublicContent }) {
             key={location.name}
           >
             <div className="location-art">
-              <EditorialArt
-                label={`Illustrazione originale per ${location.name}`}
-                variant={location.kind === "ceremony" ? "arch" : "leaf"}
-              />
+              {location.kind === "reception" ? (
+                <Image
+                  className="location-photo"
+                  src="/graphics/villa-cavenago.png"
+                  alt={`${location.name}, ${location.place}`}
+                  width={1604}
+                  height={981}
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                />
+              ) : (
+                <EditorialArt
+                  label={`Illustrazione originale per ${location.name}`}
+                  variant="arch"
+                />
+              )}
               <span aria-hidden="true">0{index + 1}</span>
             </div>
             <div className="location-copy">
