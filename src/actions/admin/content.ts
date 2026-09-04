@@ -5,14 +5,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  dressCodeColors,
-  mediaAssets,
-  scheduleItems,
-  siteSettings,
-  storyMoments
-} from "@/db/schema";
-import { parseRomeDateTimeLocalSafe } from "@/lib/admin/datetime";
+import { mediaAssets, siteSettings, storyMoments } from "@/db/schema";
 
 import {
   type AdminActionResult,
@@ -22,13 +15,7 @@ import {
 } from "./shared";
 
 const settingSchema = z.object({
-  key: z.enum([
-    "hero",
-    "wedding",
-    "dress_code",
-    "gift_settings",
-    "media_settings"
-  ]),
+  key: z.enum(["hero", "wedding", "gift_settings", "media_settings"]),
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(2_000),
   weddingDate: z.string().datetime({ offset: true }).optional(),
@@ -51,28 +38,6 @@ const settingSchema = z.object({
   published: z.boolean()
 });
 
-const romeDateTime = z.string().transform((value, ctx) => {
-  const parsed = parseRomeDateTimeLocalSafe(value);
-  if (!parsed) {
-    // Report as a Zod issue so safeParse fails cleanly instead of throwing an
-    // invalid/DST-gap datetime out of the schema.
-    ctx.addIssue({ code: "custom", message: "Data non valida" });
-    return z.NEVER;
-  }
-  return parsed;
-});
-
-const scheduleSchema = z.object({
-  id: z.uuid().optional(),
-  title: z.string().trim().min(1).max(160),
-  description: z.string().trim().max(2_000).optional(),
-  locationName: z.string().trim().max(200).optional(),
-  startsAt: romeDateTime,
-  endsAt: romeDateTime.optional(),
-  sortOrder: z.coerce.number().int().min(0),
-  published: z.boolean()
-});
-
 const storySchema = z.object({
   id: z.uuid().optional(),
   title: z.string().trim().min(1).max(160),
@@ -81,13 +46,6 @@ const storySchema = z.object({
   mediaAssetId: z.uuid().optional(),
   sortOrder: z.coerce.number().int().min(0),
   published: z.boolean()
-});
-
-const dressColorSchema = z.object({
-  id: z.uuid().optional(),
-  name: z.string().trim().min(1).max(80),
-  hexColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
-  sortOrder: z.coerce.number().int().min(0)
 });
 
 const mediaSchema = z.object({
@@ -172,68 +130,6 @@ export async function saveStructuredContentAction(
   return { ok: true, message: "Contenuto salvato" };
 }
 
-export async function saveScheduleItemAction(
-  formData: FormData
-): Promise<AdminActionResult> {
-  const admin = await authorizedAdmin("schedule.save");
-  const parsed = scheduleSchema.safeParse({
-    id: formData.get("id") || undefined,
-    title: formData.get("title"),
-    description: formData.get("description") || undefined,
-    locationName: formData.get("locationName") || undefined,
-    startsAt: formData.get("startsAt"),
-    endsAt: formData.get("endsAt") || undefined,
-    sortOrder: formData.get("sortOrder") ?? 0,
-    published: bool(formData.get("published"))
-  });
-  if (!parsed.success) return { ok: false, message: "Evento non valido" };
-  const existingId = parsed.data.id;
-  const { id = randomUUID(), ...values } = parsed.data;
-  await runAuditedAdminMutation({
-    actorAdminId: admin.id,
-    action: "schedule.saved",
-    targetType: "schedule_item",
-    targetId: id,
-    metadata: { published: values.published, sortOrder: values.sortOrder },
-    mutation: async (tx) => {
-      if (existingId) {
-        const updated = await tx
-          .update(scheduleItems)
-          .set({ ...values, updatedAt: new Date() })
-          .where(eq(scheduleItems.id, existingId))
-          .returning({ id: scheduleItems.id });
-        if (!updated[0]) throw new Error("Evento non trovato");
-      } else await tx.insert(scheduleItems).values({ id, ...values });
-    }
-  });
-  await refreshAdmin("/admin/programma");
-  return { ok: true, message: "Evento salvato" };
-}
-
-export async function deleteScheduleItemAction(id: string) {
-  const admin = await authorizedAdmin("schedule.delete");
-  const parsedId = z.uuid().parse(id);
-  await runAuditedAdminMutation({
-    actorAdminId: admin.id,
-    action: "schedule.deleted",
-    targetType: "schedule_item",
-    targetId: parsedId,
-    mutation: async (tx) => {
-      const updated = await tx
-        .update(scheduleItems)
-        .set({
-          archivedAt: new Date(),
-          published: false,
-          updatedAt: new Date()
-        })
-        .where(eq(scheduleItems.id, parsedId))
-        .returning({ id: scheduleItems.id });
-      if (!updated[0]) throw new Error("Evento non trovato");
-    }
-  });
-  await refreshAdmin("/admin/programma");
-}
-
 export async function saveStoryMomentAction(
   formData: FormData
 ): Promise<AdminActionResult> {
@@ -306,60 +202,6 @@ export async function deleteStoryMomentAction(id: string) {
     }
   });
   await refreshAdmin("/admin/storia");
-}
-
-export async function saveDressColorAction(
-  formData: FormData
-): Promise<AdminActionResult> {
-  const admin = await authorizedAdmin("dress-code.save");
-  const parsed = dressColorSchema.safeParse({
-    id: formData.get("id") || undefined,
-    name: formData.get("name"),
-    hexColor: formData.get("hexColor"),
-    sortOrder: formData.get("sortOrder") ?? 0
-  });
-  if (!parsed.success) return { ok: false, message: "Colore non valido" };
-  const existingId = parsed.data.id;
-  const { id = randomUUID(), ...values } = parsed.data;
-  await runAuditedAdminMutation({
-    actorAdminId: admin.id,
-    action: "dress_code.saved",
-    targetType: "dress_code_color",
-    targetId: id,
-    metadata: { name: values.name, sortOrder: values.sortOrder },
-    mutation: async (tx) => {
-      if (existingId) {
-        const updated = await tx
-          .update(dressCodeColors)
-          .set({ ...values, updatedAt: new Date() })
-          .where(eq(dressCodeColors.id, existingId))
-          .returning({ id: dressCodeColors.id });
-        if (!updated[0]) throw new Error("Colore non trovato");
-      } else await tx.insert(dressCodeColors).values({ id, ...values });
-    }
-  });
-  await refreshAdmin("/admin/dress-code");
-  return { ok: true, message: "Colore salvato" };
-}
-
-export async function deleteDressColorAction(id: string) {
-  const admin = await authorizedAdmin("dress-code.save");
-  const parsedId = z.uuid().parse(id);
-  await runAuditedAdminMutation({
-    actorAdminId: admin.id,
-    action: "dress_code.deleted",
-    targetType: "dress_code_color",
-    targetId: parsedId,
-    mutation: async (tx) => {
-      const updated = await tx
-        .update(dressCodeColors)
-        .set({ archivedAt: new Date(), updatedAt: new Date() })
-        .where(eq(dressCodeColors.id, parsedId))
-        .returning({ id: dressCodeColors.id });
-      if (!updated[0]) throw new Error("Colore non trovato");
-    }
-  });
-  await refreshAdmin("/admin/dress-code");
 }
 
 export async function saveMediaMetadataAction(

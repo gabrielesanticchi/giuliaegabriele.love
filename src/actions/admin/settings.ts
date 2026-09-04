@@ -6,10 +6,8 @@ import { z } from "zod";
 import { getDatabase } from "@/db";
 import {
   auditLogs,
-  dressCodeColors,
   gifts,
   mediaAssets,
-  scheduleItems,
   siteSettings,
   storyMoments
 } from "@/db/schema";
@@ -132,52 +130,35 @@ export async function saveAdminSettingsAction(
 }
 
 async function computeReadiness(db: AdminTransaction) {
-  const [
-    settings,
-    scheduleCount,
-    storyCount,
-    colorCount,
-    giftCount,
-    banking,
-    mediaRows
-  ] = await Promise.all([
-    db.select().from(siteSettings),
-    db
-      .select({ count: count() })
-      .from(scheduleItems)
-      .where(
-        and(eq(scheduleItems.published, true), isNull(scheduleItems.archivedAt))
-      ),
-    db
-      .select({ count: count() })
-      .from(storyMoments)
-      .where(
-        and(eq(storyMoments.published, true), isNull(storyMoments.archivedAt))
-      ),
-    db
-      .select({ count: count() })
-      .from(dressCodeColors)
-      .where(isNull(dressCodeColors.archivedAt)),
-    db
-      .select({ count: count() })
-      .from(gifts)
-      .where(
-        and(
-          eq(gifts.published, true),
-          eq(gifts.completed, false),
-          isNull(gifts.archivedAt)
-        )
-      ),
-    db
-      .select({ encryptedValue: siteSettings.encryptedValue })
-      .from(siteSettings)
-      .where(eq(siteSettings.key, "banking_instructions"))
-      .limit(1),
-    db
-      .select({ id: mediaAssets.id })
-      .from(mediaAssets)
-      .where(isNull(mediaAssets.archivedAt))
-  ]);
+  const [settings, storyCount, giftCount, banking, mediaRows] =
+    await Promise.all([
+      db.select().from(siteSettings),
+      db
+        .select({ count: count() })
+        .from(storyMoments)
+        .where(
+          and(eq(storyMoments.published, true), isNull(storyMoments.archivedAt))
+        ),
+      db
+        .select({ count: count() })
+        .from(gifts)
+        .where(
+          and(
+            eq(gifts.published, true),
+            eq(gifts.completed, false),
+            isNull(gifts.archivedAt)
+          )
+        ),
+      db
+        .select({ encryptedValue: siteSettings.encryptedValue })
+        .from(siteSettings)
+        .where(eq(siteSettings.key, "banking_instructions"))
+        .limit(1),
+      db
+        .select({ id: mediaAssets.id })
+        .from(mediaAssets)
+        .where(isNull(mediaAssets.archivedAt))
+    ]);
   const byKey = new Map(
     settings.map((setting) => [setting.key, setting.value])
   );
@@ -186,7 +167,6 @@ async function computeReadiness(db: AdminTransaction) {
   const hero = byKey.get("hero") as { published?: boolean } | undefined;
   const wedding = byKey.get("wedding") as
     { published?: boolean; weddingDate?: string } | undefined;
-  const dress = byKey.get("dress_code") as { published?: boolean } | undefined;
   const mediaSettings = byKey.get("media_settings") as
     { requiredMediaIds?: unknown } | undefined;
   const requiredMediaIds = Array.isArray(mediaSettings?.requiredMediaIds)
@@ -201,10 +181,7 @@ async function computeReadiness(db: AdminTransaction) {
     weddingConfigured: byKey.has("wedding"),
     weddingPublished: wedding?.published === true,
     weddingDateConfigured: Boolean(wedding?.weddingDate),
-    schedulePublishedCount: scheduleCount[0]?.count ?? 0,
     storyPublishedCount: storyCount[0]?.count ?? 0,
-    dressColorCount: colorCount[0]?.count ?? 0,
-    dressPublished: dress?.published === true,
     publishedGiftCount: giftCount[0]?.count ?? 0,
     bankingConfigured: Boolean(banking[0]?.encryptedValue),
     requiredMediaReady:

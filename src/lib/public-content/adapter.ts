@@ -4,13 +4,11 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import type { PublicContent } from "@/data/demo-content";
 import { getDatabase } from "@/db";
 import {
-  dressCodeColors,
   giftCategories,
   giftIntents,
   giftLocks,
   gifts,
   mediaAssets,
-  scheduleItems,
   siteSettings,
   storyMoments
 } from "@/db/schema";
@@ -22,14 +20,6 @@ type Snapshot = {
   requiredMediaReady: boolean;
   operationalReady: boolean;
   settings: Record<string, unknown>;
-  schedule: Array<{
-    id: string;
-    title: string;
-    description: string | null;
-    startsAt: Date;
-    sortOrder: number;
-    published: boolean;
-  }>;
   story: Array<{
     id: string;
     title: string;
@@ -39,7 +29,6 @@ type Snapshot = {
     mediaUrl?: string | null;
     mediaAlt?: string | null;
   }>;
-  colors: Array<{ name: string; hexColor: string; sortOrder: number }>;
   gifts: Array<{
     id: string;
     title: string;
@@ -70,19 +59,14 @@ export function mapPublicContentSnapshot(
   if (!includeDrafts && !snapshot.published) return null;
   const hero = object(snapshot.settings.hero);
   const wedding = object(snapshot.settings.wedding);
-  const dress = object(snapshot.settings.dress_code);
   if (
     (!includeDrafts &&
-      (hero.published !== true ||
-        wedding.published !== true ||
-        dress.published !== true)) ||
+      (hero.published !== true || wedding.published !== true)) ||
     !wedding.weddingDate ||
     (!includeDrafts &&
       (!snapshot.requiredMediaReady ||
         !snapshot.operationalReady ||
-        snapshot.schedule.every((item) => !item.published) ||
         snapshot.story.every((item) => !item.published) ||
-        snapshot.colors.length === 0 ||
         snapshot.gifts.every(
           (gift) =>
             !gift.published || gift.archivedAt !== null || gift.completed
@@ -135,18 +119,6 @@ export function mapPublicContentSnapshot(
           ];
         })
       : [],
-    schedule: snapshot.schedule
-      .filter((item) => includeDrafts || item.published)
-      .map((item) => ({
-        time: item.startsAt.toLocaleTimeString("it-IT", {
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: "Europe/Rome"
-        }),
-        dateTime: item.startsAt.toISOString(),
-        title: item.title,
-        description: item.description ?? ""
-      })),
     story: snapshot.story
       .filter((item) => includeDrafts || item.published)
       .map((item, index) => ({
@@ -162,15 +134,6 @@ export function mapPublicContentSnapshot(
               }
             : null
       })),
-    dressCode: {
-      name: String(dress.name ?? dress.title ?? ""),
-      description: String(dress.description ?? ""),
-      note: String(dress.note ?? ""),
-      colors: snapshot.colors.map((color) => ({
-        name: color.name,
-        value: color.hexColor
-      }))
-    },
     gifts: snapshot.gifts
       .filter(
         (gift) => gift.archivedAt === null && (includeDrafts || gift.published)
@@ -200,80 +163,63 @@ export async function loadPublicContent(
 ): Promise<PublicContent | null> {
   if (!process.env.DATABASE_URL) return null;
   const db = getDatabase();
-  const [
-    settingsRows,
-    schedule,
-    story,
-    colors,
-    giftRows,
-    lockRows,
-    intentRows
-  ] = await Promise.all([
-    db.select().from(siteSettings),
-    db
-      .select()
-      .from(scheduleItems)
-      .where(isNull(scheduleItems.archivedAt))
-      .orderBy(asc(scheduleItems.sortOrder)),
-    db
-      .select({
-        id: storyMoments.id,
-        title: storyMoments.title,
-        body: storyMoments.body,
-        sortOrder: storyMoments.sortOrder,
-        published: storyMoments.published,
-        mediaUrl: mediaAssets.pathname,
-        mediaAlt: mediaAssets.altText
-      })
-      .from(storyMoments)
-      .leftJoin(
-        mediaAssets,
-        and(
-          eq(storyMoments.mediaAssetId, mediaAssets.id),
-          isNull(mediaAssets.archivedAt)
+  const [settingsRows, story, giftRows, lockRows, intentRows] =
+    await Promise.all([
+      db.select().from(siteSettings),
+      db
+        .select({
+          id: storyMoments.id,
+          title: storyMoments.title,
+          body: storyMoments.body,
+          sortOrder: storyMoments.sortOrder,
+          published: storyMoments.published,
+          mediaUrl: mediaAssets.pathname,
+          mediaAlt: mediaAssets.altText
+        })
+        .from(storyMoments)
+        .leftJoin(
+          mediaAssets,
+          and(
+            eq(storyMoments.mediaAssetId, mediaAssets.id),
+            isNull(mediaAssets.archivedAt)
+          )
         )
-      )
-      .where(isNull(storyMoments.archivedAt))
-      .orderBy(asc(storyMoments.sortOrder)),
-    db
-      .select()
-      .from(dressCodeColors)
-      .where(isNull(dressCodeColors.archivedAt))
-      .orderBy(asc(dressCodeColors.sortOrder)),
-    db
-      .select({
-        id: gifts.id,
-        title: gifts.title,
-        description: gifts.description,
-        priceEuros: gifts.priceEuros,
-        progressMode: gifts.progressMode,
-        completed: gifts.completed,
-        published: gifts.published,
-        archivedAt: gifts.archivedAt,
-        sortOrder: gifts.sortOrder,
-        categoryName: giftCategories.name
-      })
-      .from(gifts)
-      .leftJoin(
-        giftCategories,
-        and(
-          eq(gifts.categoryId, giftCategories.id),
-          isNull(giftCategories.archivedAt)
+        .where(isNull(storyMoments.archivedAt))
+        .orderBy(asc(storyMoments.sortOrder)),
+      db
+        .select({
+          id: gifts.id,
+          title: gifts.title,
+          description: gifts.description,
+          priceEuros: gifts.priceEuros,
+          progressMode: gifts.progressMode,
+          completed: gifts.completed,
+          published: gifts.published,
+          archivedAt: gifts.archivedAt,
+          sortOrder: gifts.sortOrder,
+          categoryName: giftCategories.name
+        })
+        .from(gifts)
+        .leftJoin(
+          giftCategories,
+          and(
+            eq(gifts.categoryId, giftCategories.id),
+            isNull(giftCategories.archivedAt)
+          )
         )
-      )
-      .orderBy(asc(gifts.sortOrder)),
-    db.select().from(giftLocks),
-    db
-      .select({
-        giftId: giftIntents.giftId,
-        kind: giftIntents.kind,
-        status: giftIntents.status,
-        amountEuros: giftIntents.amountEuros,
-        appliedAmountEuros: giftIntents.appliedAmountEuros,
-        expiresAt: giftIntents.expiresAt
-      })
-      .from(giftIntents)
-  ]);
+        .orderBy(asc(gifts.sortOrder)),
+      db.select().from(giftLocks),
+      db
+        .select({
+          giftId: giftIntents.giftId,
+          kind: giftIntents.kind,
+          status: giftIntents.status,
+          amountEuros: giftIntents.amountEuros,
+          appliedAmountEuros: giftIntents.appliedAmountEuros,
+          expiresAt: giftIntents.expiresAt
+        })
+        .from(giftIntents)
+    ]);
   const settings = Object.fromEntries(
     settingsRows.map((row) => [row.key, row.value])
   );
@@ -324,9 +270,7 @@ export async function loadPublicContent(
             row.key === "banking_instructions" && Boolean(row.encryptedValue)
         ),
       settings,
-      schedule,
       story,
-      colors,
       gifts: mappedGifts
     },
     options.includeDrafts === true

@@ -93,23 +93,6 @@ export const mediaAssets = pgTable(
   ]
 );
 
-export const scheduleItems = pgTable(
-  "schedule_items",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    title: text("title").notNull(),
-    description: text("description"),
-    locationName: text("location_name"),
-    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
-    endsAt: timestamp("ends_at", { withTimezone: true }),
-    sortOrder: integer("sort_order").default(0).notNull(),
-    published: boolean("published").default(false).notNull(),
-    archivedAt: timestamp("archived_at", { withTimezone: true }),
-    ...timestamps
-  },
-  (table) => [index("schedule_items_starts_at_idx").on(table.startsAt)]
-);
-
 export const storyMoments = pgTable(
   "story_moments",
   {
@@ -129,24 +112,6 @@ export const storyMoments = pgTable(
     ...timestamps
   },
   (table) => [index("story_moments_sort_order_idx").on(table.sortOrder)]
-);
-
-export const dressCodeColors = pgTable(
-  "dress_code_colors",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    name: varchar("name", { length: 80 }).notNull(),
-    hexColor: varchar("hex_color", { length: 7 }).notNull(),
-    sortOrder: integer("sort_order").default(0).notNull(),
-    archivedAt: timestamp("archived_at", { withTimezone: true }),
-    ...timestamps
-  },
-  (table) => [
-    check(
-      "dress_code_colors_hex_format",
-      sql`${table.hexColor} ~ '^#[0-9A-Fa-f]{6}$'`
-    )
-  ]
 );
 
 export const giftCategories = pgTable(

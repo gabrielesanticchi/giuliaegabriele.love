@@ -9,9 +9,7 @@ import { Monogram } from "@/components/graphics/monogram";
 const navigation = [
   ["Home", "#home"],
   ["Il matrimonio", "#matrimonio"],
-  ["Programma", "#programma"],
   ["La nostra storia", "#storia"],
-  ["Dress code", "#dress-code"],
   ["Lista nozze", "#lista-nozze"]
 ] as const;
 

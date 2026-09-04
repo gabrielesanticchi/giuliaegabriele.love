@@ -35,24 +35,8 @@ describe("database public content adapter", () => {
             mapsUrl: "https://maps.example.test/villa"
           }
         ]
-      },
-      dress_code: {
-        published: true,
-        name: "Autunno",
-        description: "Toni caldi",
-        note: "Un invito"
       }
     },
-    schedule: [
-      {
-        id: "s1",
-        title: "Cerimonia",
-        description: "Chiesa",
-        startsAt: new Date("2026-10-24T09:00:00Z"),
-        sortOrder: 0,
-        published: true
-      }
-    ],
     story: [
       {
         id: "m1",
@@ -62,7 +46,6 @@ describe("database public content adapter", () => {
         published: true
       }
     ],
-    colors: [{ name: "Bosco", hexColor: "#20342c", sortOrder: 0 }],
     gifts: [
       {
         id: "g1",
@@ -85,7 +68,6 @@ describe("database public content adapter", () => {
   it("maps only publishable database state including lock and funding", () => {
     const content = mapPublicContentSnapshot(snapshot, false);
     expect(content?.heroMedia).toEqual({ kind: "art", label: "Bosco" });
-    expect(content?.schedule).toHaveLength(1);
     expect(content?.locations[0]).toMatchObject({
       kind: "ceremony",
       address: "Via Roma 1",
@@ -156,14 +138,14 @@ describe("database public content adapter", () => {
     const content = mapPublicContentSnapshot(
       {
         ...snapshot,
-        schedule: [
-          ...snapshot.schedule,
-          { ...snapshot.schedule[0], id: "draft", published: false }
+        story: [
+          ...snapshot.story,
+          { ...snapshot.story[0], id: "draft", published: false }
         ]
       },
       false
     );
-    expect(content?.schedule).toHaveLength(1);
+    expect(content?.story).toHaveLength(1);
   });
 
   it("allows authenticated preview to include drafts without requiring publication", () => {
@@ -171,11 +153,14 @@ describe("database public content adapter", () => {
       {
         ...snapshot,
         published: false,
-        schedule: [{ ...snapshot.schedule[0], published: false }]
+        story: [
+          ...snapshot.story,
+          { ...snapshot.story[0], id: "draft", published: false }
+        ]
       },
       true
     );
-    expect(content?.schedule).toHaveLength(1);
+    expect(content?.story).toHaveLength(2);
   });
 
   it("turns an adapter failure into the controlled unavailable state", async () => {

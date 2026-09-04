@@ -8,32 +8,31 @@
 }
 .locations-layout {
   display: grid;
-  gap: 5rem;
+  gap: 3rem;
 }
 .location {
-  display: grid;
-  gap: 2rem;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
 }
 .location-art {
   position: relative;
-  min-height: min(125vw, 36rem);
+  aspect-ratio: 3 / 2;
   overflow: hidden;
   color: var(--color-forest);
   background: var(--color-stone);
 }
-.location-art > span {
-  position: absolute;
-  top: 1rem;
-  right: 1rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-}
 .location--reception .location-art {
   background: var(--color-sage);
 }
+.location-note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
 .location-photo {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
@@ -48,14 +47,14 @@
   width: 100%;
   height: 100%;
   background-color: currentColor;
-  -webkit-mask: url("/graphics/manta.png") center / 78% no-repeat;
-  mask: url("/graphics/manta.png") center / 78% no-repeat;
-}
-.location-copy {
-  max-width: 32rem;
+  -webkit-mask: url("/graphics/manta.png") center / 70% no-repeat;
+  mask: url("/graphics/manta.png") center / 70% no-repeat;
 }
 .location-copy h3 {
-  margin: 0.25rem 0 1.5rem;
+  margin: 0.25rem 0 0.5rem;
+}
+.location-copy > p {
+  margin: 0.15rem 0;
 }
 .location-copy p {
   color: var(--color-muted);
@@ -81,74 +80,6 @@
 .location-copy a svg,
 .gift-actions svg {
   width: 1rem;
-}
-
-.schedule-section {
-  color: var(--color-paper);
-  background: var(--color-forest);
-}
-.schedule-section > * {
-  width: min(100%, 72rem);
-  margin-right: auto;
-  margin-left: auto;
-}
-.section-heading--light .eyebrow {
-  color: var(--color-stone);
-}
-.section-heading--light > p:last-child {
-  max-width: 34rem;
-  color: rgb(251 246 236 / 72%);
-}
-.schedule-list {
-  position: relative;
-  margin: 0 auto;
-  padding: 0;
-  list-style: none;
-}
-.schedule-list::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 1.25rem;
-  width: 1px;
-  content: "";
-  background: rgb(251 246 236 / 25%);
-}
-.schedule-list li {
-  position: relative;
-  display: grid;
-  grid-template-columns: 2.5rem 1fr;
-  gap: 0.5rem 1.25rem;
-  padding: 1.5rem 0 2.5rem;
-}
-.schedule-index {
-  z-index: 1;
-  width: 2.5rem;
-  height: 2.5rem;
-  display: grid;
-  border: 1px solid var(--color-stone);
-  border-radius: 50%;
-  place-items: center;
-  color: var(--color-stone);
-  background: var(--color-forest);
-  font-size: 0.65rem;
-}
-.schedule-list time,
-.schedule-time {
-  color: var(--color-stone);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.schedule-list div {
-  grid-column: 2;
-}
-.schedule-list h3 {
-  font-size: 2.5rem;
-}
-.schedule-list p {
-  color: rgb(251 246 236 / 72%);
 }
 
 .story-section {
@@ -212,76 +143,11 @@
   color: var(--color-muted);
 }
 
-.dress-section {
-  display: grid;
-  gap: 4rem;
-  color: var(--color-on-clay);
-  background: var(--color-clay);
-}
-.dress-copy {
-  max-width: 42rem;
-}
-.dress-copy h2 {
-  color: var(--color-paper);
-}
-.dress-copy .eyebrow,
-.dress-copy .lead,
-.dress-copy > p:last-child {
-  color: var(--color-on-clay);
-}
-.swatches {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 1.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.swatches li {
-  min-width: 5rem;
-  display: grid;
-  gap: 0.6rem;
-  color: var(--color-on-clay);
-  font-size: 0.68rem;
-  text-align: center;
-}
-.swatches li > span:first-child {
-  width: clamp(4rem, 9vw, 7rem);
-  aspect-ratio: 1;
-  display: block;
-  border: 1px solid var(--color-on-clay);
-  border-radius: 50%;
-}
-
 @media (min-width: 48rem) {
   .locations-layout {
-    gap: 8rem;
-  }
-  .location {
-    grid-template-columns: minmax(0, 1.1fr) minmax(18rem, 0.9fr);
-    gap: clamp(3rem, 7vw, 8rem);
-  }
-  .location--reception .location-art {
-    order: 2;
-  }
-  .location-art {
-    min-height: 42rem;
-  }
-  .schedule-list li {
-    grid-template-columns: 4rem 8rem 1fr;
-    gap: 2rem;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2.5rem, 5vw, 5rem);
     align-items: start;
-  }
-  .schedule-list::before {
-    left: 2rem;
-  }
-  .schedule-index {
-    width: 4rem;
-    height: 4rem;
-  }
-  .schedule-list div {
-    grid-column: 3;
   }
   .story-list li {
     grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.8fr);
@@ -293,9 +159,5 @@
   }
   .story-marker {
     left: calc(55% - 1.5rem);
-  }
-  .dress-section {
-    grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.8fr);
-    align-items: center;
   }
 }

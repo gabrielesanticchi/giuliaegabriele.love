@@ -32,16 +32,14 @@ export function PublicHome({
       <main id="contenuto">
         <Hero content={content} initialNow={initialNow} />
         <WeddingSection content={content} />
-        <ScheduleSection content={content} />
         <StorySection content={content} demoMode={demoMode} />
-        <DressCodeSection content={content} />
         <section
           className="registry-section section-pad"
           id="lista-nozze"
           aria-labelledby="registry-title"
         >
           <div className="section-heading registry-heading">
-            <p className="eyebrow">Lista nozze · 05</p>
+            <p className="eyebrow">Lista nozze · 03</p>
             <h2 id="registry-title">Costruiamo casa insieme</h2>
             <p className="lead">
               Abbiamo immaginato questa lista come la nostra futura casa: una
@@ -131,13 +129,42 @@ function WeddingSection({ content }: { content: PublicContent }) {
         </h2>
       </div>
       <div className="locations-layout">
-        {content.locations.map((location, index) => (
+        {content.locations.map((location) => (
           <article
             className={`location location--${location.kind}`}
             key={location.name}
           >
+            <div className="location-copy">
+              <p className="eyebrow">
+                {location.kind === "ceremony"
+                  ? "La cerimonia"
+                  : "Il ricevimento"}
+              </p>
+              <h3>{location.name}</h3>
+              <p>{location.address ?? location.place}</p>
+              <p className="location-time">{location.time}</p>
+              {location.mapsUrl && isSafeExternalUrl(location.mapsUrl) ? (
+                <a
+                  href={location.mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Apri Maps per ${location.name}`}
+                >
+                  Apri Maps <ArrowUpRight aria-hidden="true" />
+                </a>
+              ) : null}
+            </div>
             <div className="location-art">
-              {location.kind === "reception" ? (
+              {location.kind === "ceremony" ? (
+                <Image
+                  className="location-photo"
+                  src="/graphics/chiesa-caleppio.png"
+                  alt={`${location.name}, ${location.place}`}
+                  width={1516}
+                  height={968}
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                />
+              ) : location.kind === "reception" ? (
                 <Image
                   className="location-photo"
                   src="/graphics/villa-cavenago.png"
@@ -152,67 +179,13 @@ function WeddingSection({ content }: { content: PublicContent }) {
                   variant="arch"
                 />
               )}
-              <span aria-hidden="true">0{index + 1}</span>
             </div>
-            <div className="location-copy">
-              <p className="eyebrow">
-                {location.kind === "ceremony"
-                  ? "La cerimonia"
-                  : "Il ricevimento"}
-              </p>
-              <h3>{location.name}</h3>
-              <p>{location.place}</p>
-              {location.address ? <p>{location.address}</p> : null}
-              <p className="location-time">{location.time}</p>
-              <p>{location.note}</p>
-              {location.mapsUrl && isSafeExternalUrl(location.mapsUrl) ? (
-                <a
-                  href={location.mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Apri Maps per ${location.name}`}
-                >
-                  Apri Maps <ArrowUpRight aria-hidden="true" />
-                </a>
-              ) : null}
-            </div>
+            {location.note ? (
+              <p className="location-note">{location.note}</p>
+            ) : null}
           </article>
         ))}
       </div>
-    </section>
-  );
-}
-
-function ScheduleSection({ content }: { content: PublicContent }) {
-  return (
-    <section
-      className="schedule-section section-pad"
-      id="programma"
-      aria-labelledby="schedule-title"
-    >
-      <div className="section-heading section-heading--light">
-        <p className="eyebrow">Programma · 02</p>
-        <h2 id="schedule-title">Il ritmo della giornata</h2>
-        <p>Tre momenti essenziali, tutto il resto lo vivremo insieme.</p>
-      </div>
-      <ol className="schedule-list">
-        {content.schedule.map((item, index) => (
-          <li key={item.title}>
-            <span className="schedule-index" aria-hidden="true">
-              0{index + 1}
-            </span>
-            {item.dateTime ? (
-              <time dateTime={item.dateTime}>{item.time}</time>
-            ) : (
-              <span className="schedule-time">{item.time}</span>
-            )}
-            <div>
-              <h3>{item.title}</h3>
-              <p>{item.description}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }
@@ -232,7 +205,7 @@ function StorySection({
       aria-label="La nostra storia"
     >
       <div className="section-heading">
-        <p className="eyebrow">La nostra storia · 03</p>
+        <p className="eyebrow">La nostra storia · 02</p>
         <h2 id="story-title">
           Un sentiero
           <br />
@@ -281,31 +254,6 @@ function StorySection({
           </li>
         ))}
       </ol>
-    </section>
-  );
-}
-
-function DressCodeSection({ content }: { content: PublicContent }) {
-  return (
-    <section
-      className="dress-section section-pad"
-      id="dress-code"
-      aria-labelledby="dress-title"
-    >
-      <div className="dress-copy">
-        <p className="eyebrow">Dress code · 04</p>
-        <h2 id="dress-title">{content.dressCode.name}</h2>
-        <p className="lead">{content.dressCode.description}</p>
-        <p>{content.dressCode.note}</p>
-      </div>
-      <ul className="swatches" aria-label="Palette suggerita">
-        {content.dressCode.colors.map((color) => (
-          <li key={color.name}>
-            <span style={{ backgroundColor: color.value }} aria-hidden="true" />
-            <span>{color.name}</span>
-          </li>
-        ))}
-      </ul>
     </section>
   );
 }

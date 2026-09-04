@@ -10,13 +10,6 @@ export interface WeddingLocation {
   mapsUrl?: string;
 }
 
-export interface ScheduleItem {
-  time: string;
-  dateTime?: string;
-  title: string;
-  description: string;
-}
-
 export type HeroMediaContent =
   | { kind: "art"; label: string }
   | {
@@ -46,11 +39,6 @@ export interface StoryMoment {
   media?: StoryMedia | null;
 }
 
-export interface DressColor {
-  name: string;
-  value: string;
-}
-
 export interface PublicGift {
   id: string;
   category: string;
@@ -76,14 +64,7 @@ export interface PublicContent {
   displayDate: string | null;
   place: string;
   locations: WeddingLocation[];
-  schedule: ScheduleItem[];
   story: StoryMoment[];
-  dressCode: {
-    name: string;
-    description: string;
-    note: string;
-    colors: DressColor[];
-  };
   gifts: PublicGift[];
 }
 
@@ -124,26 +105,6 @@ export const demoPublicContent: PublicContent = {
         "https://www.google.com/maps/search/?api=1&query=Villa%20Cavenago%20Via%20Giuseppe%20Carcassola%2015%20Trezzo%20sull%27Adda"
     }
   ],
-  schedule: [
-    {
-      time: "11:00",
-      dateTime: "11:00",
-      title: "Cerimonia",
-      description: "Chiesa San Giovanni Bosco · fino alle 12.30"
-    },
-    {
-      time: "13:00",
-      dateTime: "13:00",
-      title: "Ricevimento",
-      description: "Villa Cavenago, Trezzo sull'Adda"
-    },
-    {
-      time: "21:30",
-      dateTime: "21:30",
-      title: "Saluti",
-      description: "La conclusione della nostra giornata insieme"
-    }
-  ],
   story: [
     {
       marker: "01",
@@ -172,19 +133,6 @@ export const demoPublicContent: PublicContent = {
       description: "Il sentiero che ci porterà al 24 ottobre 2026."
     }
   ],
-  dressCode: {
-    name: "Vestitevi come state comodi",
-    description:
-      "Non c'è un vero dress code: indossate ciò che vi mette più a vostro agio.",
-    note: "Se vi fa piacere, lasciatevi ispirare dai colori caldi dell'autunno.",
-    colors: [
-      { name: "Rosa antico", value: "#c98a8a" },
-      { name: "Arancio bruciato", value: "#c86a3a" },
-      { name: "Oro caldo", value: "#c7a14a" },
-      { name: "Tortora caldo", value: "#b79e8c" },
-      { name: "Salvia polverosa", value: "#a8a28e" }
-    ]
-  },
   gifts: [
     gift("cucina-01", {
       category: "Cucina",

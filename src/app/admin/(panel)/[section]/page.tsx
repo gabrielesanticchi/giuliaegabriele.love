@@ -4,13 +4,9 @@ import { asc, desc, eq, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
 import {
-  deleteDressColorAction,
   deleteMediaMetadataAction,
-  deleteScheduleItemAction,
   deleteStoryMomentAction,
-  saveDressColorAction,
   saveMediaMetadataAction,
-  saveScheduleItemAction,
   saveStoryMomentAction,
   saveStructuredContentAction
 } from "@/actions/admin/content";
@@ -45,18 +41,15 @@ import { BankingReveal } from "@/components/admin/banking-reveal";
 import { getDatabase } from "@/db";
 import {
   auditLogs,
-  dressCodeColors,
   giftCategories,
   giftIntents,
   gifts,
   mediaAssets,
-  scheduleItems,
   siteSettings,
   storyMoments
 } from "@/db/schema";
 import { getAdminPrincipal } from "@/lib/auth/session";
 import { formatCurrency } from "@/lib/domain/currency";
-import { formatRomeDateTimeLocal } from "@/lib/admin/datetime";
 
 export const dynamic = "force-dynamic";
 
@@ -66,12 +59,10 @@ const sectionTitles = {
     "Identità, apertura e stato editoriale della homepage."
   ],
   matrimonio: ["Il matrimonio", "Data, luoghi e indicazioni pratiche."],
-  programma: ["Programma", "Orari e momenti della giornata."],
   storia: [
     "La nostra storia",
     "Una sequenza editoriale di momenti e immagini."
   ],
-  "dress-code": ["Dress code", "Palette e invito gentile agli ospiti."],
   regali: ["Lista nozze", "Categorie, regali e stato di pubblicazione."],
   richieste: ["Richieste", "Verifiche manuali e stato dei contributi."],
   media: ["Media", "Metadati e testi alternativi degli asset."],
@@ -240,113 +231,6 @@ export default async function AdminSectionPage({
     );
   }
 
-  if (section === "programma") {
-    const rows = await db
-      .select()
-      .from(scheduleItems)
-      .where(isNull(scheduleItems.archivedAt))
-      .orderBy(asc(scheduleItems.sortOrder));
-    return (
-      <>
-        <PageHeader section={section} />
-        <StructuredEditor
-          title="Nuovo appuntamento"
-          description="Titolo, luogo e orari in formato strutturato."
-          action={saveScheduleItemAction}
-          fields={[
-            { name: "title", label: "Titolo", type: "text", required: true },
-            { name: "locationName", label: "Luogo", type: "text" },
-            {
-              name: "startsAt",
-              label: "Inizio",
-              type: "datetime-local",
-              required: true
-            },
-            { name: "endsAt", label: "Fine", type: "datetime-local" },
-            {
-              name: "sortOrder",
-              label: "Ordine",
-              type: "number",
-              defaultValue: rows.length
-            },
-            { name: "published", label: "Pubblicato", type: "checkbox" },
-            { name: "description", label: "Descrizione", type: "textarea" }
-          ]}
-        />
-        <SimpleTable
-          headers={["Titolo", "Luogo", "Stato"]}
-          rows={rows.map((row) => [
-            row.title,
-            row.locationName ?? "—",
-            row.published ? "Pubblicato" : "Bozza"
-          ])}
-        />
-        {rows.map((row) => (
-          <details key={`edit-${row.id}`} className="admin-editor">
-            <summary>Modifica / riordina / archivia: {row.title}</summary>
-            <StructuredEditor
-              title={row.title}
-              description="Modifica contenuto, ordine e pubblicazione."
-              action={saveScheduleItemAction}
-              hidden={{ id: row.id }}
-              fields={[
-                {
-                  name: "title",
-                  label: "Titolo",
-                  type: "text",
-                  required: true,
-                  defaultValue: row.title
-                },
-                {
-                  name: "locationName",
-                  label: "Luogo",
-                  type: "text",
-                  defaultValue: row.locationName ?? ""
-                },
-                {
-                  name: "startsAt",
-                  label: "Inizio",
-                  type: "datetime-local",
-                  required: true,
-                  defaultValue: formatRomeDateTimeLocal(row.startsAt)
-                },
-                {
-                  name: "endsAt",
-                  label: "Fine",
-                  type: "datetime-local",
-                  defaultValue: row.endsAt
-                    ? formatRomeDateTimeLocal(row.endsAt)
-                    : ""
-                },
-                {
-                  name: "sortOrder",
-                  label: "Ordine",
-                  type: "number",
-                  defaultValue: row.sortOrder
-                },
-                {
-                  name: "published",
-                  label: "Pubblicato",
-                  type: "checkbox",
-                  defaultValue: row.published
-                },
-                {
-                  name: "description",
-                  label: "Descrizione",
-                  type: "textarea",
-                  defaultValue: row.description ?? ""
-                }
-              ]}
-            />
-            <form action={deleteScheduleItemAction.bind(null, row.id)}>
-              <button type="submit">Elimina</button>
-            </form>
-          </details>
-        ))}
-      </>
-    );
-  }
-
   if (section === "storia") {
     const [rows, storyMedia] = await Promise.all([
       db
@@ -454,119 +338,6 @@ export default async function AdminSectionPage({
               ]}
             />
             <form action={deleteStoryMomentAction.bind(null, row.id)}>
-              <button type="submit">Elimina</button>
-            </form>
-          </details>
-        ))}
-      </>
-    );
-  }
-
-  if (section === "dress-code") {
-    const [rows, dressRows] = await Promise.all([
-      db
-        .select()
-        .from(dressCodeColors)
-        .where(isNull(dressCodeColors.archivedAt))
-        .orderBy(asc(dressCodeColors.sortOrder)),
-      db
-        .select({ value: siteSettings.value })
-        .from(siteSettings)
-        .where(eq(siteSettings.key, "dress_code"))
-        .limit(1)
-    ]);
-    const dress = (dressRows[0]?.value ?? {}) as {
-      title?: string;
-      description?: string;
-      published?: boolean;
-    };
-    return (
-      <>
-        <PageHeader section={section} />
-        <StructuredEditor
-          title="Testo dress code"
-          description="Titolo e invito mostrati nella sezione pubblica."
-          action={saveStructuredContentAction}
-          hidden={{ key: "dress_code" }}
-          fields={[
-            {
-              name: "title",
-              label: "Titolo",
-              type: "text",
-              required: true,
-              defaultValue: dress.title ?? ""
-            },
-            {
-              name: "description",
-              label: "Descrizione",
-              type: "textarea",
-              defaultValue: dress.description ?? ""
-            },
-            {
-              name: "published",
-              label: "Pubblicato",
-              type: "checkbox",
-              defaultValue: dress.published === true
-            }
-          ]}
-        />
-        <StructuredEditor
-          title="Aggiungi un colore"
-          description="Palette accessibile con nome e valore esadecimale."
-          action={saveDressColorAction}
-          fields={[
-            { name: "name", label: "Nome", type: "text", required: true },
-            {
-              name: "hexColor",
-              label: "Colore",
-              type: "color",
-              required: true,
-              defaultValue: "#c86a3a"
-            },
-            {
-              name: "sortOrder",
-              label: "Ordine",
-              type: "number",
-              defaultValue: rows.length
-            }
-          ]}
-        />
-        <SimpleTable
-          headers={["Nome", "Colore", "Ordine"]}
-          rows={rows.map((row) => [row.name, row.hexColor, row.sortOrder])}
-        />
-        {rows.map((row) => (
-          <details key={`edit-${row.id}`} className="admin-editor">
-            <summary>Modifica / riordina: {row.name}</summary>
-            <StructuredEditor
-              title={row.name}
-              description="Aggiorna colore e ordine."
-              action={saveDressColorAction}
-              hidden={{ id: row.id }}
-              fields={[
-                {
-                  name: "name",
-                  label: "Nome",
-                  type: "text",
-                  required: true,
-                  defaultValue: row.name
-                },
-                {
-                  name: "hexColor",
-                  label: "Colore",
-                  type: "color",
-                  required: true,
-                  defaultValue: row.hexColor
-                },
-                {
-                  name: "sortOrder",
-                  label: "Ordine",
-                  type: "number",
-                  defaultValue: row.sortOrder
-                }
-              ]}
-            />
-            <form action={deleteDressColorAction.bind(null, row.id)}>
               <button type="submit">Elimina</button>
             </form>
           </details>

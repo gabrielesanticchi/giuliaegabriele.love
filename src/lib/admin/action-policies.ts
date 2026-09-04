@@ -8,11 +8,8 @@ import {
 
 export const ADMIN_ACTION_POLICIES = {
   "content.save": "editor",
-  "schedule.save": "editor",
-  "schedule.delete": "editor",
   "story.save": "editor",
   "story.delete": "editor",
-  "dress-code.save": "editor",
   "gift-category.save": "editor",
   "gift.save": "editor",
   "gift.duplicate": "editor",

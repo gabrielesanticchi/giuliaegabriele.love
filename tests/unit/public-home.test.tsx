@@ -38,16 +38,8 @@ describe("PublicHome", () => {
     expect(
       screen.getByText("Via Giuseppe Carcassola 15, Trezzo sull'Adda")
     ).toBeInTheDocument();
-    expect(screen.getByText("11:00", { selector: "time" })).toBeInTheDocument();
-    expect(screen.getByText("11:00", { selector: "time" })).toHaveAttribute(
-      "datetime",
-      "11:00"
-    );
-    expect(screen.getByText("13:00", { selector: "time" })).toBeInTheDocument();
-    expect(screen.getByText("21:30", { selector: "time" })).toHaveAttribute(
-      "datetime",
-      "21:30"
-    );
+    expect(screen.getByText("11:00 – 12:30")).toBeInTheDocument();
+    expect(screen.getByText("Dalle 13:00 alle 21:30")).toBeInTheDocument();
   });
 
   it("nasconde Maps quando il link manca o non è HTTPS", () => {

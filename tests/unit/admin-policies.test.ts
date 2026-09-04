@@ -54,10 +54,7 @@ describe("readiness and publishing", () => {
     weddingConfigured: true,
     weddingPublished: true,
     weddingDateConfigured: true,
-    schedulePublishedCount: 2,
     storyPublishedCount: 1,
-    dressColorCount: 3,
-    dressPublished: true,
     publishedGiftCount: 1,
     bankingConfigured: true,
     requiredMediaReady: true,
@@ -67,13 +64,13 @@ describe("readiness and publishing", () => {
   it("reports every missing requirement and blocks publishing", () => {
     const checklist = getReadinessChecklist({
       ...readyInput,
-      schedulePublishedCount: 0,
+      storyPublishedCount: 0,
       privacyReviewed: false
     });
 
     expect(
       checklist.filter((item) => !item.ready).map((item) => item.key)
-    ).toEqual(["schedule", "privacy"]);
+    ).toEqual(["story", "privacy"]);
     expect(() => assertSiteReady(checklist)).toThrow(
       "Il sito non è pronto per la pubblicazione"
     );

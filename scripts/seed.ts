@@ -8,18 +8,13 @@ import { encryptSecret } from "../src/lib/security/crypto";
  * Idempotent demo seed for development/test only. It refuses to run in
  * production so real deployments never ship demonstrative content. Fixed UUIDs
  * make re-runs a no-op. It populates enough published content for the public
- * home to render (the readiness gate requires published hero/wedding/dress,
- * required media, a reviewed privacy model and encrypted banking instructions).
+ * home to render (the readiness gate requires published hero/wedding, required
+ * media, a reviewed privacy model and encrypted banking instructions).
  */
 const IDS = {
   media: "11111111-1111-4111-8111-111111111111",
-  scheduleCeremony: "22222222-2222-4222-8222-222222222221",
-  scheduleReception: "22222222-2222-4222-8222-222222222222",
-  scheduleFarewell: "22222222-2222-4222-8222-222222222223",
   story1: "33333333-3333-4333-8333-333333333331",
   story2: "33333333-3333-4333-8333-333333333332",
-  color1: "44444444-4444-4444-8444-444444444441",
-  color2: "44444444-4444-4444-8444-444444444442",
   category: "55555555-5555-4555-8555-555555555551",
   gift: "66666666-6666-4666-8666-666666666661"
 };
@@ -36,15 +31,8 @@ async function main() {
   const client = postgres(url, { max: 1 });
   try {
     const db = drizzle(client, { schema });
-    const {
-      siteSettings,
-      mediaAssets,
-      scheduleItems,
-      storyMoments,
-      dressCodeColors,
-      giftCategories,
-      gifts
-    } = schema;
+    const { siteSettings, mediaAssets, storyMoments, giftCategories, gifts } =
+      schema;
 
     await db
       .insert(mediaAssets)
@@ -105,17 +93,6 @@ async function main() {
         }
       },
       {
-        key: "dress_code",
-        value: {
-          key: "dress_code",
-          title: "Vestitevi come state comodi",
-          description:
-            "Non c'è un vero dress code: indossate ciò che vi mette più a vostro agio.",
-          note: "Se vi fa piacere, lasciatevi ispirare dai colori caldi dell'autunno.",
-          published: true
-        }
-      },
-      {
         key: "media_settings",
         value: {
           key: "media_settings",
@@ -156,36 +133,6 @@ async function main() {
     }
 
     await db
-      .insert(scheduleItems)
-      .values([
-        {
-          id: IDS.scheduleCeremony,
-          title: "Cerimonia",
-          description: "Chiesa San Giovanni Bosco · fino alle 12.30",
-          startsAt: new Date("2026-10-24T09:00:00Z"),
-          sortOrder: 0,
-          published: true
-        },
-        {
-          id: IDS.scheduleReception,
-          title: "Ricevimento",
-          description: "Villa Cavenago, Trezzo sull'Adda",
-          startsAt: new Date("2026-10-24T11:00:00Z"),
-          sortOrder: 1,
-          published: true
-        },
-        {
-          id: IDS.scheduleFarewell,
-          title: "Saluti",
-          description: "La conclusione della nostra giornata insieme",
-          startsAt: new Date("2026-10-24T19:30:00Z"),
-          sortOrder: 2,
-          published: true
-        }
-      ])
-      .onConflictDoNothing();
-
-    await db
       .insert(storyMoments)
       .values([
         {
@@ -202,24 +149,6 @@ async function main() {
           body: "Il sentiero che ci porterà al 24 ottobre 2026.",
           sortOrder: 1,
           published: true
-        }
-      ])
-      .onConflictDoNothing();
-
-    await db
-      .insert(dressCodeColors)
-      .values([
-        {
-          id: IDS.color1,
-          name: "Verde bosco",
-          hexColor: "#20342c",
-          sortOrder: 0
-        },
-        {
-          id: IDS.color2,
-          name: "Terracotta",
-          hexColor: "#b6754e",
-          sortOrder: 1
         }
       ])
       .onConflictDoNothing();
