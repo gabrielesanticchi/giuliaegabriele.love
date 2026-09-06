@@ -7,14 +7,10 @@ import {
 } from "@/lib/auth/authorization";
 
 export const ADMIN_ACTION_POLICIES = {
-  "content.save": "editor",
-  "story.save": "editor",
-  "story.delete": "editor",
   "gift-category.save": "editor",
   "gift.save": "editor",
   "gift.duplicate": "editor",
   "gift.archive": "editor",
-  "gift.reorder": "editor",
   "gift.publish": "editor",
   "gift.hide": "editor",
   "request.verify": "owner",
@@ -27,12 +23,8 @@ export const ADMIN_ACTION_POLICIES = {
   "request.resend-email": "owner",
   "request.process-pending-emails": "owner",
   "request.export": "owner",
-  "media.save": "editor",
-  "settings.save": "owner",
   "banking.view": "owner",
-  "banking.save": "owner",
-  "site.publish": "owner",
-  "site.unpublish": "owner"
+  "banking.save": "owner"
 } as const satisfies Record<string, AdminRole>;
 
 export type AdminActionName = keyof typeof ADMIN_ACTION_POLICIES;

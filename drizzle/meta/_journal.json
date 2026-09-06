@@ -29,6 +29,20 @@
       "when": 1788560085370,
       "tag": "0003_drop_schedule_dresscode",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788900002000,
+      "tag": "0004_sweet_quasimodo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788900003000,
+      "tag": "0005_vengeful_spencer_smythe",
+      "breakpoints": true
     }
   ]
 }

@@ -4,24 +4,17 @@ import postgres from "postgres";
 import * as schema from "../src/db/schema";
 import { encryptSecret } from "../src/lib/security/crypto";
 
-/**
- * Idempotent demo seed for development/test only. It refuses to run in
- * production so real deployments never ship demonstrative content. Fixed UUIDs
- * make re-runs a no-op. It populates enough published content for the public
- * home to render (the readiness gate requires published hero/wedding, required
- * media, a reviewed privacy model and encrypted banking instructions).
- */
+/** Seed the minimal operational data needed by the development Lista Nozze. */
 const IDS = {
-  media: "11111111-1111-4111-8111-111111111111",
-  story1: "33333333-3333-4333-8333-333333333331",
-  story2: "33333333-3333-4333-8333-333333333332",
   category: "55555555-5555-4555-8555-555555555551",
   gift: "66666666-6666-4666-8666-666666666661"
 };
 
 async function main() {
   if (process.env.NODE_ENV === "production") {
-    throw new Error("Il seed demo non può essere eseguito in produzione");
+    throw new Error(
+      "Il seed di sviluppo non può essere eseguito in produzione"
+    );
   }
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error("DATABASE_URL non configurato");
@@ -31,127 +24,27 @@ async function main() {
   const client = postgres(url, { max: 1 });
   try {
     const db = drizzle(client, { schema });
-    const { siteSettings, mediaAssets, storyMoments, giftCategories, gifts } =
-      schema;
+    const { siteSettings, giftCategories, gifts } = schema;
+
+    const bankingInstructions = {
+      value: { configured: true },
+      encryptedValue: encryptSecret(
+        JSON.stringify({
+          accountHolder: "Giulia e Gabriele",
+          iban: "IT00X0000000000000000000000",
+          bankName: "Banca dimostrativa"
+        }),
+        encryptionKey
+      )
+    };
 
     await db
-      .insert(mediaAssets)
-      .values({
-        id: IDS.media,
-        pathname: "https://demo.public.blob.vercel-storage.com/storia/demo.jpg",
-        contentType: "image/jpeg",
-        sizeBytes: 512000,
-        altText: "Fotografia dimostrativa della coppia"
-      })
-      .onConflictDoNothing();
-
-    const settings: Array<{
-      key: string;
-      value: Record<string, unknown>;
-      encryptedValue?: string;
-    }> = [
-      {
-        key: "hero",
-        value: {
-          key: "hero",
-          title: "Giulia & Gabriele",
-          description: "Ci sposiamo il 24 ottobre 2026.",
-          published: true,
-          media: { kind: "art", label: "Bosco editoriale" }
-        }
-      },
-      {
-        key: "wedding",
-        value: {
-          key: "wedding",
-          title: "Il matrimonio",
-          description: "Due luoghi, un solo giorno.",
-          weddingDate: "2026-10-24T11:00:00+02:00",
-          displayDate: "24 ottobre 2026",
-          place: "Caleppio di Settala",
-          published: true,
-          locations: [
-            {
-              kind: "ceremony",
-              name: "Chiesa San Giovanni Bosco",
-              address: "Caleppio di Settala",
-              time: "11:00 – 12:30",
-              parking: "Vi aspettiamo qualche minuto prima.",
-              mapsUrl:
-                "https://www.google.com/maps/search/?api=1&query=Chiesa%20San%20Giovanni%20Bosco%20Caleppio%20di%20Settala"
-            },
-            {
-              kind: "reception",
-              name: "Villa Cavenago",
-              address: "Via Giuseppe Carcassola 15, Trezzo sull'Adda",
-              time: "Dalle 13:00 alle 21:30",
-              parking: "Parcheggio in loco.",
-              mapsUrl:
-                "https://www.google.com/maps/search/?api=1&query=Villa%20Cavenago%20Trezzo%20sull%27Adda"
-            }
-          ]
-        }
-      },
-      {
-        key: "media_settings",
-        value: {
-          key: "media_settings",
-          title: "Media",
-          description: "Media richiesti per la pubblicazione.",
-          requiredMediaIds: [IDS.media],
-          published: true
-        }
-      },
-      { key: "site_publication", value: { published: true } },
-      { key: "admin_settings", value: { privacyReviewed: true } },
-      {
-        key: "banking_instructions",
-        value: { configured: true },
-        encryptedValue: encryptSecret(
-          JSON.stringify({
-            holder: "Giulia e Gabriele",
-            iban: "IT00X0000000000000000000000",
-            bank: "Banca dimostrativa"
-          }),
-          encryptionKey
-        )
-      }
-    ];
-
-    for (const setting of settings) {
-      await db
-        .insert(siteSettings)
-        .values(setting)
-        .onConflictDoUpdate({
-          target: siteSettings.key,
-          set: {
-            value: setting.value,
-            encryptedValue: setting.encryptedValue,
-            updatedAt: new Date()
-          }
-        });
-    }
-
-    await db
-      .insert(storyMoments)
-      .values([
-        {
-          id: IDS.story1,
-          title: "Il primo incontro",
-          body: "Uno spazio pronto ad accogliere il nostro racconto.",
-          mediaAssetId: IDS.media,
-          sortOrder: 0,
-          published: true
-        },
-        {
-          id: IDS.story2,
-          title: "Verso il grande giorno",
-          body: "Il sentiero che ci porterà al 24 ottobre 2026.",
-          sortOrder: 1,
-          published: true
-        }
-      ])
-      .onConflictDoNothing();
+      .insert(siteSettings)
+      .values({ key: "banking_instructions", ...bankingInstructions })
+      .onConflictDoUpdate({
+        target: siteSettings.key,
+        set: { ...bankingInstructions, updatedAt: new Date() }
+      });
 
     await db
       .insert(giftCategories)
@@ -170,23 +63,17 @@ async function main() {
         publicReference: "DEMO-CUCINA-01",
         categoryId: IDS.category,
         title: "Tavolo per le cene insieme",
-        description: "Un luogo quotidiano per ritrovarsi.",
+        description: "Un luogo quotidiano per ritrovarsi e ospitare.",
         priceEuros: 1200,
-        progressMode: "discreet",
         published: true,
         sortOrder: 0
       })
       .onConflictDoNothing();
 
-    process.stdout.write("Seed demo applicato (idempotente)\n");
+    process.stdout.write("Seed Lista Nozze applicato (idempotente)\n");
   } finally {
-    await client.end();
+    await client.end({ timeout: 5 });
   }
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(
-    `${error instanceof Error ? error.message : "Seed fallito"}\n`
-  );
-  process.exitCode = 1;
-});
+await main();

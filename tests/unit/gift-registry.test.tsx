@@ -10,7 +10,43 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GiftRegistry } from "@/components/sections/gift-registry";
-import { demoPublicContent } from "@/data/demo-content";
+import type { PublicGift } from "@/data/site-content";
+
+const testGifts: PublicGift[] = [
+  {
+    id: "available",
+    category: "Cucina",
+    name: "Tavolo",
+    description: "Un tavolo per stare insieme.",
+    priceEuros: 1000,
+    status: "available",
+    allowFullGift: true,
+    allowContributions: true,
+    confirmedContributionEuros: 250
+  },
+  {
+    id: "reserved",
+    category: "Soggiorno",
+    name: "Libreria",
+    description: "Una libreria per i nostri ricordi.",
+    priceEuros: 500,
+    status: "reserved",
+    allowFullGift: true,
+    allowContributions: false,
+    confirmedContributionEuros: 0
+  },
+  {
+    id: "gifted",
+    category: "Camera",
+    name: "Tessili",
+    description: "Tessili per la nostra camera.",
+    priceEuros: 300,
+    status: "gifted",
+    allowFullGift: true,
+    allowContributions: false,
+    confirmedContributionEuros: 300
+  }
+];
 
 afterEach(() => {
   cleanup();
@@ -28,11 +64,11 @@ describe("GiftRegistry", () => {
     );
   }
 
-  it("rende otto regali e soltanto i tre stati pubblici previsti", () => {
-    render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
+  it("rende i regali nei tre stati pubblici previsti", () => {
+    render(<GiftRegistry gifts={testGifts} />);
 
-    expect(screen.getAllByRole("article")).toHaveLength(8);
-    expect(screen.getAllByText("DISPONIBILE").length).toBeGreaterThanOrEqual(3);
+    expect(screen.getAllByRole("article")).toHaveLength(3);
+    expect(screen.getByText("DISPONIBILE")).toBeInTheDocument();
     expect(
       screen.getByText("QUALCUNO STA GIÀ PENSANDO A QUESTO REGALO")
     ).toBeInTheDocument();
@@ -41,7 +77,7 @@ describe("GiftRegistry", () => {
 
   it("filtra i regali e aggiorna il conteggio accessibile", async () => {
     const user = userEvent.setup();
-    render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
+    render(<GiftRegistry gifts={testGifts} />);
 
     await user.click(screen.getByRole("button", { name: "In attesa" }));
 
@@ -58,7 +94,7 @@ describe("GiftRegistry", () => {
 
   it("ripristina il focus sulla CTA che ha aperto il dialog", async () => {
     const user = userEvent.setup();
-    render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
+    render(<GiftRegistry gifts={testGifts} />);
     const trigger = screen.getAllByRole("button", { name: "Regala" })[0];
 
     await user.click(trigger);
@@ -71,7 +107,7 @@ describe("GiftRegistry", () => {
 
   it("apre un dialog Regala accessibile con il copy concordato", async () => {
     const user = userEvent.setup();
-    render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
+    render(<GiftRegistry gifts={testGifts} />);
 
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
 
@@ -90,46 +126,16 @@ describe("GiftRegistry", () => {
       )
     ).toBeInTheDocument();
     expect(
+      within(dialog).getByRole("link", { name: "informativa privacy" })
+    ).toHaveAttribute("href", "/privacy");
+    expect(
       within(dialog).getByRole("button", { name: "Chiudi" })
     ).toHaveFocus();
   });
 
-  it("apre il dialog Contribuisci e simula soltanto in demo esplicita", async () => {
-    vi.stubEnv("NODE_ENV", "development");
-    const user = userEvent.setup();
-    const onDemoAction = vi.fn();
-    render(
-      <GiftRegistry
-        gifts={demoPublicContent.gifts}
-        demoMode
-        allowDemoSubmission
-        onDemoAction={onDemoAction}
-      />
-    );
-
-    await user.click(
-      screen.getAllByRole("button", { name: "Contribuisci" })[0]
-    );
-    const dialog = screen.getByRole("dialog", {
-      name: "Anche un piccolo contributo può diventare un mattone della nostra casa."
-    });
-    expect(
-      within(dialog).getByText(
-        /Il pagamento avverrà tramite bonifico e verrà conteggiato nella lista soltanto dopo la nostra verifica\./
-      )
-    ).toBeInTheDocument();
-    await fillGuestForm(user);
-    await user.type(within(dialog).getByLabelText("Importo in euro"), "50");
-    await user.click(within(dialog).getByRole("button", { name: "Continua" }));
-    expect(onDemoAction).toHaveBeenCalledTimes(1);
-    expect(within(dialog).getByRole("status")).toHaveTextContent(
-      "Simulazione completata"
-    );
-  });
-
   it("porta il focus al riepilogo errori quando il form è incompleto", async () => {
     const user = userEvent.setup();
-    render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
+    render(<GiftRegistry gifts={testGifts} />);
 
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     await user.click(screen.getByRole("button", { name: "Continua" }));
@@ -150,7 +156,7 @@ describe("GiftRegistry", () => {
 
   it("collega anche gli errori di telefono e messaggio ai relativi campi", async () => {
     const user = userEvent.setup();
-    render(<GiftRegistry gifts={demoPublicContent.gifts} demoMode />);
+    render(<GiftRegistry gifts={testGifts} />);
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     const phone = screen.getByLabelText("Telefono");
     const message = screen.getByLabelText("Messaggio (facoltativo)");
@@ -182,7 +188,7 @@ describe("GiftRegistry", () => {
       )
     );
     vi.stubGlobal("fetch", fetchMock);
-    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
+    render(<GiftRegistry gifts={testGifts} />);
     await user.click(
       screen.getAllByRole("button", { name: "Contribuisci" })[0]
     );
@@ -201,8 +207,10 @@ describe("GiftRegistry", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const sent = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as {
       amountEuros: number;
+      privacyVersion: string;
     };
     expect(sent.amountEuros).toBe(1234);
+    expect(sent.privacyVersion).toBe("2026-09-05");
   });
 
   it("conserva la idempotency key al retry dopo un errore", async () => {
@@ -228,7 +236,7 @@ describe("GiftRegistry", () => {
         )
       );
     vi.stubGlobal("fetch", fetchMock);
-    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
+    render(<GiftRegistry gifts={testGifts} />);
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     await fillGuestForm(user);
     await user.click(screen.getByRole("button", { name: "Continua" }));
@@ -242,33 +250,6 @@ describe("GiftRegistry", () => {
       JSON.parse(call[1]?.body as string)
     ) as Array<{ idempotencyKey: string }>;
     expect(keys[1]?.idempotencyKey).toBe(keys[0]?.idempotencyKey);
-  });
-
-  it("non simula mai persistenza fuori da development", async () => {
-    vi.stubEnv("NODE_ENV", "test");
-    const user = userEvent.setup();
-    const onDemoAction = vi.fn();
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: { code: "service_unavailable" } }), {
-        status: 503,
-        headers: { "content-type": "application/json" }
-      })
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    render(
-      <GiftRegistry
-        gifts={demoPublicContent.gifts}
-        demoMode
-        allowDemoSubmission
-        onDemoAction={onDemoAction}
-      />
-    );
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
-    await fillGuestForm(user);
-    await user.click(screen.getByRole("button", { name: "Continua" }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(onDemoAction).not.toHaveBeenCalled();
   });
 
   it("gestisce un replay redatto senza aspettarsi link o coordinate", async () => {
@@ -287,7 +268,7 @@ describe("GiftRegistry", () => {
         )
       )
     );
-    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
+    render(<GiftRegistry gifts={testGifts} />);
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     await fillGuestForm(user);
     await user.click(screen.getByRole("button", { name: "Continua" }));
@@ -312,7 +293,7 @@ describe("GiftRegistry", () => {
       });
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<GiftRegistry gifts={demoPublicContent.gifts} />);
+    render(<GiftRegistry gifts={testGifts} />);
 
     await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
     await fillGuestForm(user);

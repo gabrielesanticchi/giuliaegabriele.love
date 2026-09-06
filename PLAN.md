@@ -1,110 +1,38 @@
-# Piano di realizzazione — stato al 19 agosto 2026
+# Stato del progetto — 6 settembre 2026
 
-## Stato sintetico
+## Architettura corrente
 
-| Milestone | Stato | Evidenza principale |
-|---|---|---|
-| 1. Fondazione, qualità e dominio | Completata | Commit `7b9414c`, `da93517`; review PASS |
-| 2. PostgreSQL, cifratura e transazioni Lista Nozze | Completata | Commit `dd3d929` → `0ce1834`; review PASS |
-| 3. Sistema grafico e sito pubblico | Completata | Commit `76e74b9` → `04f04e1`; review PASS |
-| 4. API pubbliche e pagina invitato | Completata | Commit `cde0076` → `892b7a4`; security review PASS |
-| 5. Auth.js (email + password) e amministrazione | Completata | Fix round 4; code+security review PASS (0 CRITICAL/HIGH) |
-| 6. Blob, privacy, SEO e hardening finale | Completata | Blob upload, CSP/header, SEO, health, `.env.example`, scan segreti |
-| 7. E2E, QA visuale e documentazione | Completata | migrate/seed/admin operativi, Playwright+axe 7/7, screenshot 390/768/1440, README/AGENTS |
+- Hero, data, luoghi, indicazioni e storia sono versionati in
+  `src/data/site-content.ts`.
+- PostgreSQL conserva soltanto Lista Nozze, richieste, coordinate bancarie,
+  amministratori, audit, idempotenza, rate limiting ed email.
+- Il sito pubblico non ha un gate di pubblicazione e resta visibile anche se il
+  caricamento dei regali fallisce.
+- L’admin espone Panoramica, Lista Nozze, Richieste e Impostazioni.
+- Non esistono CMS editoriale, preview, upload media, Turnstile o contenuti demo.
 
-## Baseline corrente
+## Migrazione pendente
 
-- `HEAD` prima del fix round 4: `2bbcc85` (`docs: add implementation handoff`).
-- Ultimo gate eseguito (fix round 4): 221/221 unit test, typecheck, ESLint,
-  Prettier, `drizzle-kit check` e build Next.js superati.
-- **Integration test PostgreSQL eseguiti davvero**: 30/30 verdi contro un cluster
-  PostgreSQL 15 effimero locale (socket in `/tmp/wpg`, TCP `127.0.0.1:54329`,
-  `TEST_DATABASE_URL=postgres://wedding@127.0.0.1:54329/wedding_test`). Erano 22
-  test mai eseguiti prima; ora 22 preesistenti + 8 nuovi.
-- Il comando `pnpm` risolto tramite Corepack è guasto nell'ambiente corrente;
-  usare `~/Library/pnpm/pnpm` oppure i binari in `node_modules/.bin`.
-- Nessun deploy, push, provisioning Vercel o modifica DNS è stato eseguito.
+Le migrazioni `drizzle/0004_sweet_quasimodo.sql` e
+`drizzle/0005_vengeful_spencer_smythe.sql` eliminano definitivamente
+`media_assets`, `story_moments`, `gifts.media_asset_id` e il vecchio selettore
+`gifts.progress_mode`. La perdita dei vecchi dati editoriali è stata approvata
+esplicitamente; le migrazioni non sono state eseguite su Vercel.
 
-## Bug di produzione scoperti eseguendo i test di integrazione (Task 2/4)
+## Verifica
 
-Entrambi non erano mai emersi perché la suite PostgreSQL non era mai stata
-eseguita. Corretti con i test falliti come riproduzione:
+Il gate richiesto è:
 
-1. `src/lib/security/rate-limit.ts` interpolava oggetti `Date` grezzi in
-   frammenti `sql` dell'`onConflictDoUpdate`; il driver `postgres` va in crash
-   (`Received an instance of Date`) ad ogni chiamata del rate limiter. Fix: bind
-   di stringhe ISO con cast esplicito `::timestamptz`.
-2. `src/db/transactions/gifts.ts` + `errors.ts` leggevano `code`/`constraint_name`
-   sull'errore di primo livello, ma drizzle incapsula l'errore driver sotto
-   `.cause`. Retry 40001, recovery idempotente 23505 e mapping gift-lock → 409
-   erano quindi silenziosamente saltati (la garanzia “contesa → 409” non era di
-   fatto rispettata). Fix: `findPostgresError` risale la catena `.cause` e
-   seleziona il primo codice con forma SQLSTATE (5 caratteri).
+```text
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:integration  # richiede TEST_DATABASE_URL
+pnpm db:check
+pnpm build
+```
 
-## Fix round 4 di Task 5 — completato
+Specifica e piano dettagliato:
 
-1. Media della storia end-to-end: validazione stessa transazione (esiste e non
-   archiviato), adapter pubblico con `{url, alt, focalPoint}` e resa timeline con
-   `next/image`. Test valido/inesistente/archiviato.
-2. Autenticazione admin con credenziali email + password (Argon2id), sessioni
-   Auth.js e reset password via CLI. Test su login, sessione e reset.
-3. Datetime Europe/Rome: transform Zod con `ctx.addIssue` (niente eccezioni fuori
-   da `safeParse`); la Server Action restituisce “Evento non valido”.
-4. Email outbox: `intentId` nella delivery key, verifica identità sul conflict
-   recovery, azione owner-only idempotente `processPendingEmailDeliveriesAction`
-   in `/admin/richieste`, provider idempotency key stabile, Resend opzionale.
-
-## Task 6 — completato
-
-- Upload Blob autorizzato (`/api/admin/media/upload`, `handleUpload`) con
-  allowlist MIME/dimensione (niente SVG), policy testata; la pathname salvata è
-  la URL https del blob (risolve il vincolo `isSafeMediaUrl`).
-- Env di produzione fail-closed (`src/lib/config/env.ts`, testato) verificate al
-  boot da `instrumentation.ts`.
-- Security header + CSP (`next.config.ts`): niente `unsafe-eval`; Turnstile e
-  Blob con scope, HSTS, nosniff, frame DENY, referrer/permissions policy.
-- SEO: `robots.ts` (Disallow: / in fase noindex), `sitemap.ts`, `manifest.ts`,
-  OG/canonical, favicon; admin resta noindex.
-- Health/readiness `/api/health` (503 se DB irraggiungibile).
-- `.env.example` completo e documentato; scan segreti/PII pulito (nessun segreto
-  nel bundle client, nessun IBAN o segreto hardcoded).
-
-## Task 7 — completato
-
-- `scripts/migrate.ts` e `scripts/seed.ts` (idempotente, dev/test only). Le CLI
-  admin (create/list/reset) ora funzionano: aggiunto `--conditions=react-server`
-  (stub di `server-only`) e `closeDatabase()` per evitare l'hang del pool.
-- Playwright + axe: 12/12 verdi — home (h1/skip-link/tastiera, a11y),
-  registry (filtri toggle, dialog modale con focus-trap/restore, a11y con dialog
-  aperto), pagine pubbliche (privacy a11y, token invitato invalido controllato),
-  admin (login, guardia dashboard), robots, health. Le scansioni axe azzerano le
-  transizioni per misurare lo stato assestato.
-- A11y fix emerso dagli E2E: il widget Turnstile ora usa `role="group"` (prima
-  `aria-label` su `div` senza ruolo → violazione). La bassa contrast della nav
-  era solo un frame di transizione: assestata è `#14231d` su chiaro (~15:1).
-- Screenshot QA 390×844 / 768×1024 / 1440×900 + admin login + dialog contributo
-  con guardia anti-overflow; ispezione visiva OK (in `artifacts/`, git-ignored).
-- `README.md`, `AGENTS.md`, `docs/PRODUCTION_CHECKLIST.md`.
-
-## Note non bloccanti per l'evoluzione futura
-
-- Story media: `next/image unoptimized` è volontario (media utente di origine
-  variabile). Per abilitare l'ottimizzazione, aggiungere `images.remotePatterns`
-  per l'host Blob e adeguare i test dei componenti.
-- `deliverPendingEmailBatch` non usa `FOR UPDATE SKIP LOCKED`: il doppio click
-  concorrente è comunque de-duplicato dalla provider idempotency key.
-- CSP mantiene `unsafe-inline` per script/stili (richiesto dall'hydration Next);
-  valutare una CSP a nonce via middleware come hardening successivo.
-
-## Dopo Task 5
-
-1. Task 6: Vercel Blob, upload sicuro, privacy/retention, SEO/OG, CSP/security
-   header, health/readiness e `.env.example` definitivo.
-2. Task 7: seed/CLI operativi, Playwright completo, axe, screenshot 390/768/1440,
-   QA visuale, README/AGENTS e verifica finale.
-3. Configurare `TEST_DATABASE_URL` e eseguire davvero la suite PostgreSQL prima
-   di dichiarare completo il progetto.
-
-Il piano esecutivo dettagliato resta in
-`docs/superpowers/plans/2026-08-19-wedding-platform.md`; il handoff operativo è
-in `docs/HANDOFF_CLAUDE.md`.
+- `docs/superpowers/specs/2026-09-05-static-wedding-content-design.md`
+- `docs/superpowers/plans/2026-09-05-static-wedding-content.md`

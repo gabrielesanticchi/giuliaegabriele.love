@@ -14,7 +14,7 @@ export default function AdminLoginPage() {
       <section className="admin-login-panel">
         <p className="eyebrow">Area riservata</p>
         <h1>Amministrazione</h1>
-        <p>Contenuti, richieste e pubblicazione del sito.</p>
+        <p>Lista nozze, richieste e contributi.</p>
         <Suspense fallback={<p>Caricamento…</p>}>
           <LoginForm />
         </Suspense>

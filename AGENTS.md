@@ -40,7 +40,7 @@ Drizzle/PostgreSQL, Auth.js con credenziali email + password). Italiano, fuso `E
 
 ## Dove guardare
 
-- Piano e stato: `PLAN.md`, `docs/superpowers/plans/`, `docs/HANDOFF_CLAUDE.md`.
+- Piano e stato: `PLAN.md`, `docs/superpowers/plans/`.
 - Transazioni Lista Nozze: `src/db/transactions/`.
 - Sicurezza/crittografia: `src/lib/security/`, `src/lib/auth/`.
 - Adapter contenuti pubblici: `src/lib/public-content/adapter.ts`.

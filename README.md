@@ -14,7 +14,7 @@ Vercel, ma **questa repository non esegue deploy, push o provisioning**.
 - **PostgreSQL** via **Drizzle ORM** + driver `postgres`
 - **Auth.js (next-auth)** Credentials (email + password) con Argon2id
 - **Zod** per la validazione, **React Hook Form** per i form
-- **Vercel Blob** per i media, **Resend** per le email admin (opzionale)
+- **Resend** per le email admin (opzionale)
 - Anti-abuso dei form pubblici via honeypot + rate limiting PostgreSQL
 - **Vitest** + Testing Library (unit/integration), **Playwright** + axe (E2E/a11y)
 - **Tailwind CSS v4** e sistema grafico originale “Bosco Incantato Editoriale”
@@ -38,8 +38,9 @@ pnpm install
 pnpm dev
 ```
 
-In sviluppo, se il database non è raggiungibile l'app ricade in modo controllato
-sui **contenuti dimostrativi**, quindi `pnpm dev` mostra il sito anche senza DB.
+Hero, data, luoghi e storia sono definiti in `src/data/site-content.ts`, quindi
+il sito resta visibile anche senza database. PostgreSQL serve per Lista Nozze,
+richieste e area amministrativa.
 
 ### Con un database reale (persistenza + area admin)
 
@@ -80,7 +81,7 @@ manca una l'app **non si avvia** (fail-closed). Obbligatorie:
 `DATA_ENCRYPTION_KEY`, `GUEST_TOKEN_SECRET`,
 `REQUEST_FINGERPRINT_SECRET`, `NEXT_PUBLIC_SITE_URL`.
 
-Opzionali: `BLOB_READ_WRITE_TOKEN`, Resend (`RESEND_API_KEY`, `EMAIL_FROM`,
+Opzionali: Resend (`RESEND_API_KEY`, `EMAIL_FROM`,
 `ADMIN_NOTIFICATION_EMAIL`). I form pubblici raccolgono solo nome e telefono
 (nessuna email invitato) e sono protetti da honeypot + rate limiting, senza
 Turnstile. Se Resend non è configurato le email admin vengono registrate come
@@ -96,11 +97,12 @@ Turnstile. Se Resend non è configurato le email admin vengono registrate come
 | `pnpm test`                                                 | Unit test (Vitest, jsdom)                                  |
 | `pnpm test:integration`                                     | Integration test PostgreSQL (richiede `TEST_DATABASE_URL`) |
 | `pnpm test:e2e`                                             | Playwright (richiede un server e browser installati)       |
-| `pnpm db:migrate` · `pnpm db:seed`                          | Migrazioni · seed demo (dev/test)                          |
+| `pnpm db:migrate` · `pnpm db:seed`                          | Migrazioni · seed Lista Nozze (dev/test)                   |
 | `pnpm db:check` · `pnpm db:generate`                        | Verifica/genera migrazioni Drizzle                         |
 | `pnpm admin:create` · `admin:list` · `admin:reset-password` | CLI amministratori                                         |
 
 ## Test
+
 - **Unit**: `pnpm test`.
 - **Integration** (concorrenza, transazioni, outbox, auth): serve un PostgreSQL
   reale. Esempio con un cluster effimero locale (senza Docker):
@@ -123,11 +125,11 @@ Turnstile. Se Resend non è configurato le email admin vengono registrate come
 
 ## Architettura del sistema
 
-Monolite Next.js (App Router) su Vercel: Server Components per contenuti e
-dashboard, Client Components solo per navigazione, countdown, filtri, dialog e
-form. Drizzle parla con PostgreSQL tramite transazioni e vincoli univoci; i
-servizi esterni (Blob, Resend) degradano in modo controllato quando non
-configurati.
+Monolite Next.js (App Router) su Vercel: contenuti del matrimonio versionati nel
+codice, Server Components per Lista Nozze e dashboard, Client Components solo
+per navigazione, countdown, filtri, dialog e form. Drizzle parla con PostgreSQL
+tramite transazioni e vincoli univoci; Resend degrada in modo controllato quando
+non configurato.
 
 ```mermaid
 flowchart TB
@@ -140,18 +142,17 @@ flowchart TB
     direction TB
     PUB["app/(public)<br/>home · privacy · /richiesta/[token]"]
     ADM["app/admin<br/>login · dashboard · CRUD"]
-    API["app/api<br/>health · gifts reserve/contribute<br/>requests · media/upload · auth"]
+    API["app/api<br/>health · gifts reserve/contribute<br/>requests · auth"]
     SA["actions/admin<br/>Server Actions (effect+audit+receipt)"]
-    LIB["lib<br/>security (AES-256-GCM) · auth · rate-limit<br/>email · blob · public-content"]
+    LIB["lib<br/>security (AES-256-GCM) · auth · rate-limit<br/>email · public-content"]
     DBX["db<br/>Drizzle schema + transazioni<br/>reserveGift · contributeToGift · verifyIntent"]
   end
 
   subgraph data["Persistenza"]
-    PG[("PostgreSQL<br/>14 tabelle")]
+    PG[("PostgreSQL<br/>10 tabelle")]
   end
 
-  subgraph ext["Servizi esterni (opzionali)"]
-    BLOB["Vercel Blob"]
+  subgraph ext["Servizio esterno opzionale"]
     RESEND["Resend"]
   end
 
@@ -164,7 +165,6 @@ flowchart TB
   SA --> LIB
   LIB --> DBX
   DBX --> PG
-  LIB -.->|upload firmato, no SVG| BLOB
   LIB -.->|email admin best-effort, no rollback| RESEND
 
   instr["instrumentation.ts<br/>fail-closed env al boot"] -.-> next
@@ -176,12 +176,12 @@ flowchart TB
 giuliaegabriele.love/
 ├── src/
 │   ├── app/
-│   │   ├── (public)/            # home editoriale, privacy, pagina invitato
-│   │   ├── admin/               # login, dashboard, CRUD
-│   │   ├── api/                 # health, gifts, requests, media/upload, auth
+│   │   ├── (public)/            # home, privacy, pagina invitato
+│   │   ├── admin/               # login, dashboard, regali, richieste, impostazioni
+│   │   ├── api/                 # health, gifts, requests, auth
 │   │   ├── layout.tsx           # metadata, OG, canonical, font
 │   │   ├── robots.ts · sitemap.ts · manifest.ts
-│   ├── actions/admin/           # Server Actions (content, gifts, requests, settings)
+│   ├── actions/admin/           # Server Actions (gifts, requests, settings)
 │   ├── components/              # graphics, layout, sections (pubblico), admin (UI)
 │   ├── db/
 │   │   ├── schema/              # tabelle Drizzle + enum e vincoli
@@ -190,13 +190,12 @@ giuliaegabriele.love/
 │   │   ├── security/            # AES-256-GCM, hashing, rate-limit
 │   │   ├── auth/                # Auth.js, password (Argon2id), CLI
 │   │   ├── email/               # template + outbox (Resend opzionale)
-│   │   ├── blob/                # policy upload (allowlist MIME, no SVG)
 │   │   ├── admin/               # policy azioni, idempotenza, audit, datetime
 │   │   ├── config/              # validazione env di produzione (fail-closed)
 │   │   ├── public-content/      # adapter DB → modello pubblico
 │   │   ├── domain/              # valuta, countdown, URL, schemi
 │   ├── styles/                  # design tokens + CSS “Bosco Incantato Editoriale”
-│   └── data/demo-content.ts     # contenuti demo (solo dev/test)
+│   └── data/site-content.ts     # hero, data, luoghi e storia versionati
 ├── scripts/                     # migrate, seed (dev/test), admin CLI
 ├── drizzle/                     # migrazioni SQL generate
 ├── tests/                       # unit (Vitest) · integration (PostgreSQL) · e2e (Playwright+axe)
@@ -204,10 +203,10 @@ giuliaegabriele.love/
 └── next.config.ts               # CSP + security header
 ```
 
-**Tabelle PostgreSQL:** `admin_users`, `site_settings`, `media_assets`,
-`schedule_items`, `story_moments`, `dress_code_colors`, `gift_categories`,
+**Tabelle PostgreSQL:** `admin_users`, `site_settings`, `gift_categories`,
 `gifts`, `gift_intents`, `gift_locks`, `admin_action_receipts`, `audit_logs`,
-`rate_limit_buckets`, `email_deliveries`.
+`rate_limit_buckets`, `email_deliveries`. I contenuti del matrimonio non hanno
+tabelle dedicate: sono versionati in `src/data/site-content.ts`.
 
 Diagramma ER completo (relazioni, foreign key, regole `on delete`):
 [`docs/DATA_MODEL.md`](./docs/DATA_MODEL.md).

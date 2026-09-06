@@ -4,7 +4,7 @@ import { Pause, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { EditorialArt } from "@/components/graphics/editorial-art";
-import type { HeroMediaContent } from "@/data/demo-content";
+import type { HeroMediaContent } from "@/data/site-content";
 
 export interface HeroMediaProps {
   media: HeroMediaContent;

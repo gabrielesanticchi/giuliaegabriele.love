@@ -1,7 +1,8 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { randomBytes, randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -28,15 +29,21 @@ integration(
         connection: { search_path: schemaName }
       });
 
-      const migration = await readFile(
-        new URL("../../drizzle/0000_thick_bishop.sql", import.meta.url),
-        "utf8"
-      );
-      for (const original of migration.split("--> statement-breakpoint")) {
-        const statement = original
-          .trim()
-          .replaceAll('"public".', `"${schemaName}".`);
-        if (statement) await bootstrapSql.unsafe(statement);
+      const migrationsDirectory = new URL("../../drizzle/", import.meta.url);
+      const migrationFiles = (await readdir(migrationsDirectory))
+        .filter((name) => /^\d{4}_.+\.sql$/.test(name))
+        .sort();
+      for (const file of migrationFiles) {
+        const migration = await readFile(
+          new URL(file, migrationsDirectory),
+          "utf8"
+        );
+        for (const original of migration.split("--> statement-breakpoint")) {
+          const statement = original
+            .trim()
+            .replaceAll('"public".', `"${schemaName}".`);
+          if (statement) await bootstrapSql.unsafe(statement);
+        }
       }
       db = createDatabase(bootstrapSql);
     });
@@ -49,7 +56,7 @@ integration(
       }
     });
 
-    it("creates request security columns and index from migration 0000", async () => {
+    it("creates request security columns and index after all migrations", async () => {
       const columns = await adminSql<
         Array<{ column_name: string; is_nullable: "YES" | "NO" }>
       >`
@@ -83,6 +90,112 @@ integration(
         { indexname: "gift_intents_request_fingerprint_idx" }
       ]);
     });
+
+    it("removes obsolete storage from the final database schema", async () => {
+      const tables = await adminSql<Array<{ table_name: string }>>`
+        select table_name
+        from information_schema.tables
+        where table_schema = ${schemaName}
+          and table_name in ('media_assets', 'story_moments')
+        order by table_name
+      `;
+      const giftColumns = await adminSql<Array<{ column_name: string }>>`
+        select column_name
+        from information_schema.columns
+        where table_schema = ${schemaName}
+          and table_name = 'gifts'
+          and column_name in ('media_asset_id', 'progress_mode')
+      `;
+
+      expect(tables).toEqual([]);
+      expect(giftColumns).toEqual([]);
+    });
+
+    it.each([
+      { label: "0002", includesOriginal0003: false },
+      { label: "the original 0003", includesOriginal0003: true }
+    ])(
+      "upgrades a database already migrated through $label",
+      async ({ includesOriginal0003 }) => {
+        const suffix = randomUUID().replaceAll("-", "");
+        const upgradeSchema = `upgrade_${suffix}`;
+        const migrationsSchema = `migrations_${suffix}`;
+        await adminSql.unsafe(`create schema "${upgradeSchema}"`);
+        const upgradeSql = postgres(databaseUrl!, {
+          max: 1,
+          connection: { search_path: upgradeSchema }
+        });
+
+        try {
+          const migrationsDirectory = new URL(
+            "../../drizzle/",
+            import.meta.url
+          );
+          const appliedFiles = [
+            "0000_thick_bishop.sql",
+            "0001_abnormal_mastermind.sql",
+            "0002_euro_amounts.sql"
+          ];
+          if (includesOriginal0003) {
+            appliedFiles.push("0003_drop_schedule_dresscode.sql");
+          }
+          for (const file of appliedFiles) {
+            const migration = await readFile(
+              new URL(file, migrationsDirectory),
+              "utf8"
+            );
+            for (const original of migration.split(
+              "--> statement-breakpoint"
+            )) {
+              const statement = original
+                .trim()
+                .replaceAll('"public".', `"${upgradeSchema}".`);
+              if (statement) await upgradeSql.unsafe(statement);
+            }
+          }
+          await adminSql.unsafe(`create schema "${migrationsSchema}"`);
+          await adminSql.unsafe(`
+          create table "${migrationsSchema}"."__drizzle_migrations" (
+            id serial primary key,
+            hash text not null,
+            created_at bigint
+          )
+        `);
+          await adminSql.unsafe(`
+          insert into "${migrationsSchema}"."__drizzle_migrations"
+            (hash, created_at) values ('through-0002', 1788900000000)
+        `);
+          if (includesOriginal0003) {
+            await adminSql.unsafe(`
+            insert into "${migrationsSchema}"."__drizzle_migrations"
+              (hash, created_at) values ('original-0003', 1788560085370)
+          `);
+          }
+
+          await migrate(createDatabase(upgradeSql), {
+            migrationsFolder: "drizzle",
+            migrationsSchema
+          });
+
+          const obsolete = await adminSql<Array<{ table_name: string }>>`
+          select table_name
+          from information_schema.tables
+          where table_schema = ${upgradeSchema}
+            and table_name in (
+              'dress_code_colors',
+              'schedule_items',
+              'media_assets',
+              'story_moments'
+            )
+        `;
+          expect(obsolete).toEqual([]);
+        } finally {
+          await upgradeSql.end();
+          await adminSql.unsafe(`drop schema "${upgradeSchema}" cascade`);
+          await adminSql.unsafe(`drop schema "${migrationsSchema}" cascade`);
+        }
+      }
+    );
 
     it("supports an exact idempotent retry immediately after bootstrap", async () => {
       const giftId = randomUUID();

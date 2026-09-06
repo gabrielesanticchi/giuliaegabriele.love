@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { assertSiteReady, getReadinessChecklist } from "@/lib/admin/readiness";
 import { buildSafeCsv } from "@/lib/admin/csv";
 import { redactAuditMetadata } from "@/lib/admin/audit";
 
@@ -44,41 +43,5 @@ describe("audit minimization", () => {
       amountEuros: 4_500,
       nested: { note: "nota consentita" }
     });
-  });
-});
-
-describe("readiness and publishing", () => {
-  const readyInput = {
-    heroConfigured: true,
-    heroPublished: true,
-    weddingConfigured: true,
-    weddingPublished: true,
-    weddingDateConfigured: true,
-    storyPublishedCount: 1,
-    publishedGiftCount: 1,
-    bankingConfigured: true,
-    requiredMediaReady: true,
-    privacyReviewed: true
-  };
-
-  it("reports every missing requirement and blocks publishing", () => {
-    const checklist = getReadinessChecklist({
-      ...readyInput,
-      storyPublishedCount: 0,
-      privacyReviewed: false
-    });
-
-    expect(
-      checklist.filter((item) => !item.ready).map((item) => item.key)
-    ).toEqual(["story", "privacy"]);
-    expect(() => assertSiteReady(checklist)).toThrow(
-      "Il sito non è pronto per la pubblicazione"
-    );
-  });
-
-  it("allows publishing only when the complete checklist is ready", () => {
-    expect(() =>
-      assertSiteReady(getReadinessChecklist(readyInput))
-    ).not.toThrow();
   });
 });

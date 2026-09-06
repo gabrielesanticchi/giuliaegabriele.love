@@ -13,7 +13,7 @@ import {
 } from "react";
 import { type Resolver, useForm } from "react-hook-form";
 
-import type { PublicGift } from "@/data/demo-content";
+import type { PublicGift } from "@/data/site-content";
 import { formatCurrency } from "@/lib/domain/currency";
 import {
   contributionGiftFormSchema,
@@ -26,10 +26,7 @@ type GiftAction = "gift" | "contribute";
 
 export interface GiftRegistryProps {
   gifts: PublicGift[];
-  demoMode?: boolean;
-  allowDemoSubmission?: boolean;
   privacyVersion?: string;
-  onDemoAction?: (gift: PublicGift, action: GiftAction) => void;
 }
 
 const filters: ReadonlyArray<{ value: GiftFilter; label: string }> = [
@@ -47,10 +44,7 @@ const statusLabels = {
 
 export function GiftRegistry({
   gifts,
-  demoMode = false,
-  allowDemoSubmission = false,
-  privacyVersion = "draft-2026-08-19",
-  onDemoAction
+  privacyVersion = "2026-09-05"
 }: GiftRegistryProps) {
   const [filter, setFilter] = useState<GiftFilter>("all");
   const [selection, setSelection] = useState<{
@@ -98,20 +92,15 @@ export function GiftRegistry({
             )
           );
           return (
-            <article
-              className={`gift-card${gift.featured ? " gift-card--featured" : ""}`}
-              key={gift.id}
-            >
+            <article className="gift-card" key={gift.id}>
               <div className="gift-art" aria-hidden="true">
                 <span>{String(gifts.indexOf(gift) + 1).padStart(2, "0")}</span>
                 <i />
               </div>
               <div className="gift-copy">
                 <div className="gift-meta">
-                  <span>{gift.room}</span>
                   <span>{gift.category}</span>
                 </div>
-                {gift.label ? <p className="gift-label">{gift.label}</p> : null}
                 <h3>{gift.name}</h3>
                 <p>{gift.description}</p>
                 <p className={`gift-status gift-status--${gift.status}`}>
@@ -171,10 +160,7 @@ export function GiftRegistry({
       <GiftActionDialog
         selection={selection}
         onOpenChange={(open) => !open && setSelection(null)}
-        demoMode={demoMode}
-        allowDemoSubmission={allowDemoSubmission}
         privacyVersion={privacyVersion}
-        onDemoAction={onDemoAction}
         invokerRef={invokerRef}
       />
     </>
@@ -184,20 +170,14 @@ export function GiftRegistry({
 interface GiftActionDialogProps {
   selection: { gift: PublicGift; action: GiftAction } | null;
   onOpenChange: (open: boolean) => void;
-  demoMode: boolean;
-  allowDemoSubmission: boolean;
   privacyVersion: string;
-  onDemoAction?: (gift: PublicGift, action: GiftAction) => void;
   invokerRef: RefObject<HTMLButtonElement | null>;
 }
 
 function GiftActionDialog({
   selection,
   onOpenChange,
-  demoMode,
-  allowDemoSubmission,
   privacyVersion,
-  onDemoAction,
   invokerRef
 }: GiftActionDialogProps) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -238,7 +218,7 @@ function GiftActionDialog({
               <X aria-hidden="true" />
             </button>
           </Dialog.Close>
-          <p className="eyebrow">{selection?.gift.room}</p>
+          <p className="eyebrow">{selection?.gift.category}</p>
           <Dialog.Title>{title}</Dialog.Title>
           <Dialog.Description>{description}</Dialog.Description>
           {!isContribution ? (
@@ -251,10 +231,7 @@ function GiftActionDialog({
             <GiftIntentForm
               key={`${selection.gift.id}:${selection.action}`}
               selection={selection}
-              demoMode={demoMode}
-              allowDemoSubmission={allowDemoSubmission}
               privacyVersion={privacyVersion}
-              onDemoAction={onDemoAction}
             />
           ) : null}
         </Dialog.Content>
@@ -305,16 +282,10 @@ type GiftSuccess = GiftFirstSuccess | GiftReplaySuccess;
 
 function GiftIntentForm({
   selection,
-  demoMode,
-  allowDemoSubmission,
-  privacyVersion,
-  onDemoAction
+  privacyVersion
 }: {
   selection: { gift: PublicGift; action: GiftAction };
-  demoMode: boolean;
-  allowDemoSubmission: boolean;
   privacyVersion: string;
-  onDemoAction?: (gift: PublicGift, action: GiftAction) => void;
 }) {
   const isContribution = selection.action === "contribute";
   const formId = useId();
@@ -360,16 +331,6 @@ function GiftIntentForm({
   const submit = handleSubmit(
     async (values) => {
       setFeedback(null);
-      if (
-        demoMode &&
-        allowDemoSubmission &&
-        process.env.NODE_ENV === "development"
-      ) {
-        onDemoAction?.(selection.gift, selection.action);
-        setFeedback({ kind: "success", message: "Simulazione completata." });
-        return;
-      }
-
       const requestKey = idempotencyKey ?? crypto.randomUUID();
       if (!idempotencyKey) setIdempotencyKey(requestKey);
       const common = {
@@ -657,7 +618,12 @@ function GiftIntentForm({
               }
               {...register("privacyAccepted")}
             />
-            Ho letto e accetto l’informativa privacy
+            <span>
+              Ho letto e accetto l’
+              <a href="/privacy" target="_blank" rel="noopener noreferrer">
+                informativa privacy
+              </a>
+            </span>
           </label>
           {fieldError(
             errors.privacyAccepted?.message,

@@ -64,7 +64,7 @@ export async function runAdminIdempotentTransaction<
       sql`select pg_advisory_xact_lock(hashtextextended(${logicalKey}, 0))`
     );
     await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext('publication_content'))`
+      sql`select pg_advisory_xact_lock(hashtext('admin_mutations'))`
     );
     const existing = await tx
       .select()

@@ -349,32 +349,17 @@
   display: inline-flex;
   align-items: center;
 }
-.waiting-page,
 .legal-page {
   min-height: 100svh;
   padding: clamp(3rem, 10vw, 8rem) var(--page-pad);
 }
-.waiting-page {
-  display: grid;
-  place-items: center;
-  align-content: center;
-  color: var(--color-paper);
-  background: var(--color-deep);
-  text-align: center;
-}
-.waiting-page .monogram,
 .legal-page > .monogram {
   width: 6rem;
   margin-bottom: 1.5rem;
 }
-.waiting-page h1,
 .legal-page h1 {
   max-width: 60rem;
   font-size: clamp(3.5rem, 10vw, 8rem);
-}
-.waiting-page > p:last-child {
-  max-width: 38rem;
-  color: rgb(251 246 236 / 75%);
 }
 .legal-page {
   width: min(100%, 70rem);

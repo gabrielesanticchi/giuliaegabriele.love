@@ -4,30 +4,22 @@ import { describe, expect, it } from "vitest";
 import { AdminNavigation } from "@/components/admin/admin-navigation";
 import { StructuredEditor } from "@/components/admin/structured-editor";
 
-describe("admin editorial interface", () => {
-  it("exposes the complete Italian navigation", () => {
+describe("admin operational interface", () => {
+  it("exposes only the Lista Nozze operational navigation", () => {
     render(<AdminNavigation />);
 
-    for (const label of [
-      "Panoramica",
-      "Sito e Hero",
-      "Il matrimonio",
-      "La nostra storia",
-      "Lista nozze",
-      "Richieste",
-      "Media",
-      "Impostazioni",
-      "Audit log"
-    ]) {
+    const expected = ["Panoramica", "Lista nozze", "Richieste", "Impostazioni"];
+    for (const label of expected) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
+    expect(screen.getAllByRole("link")).toHaveLength(expected.length);
   });
 
   it("renders constrained fields rather than a free-form HTML editor", () => {
     render(
       <StructuredEditor
-        title="Sito e Hero"
-        description="Contenuti principali"
+        title="Lista nozze"
+        description="Nuovo regalo"
         action={async () => ({ ok: true, message: "salvato" })}
         hidden={{ key: "hero" }}
         fields={[

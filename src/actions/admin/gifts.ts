@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDatabase } from "@/db";
@@ -33,7 +33,6 @@ const giftSchema = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2_000).optional(),
   priceEuros: z.coerce.number().int().min(0).max(1_000_000),
-  progressMode: z.enum(["hidden", "discreet", "exact"]),
   sortOrder: z.coerce.number().int().min(0),
   published: z.boolean()
 });
@@ -103,7 +102,6 @@ export async function saveGiftAction(
     title: formData.get("title"),
     description: formData.get("description") || undefined,
     priceEuros: formData.get("priceEuros"),
-    progressMode: formData.get("progressMode"),
     sortOrder: formData.get("sortOrder") ?? 0,
     published: formData.get("published") === "on"
   });
@@ -210,34 +208,4 @@ export async function setGiftPublishedAction(id: string, published: boolean) {
     }
   });
   await refreshAdmin("/admin/regali");
-}
-
-export async function reorderGiftsAction(orderedIds: string[]) {
-  const admin = await authorizedAdmin("gift.reorder");
-  const ids = z.array(z.uuid()).min(1).max(500).parse(orderedIds);
-  await runAuditedAdminMutation({
-    actorAdminId: admin.id,
-    action: "gift.reordered",
-    targetType: "gift_collection",
-    metadata: { count: ids.length },
-    mutation: async (tx) => {
-      for (const [sortOrder, id] of ids.entries()) {
-        const updated = await tx
-          .update(gifts)
-          .set({ sortOrder, updatedAt: new Date() })
-          .where(eq(gifts.id, id))
-          .returning({ id: gifts.id });
-        if (!updated[0]) throw new Error("Regalo non trovato");
-      }
-    }
-  });
-  await refreshAdmin("/admin/regali");
-}
-
-export async function nextGiftSortOrder() {
-  await authorizedAdmin("gift.save");
-  const rows = await getDatabase()
-    .select({ value: sql<number>`coalesce(max(${gifts.sortOrder}), -1) + 1` })
-    .from(gifts);
-  return Number(rows[0]?.value ?? 0);
 }

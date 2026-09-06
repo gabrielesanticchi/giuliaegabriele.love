@@ -1,13 +1,8 @@
 const items = [
   ["/admin", "Panoramica"],
-  ["/admin/sito", "Sito e Hero"],
-  ["/admin/matrimonio", "Il matrimonio"],
-  ["/admin/storia", "La nostra storia"],
   ["/admin/regali", "Lista nozze"],
   ["/admin/richieste", "Richieste"],
-  ["/admin/media", "Media"],
-  ["/admin/impostazioni", "Impostazioni"],
-  ["/admin/audit", "Audit log"]
+  ["/admin/impostazioni", "Impostazioni"]
 ] as const;
 
 export function AdminNavigation() {

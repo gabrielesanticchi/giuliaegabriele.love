@@ -7,20 +7,16 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { GiftRegistry } from "@/components/sections/gift-registry";
 import { HeroMedia } from "@/components/sections/hero-media";
 import { WeddingCountdown } from "@/components/sections/wedding-countdown";
-import type { PublicContent } from "@/data/demo-content";
+import type { PublicContent } from "@/data/site-content";
 import { isSafeExternalUrl } from "@/lib/domain/urls";
 
 export interface PublicHomeProps {
   content: PublicContent;
-  demoMode?: boolean;
-  allowDemoSubmission?: boolean;
   initialNow?: string;
 }
 
 export function PublicHome({
   content,
-  demoMode = false,
-  allowDemoSubmission = false,
   initialNow = new Date().toISOString()
 }: PublicHomeProps) {
   return (
@@ -32,7 +28,7 @@ export function PublicHome({
       <main id="contenuto">
         <Hero content={content} initialNow={initialNow} />
         <WeddingSection content={content} />
-        <StorySection content={content} demoMode={demoMode} />
+        <StorySection content={content} />
         <section
           className="registry-section section-pad"
           id="lista-nozze"
@@ -60,11 +56,7 @@ export function PublicHome({
               resterà con noi.
             </p>
           </div>
-          <GiftRegistry
-            gifts={content.gifts}
-            demoMode={demoMode}
-            allowDemoSubmission={allowDemoSubmission}
-          />
+          <GiftRegistry gifts={content.gifts} />
         </section>
       </main>
       <footer className="site-footer">
@@ -190,13 +182,7 @@ function WeddingSection({ content }: { content: PublicContent }) {
   );
 }
 
-function StorySection({
-  content,
-  demoMode
-}: {
-  content: PublicContent;
-  demoMode: boolean;
-}) {
+function StorySection({ content }: { content: PublicContent }) {
   return (
     <section
       className="story-section section-pad"
@@ -211,7 +197,6 @@ function StorySection({
           <br />
           da raccontare
         </h2>
-        {demoMode ? <p className="demo-label">Contenuti dimostrativi</p> : null}
       </div>
       <ol className="story-list">
         {content.story.map((moment) => (
@@ -237,11 +222,7 @@ function StorySection({
                 />
               ) : (
                 <EditorialArt
-                  label={
-                    demoMode
-                      ? `Segnaposto demo: ${moment.title}`
-                      : `Illustrazione originale per ${moment.title}`
-                  }
+                  label={`Illustrazione originale per ${moment.title}`}
                   variant="path"
                 />
               )}

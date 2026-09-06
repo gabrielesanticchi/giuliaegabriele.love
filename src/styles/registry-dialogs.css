@@ -87,10 +87,6 @@
   font-size: 0.7rem;
   letter-spacing: 0.12em;
 }
-.gift-card--featured .gift-art {
-  color: var(--color-paper);
-  background: var(--color-forest);
-}
 .gift-copy {
   padding: 1.5rem 0.25rem 1rem;
 }
@@ -103,18 +99,11 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.gift-label {
-  color: var(--color-clay-text);
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
 .gift-copy h3 {
   margin: 0.75rem 0 1rem;
   font-size: clamp(2rem, 4vw, 3rem);
 }
-.gift-copy > p:not(.gift-status, .gift-price, .gift-label) {
+.gift-copy > p:not(.gift-status, .gift-price) {
   color: var(--color-muted);
 }
 .gift-status {
@@ -348,12 +337,6 @@
   .gift-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .gift-card--featured {
-    grid-column: span 2;
-    display: grid;
-    grid-template-columns: 1.25fr 0.75fr;
-    gap: 2rem;
-  }
   .gift-dialog {
     right: clamp(2rem, 8vw, 8rem);
     bottom: 2rem;
@@ -365,9 +348,6 @@
 @media (min-width: 70rem) {
   .gift-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-  .gift-card--featured {
-    grid-column: span 2;
   }
 }
 @keyframes sheet-in {

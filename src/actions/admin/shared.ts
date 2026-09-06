@@ -2,7 +2,7 @@ import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 import { sql } from "drizzle-orm";
 
 import { getDatabase, type WeddingDatabase } from "@/db";
@@ -47,7 +47,7 @@ export async function runAuditedAdminMutation<T>(input: {
 }): Promise<T> {
   return getDatabase().transaction(async (tx) => {
     await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext('publication_content'))`
+      sql`select pg_advisory_xact_lock(hashtext('admin_mutations'))`
     );
     const result = await input.mutation(tx);
     await tx.insert(auditLogs).values({
@@ -67,7 +67,7 @@ export async function runAuditedAdminMutation<T>(input: {
 
 export function refreshAdmin(path: string) {
   revalidatePath(path);
-  revalidateTag("public-content", "max");
+  revalidatePath("/");
 }
 
 export type AdminActionResult =

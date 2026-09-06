@@ -76,44 +76,6 @@ export const siteSettings = pgTable("site_settings", {
   ...timestamps
 });
 
-export const mediaAssets = pgTable(
-  "media_assets",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    pathname: text("pathname").notNull(),
-    contentType: varchar("content_type", { length: 127 }).notNull(),
-    sizeBytes: integer("size_bytes").notNull(),
-    altText: text("alt_text").default("").notNull(),
-    archivedAt: timestamp("archived_at", { withTimezone: true }),
-    ...timestamps
-  },
-  (table) => [
-    uniqueIndex("media_assets_pathname_unique").on(table.pathname),
-    check("media_assets_size_nonnegative", sql`${table.sizeBytes} >= 0`)
-  ]
-);
-
-export const storyMoments = pgTable(
-  "story_moments",
-  {
-    id: uuid("id").defaultRandom().primaryKey(),
-    title: text("title").notNull(),
-    body: text("body").notNull(),
-    occurredOn: timestamp("occurred_on", {
-      withTimezone: true,
-      mode: "date"
-    }),
-    mediaAssetId: uuid("media_asset_id").references(() => mediaAssets.id, {
-      onDelete: "set null"
-    }),
-    sortOrder: integer("sort_order").default(0).notNull(),
-    published: boolean("published").default(false).notNull(),
-    archivedAt: timestamp("archived_at", { withTimezone: true }),
-    ...timestamps
-  },
-  (table) => [index("story_moments_sort_order_idx").on(table.sortOrder)]
-);
-
 export const giftCategories = pgTable(
   "gift_categories",
   {
@@ -135,15 +97,9 @@ export const gifts = pgTable(
     categoryId: uuid("category_id").references(() => giftCategories.id, {
       onDelete: "set null"
     }),
-    mediaAssetId: uuid("media_asset_id").references(() => mediaAssets.id, {
-      onDelete: "set null"
-    }),
     title: text("title").notNull(),
     description: text("description"),
     priceEuros: integer("price_euros").notNull(),
-    progressMode: varchar("progress_mode", { length: 20 })
-      .default("discreet")
-      .notNull(),
     completed: boolean("completed").default(false).notNull(),
     published: boolean("published").default(false).notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -154,11 +110,7 @@ export const gifts = pgTable(
     uniqueIndex("gifts_public_reference_unique").on(table.publicReference),
     index("gifts_category_idx").on(table.categoryId),
     index("gifts_completed_idx").on(table.completed),
-    check("gifts_price_nonnegative", sql`${table.priceEuros} >= 0`),
-    check(
-      "gifts_progress_mode_valid",
-      sql`${table.progressMode} in ('hidden', 'discreet', 'exact')`
-    )
+    check("gifts_price_nonnegative", sql`${table.priceEuros} >= 0`)
   ]
 );
 

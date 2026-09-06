@@ -1,15 +1,8 @@
 import { randomUUID } from "node:crypto";
 
-import { asc, desc, eq, isNull } from "drizzle-orm";
+import { asc, desc, isNull } from "drizzle-orm";
 import { notFound } from "next/navigation";
 
-import {
-  deleteMediaMetadataAction,
-  deleteStoryMomentAction,
-  saveMediaMetadataAction,
-  saveStoryMomentAction,
-  saveStructuredContentAction
-} from "@/actions/admin/content";
 import {
   archiveGiftAction,
   archiveGiftCategoryAction,
@@ -29,48 +22,20 @@ import {
   unlockRequestAction,
   verifyRequestAction
 } from "@/actions/admin/requests";
-import {
-  loadReadiness,
-  publishSiteAction,
-  saveAdminSettingsAction,
-  saveBankingAction,
-  unpublishSiteAction
-} from "@/actions/admin/settings";
+import { saveBankingAction } from "@/actions/admin/settings";
 import { StructuredEditor } from "@/components/admin/structured-editor";
 import { BankingReveal } from "@/components/admin/banking-reveal";
 import { getDatabase } from "@/db";
-import {
-  auditLogs,
-  giftCategories,
-  giftIntents,
-  gifts,
-  mediaAssets,
-  siteSettings,
-  storyMoments
-} from "@/db/schema";
+import { giftCategories, giftIntents, gifts } from "@/db/schema";
 import { getAdminPrincipal } from "@/lib/auth/session";
 import { formatCurrency } from "@/lib/domain/currency";
 
 export const dynamic = "force-dynamic";
 
 const sectionTitles = {
-  sito: [
-    "Sito e Hero",
-    "Identità, apertura e stato editoriale della homepage."
-  ],
-  matrimonio: ["Il matrimonio", "Data, luoghi e indicazioni pratiche."],
-  storia: [
-    "La nostra storia",
-    "Una sequenza editoriale di momenti e immagini."
-  ],
   regali: ["Lista nozze", "Categorie, regali e stato di pubblicazione."],
   richieste: ["Richieste", "Verifiche manuali e stato dei contributi."],
-  media: ["Media", "Metadati e testi alternativi degli asset."],
-  impostazioni: [
-    "Impostazioni",
-    "Privacy, coordinate riservate e pubblicazione."
-  ],
-  audit: ["Audit log", "Traccia minimizzata delle operazioni amministrative."]
+  impostazioni: ["Impostazioni", "Coordinate bancarie riservate."]
 } as const;
 
 type Section = keyof typeof sectionTitles;
@@ -84,11 +49,6 @@ function PageHeader({ section }: { section: Section }) {
         <h1>{title}</h1>
         <p>{description}</p>
       </div>
-      {section !== "audit" ? (
-        <a className="admin-action" href="/admin/preview">
-          Anteprima
-        </a>
-      ) : null}
     </header>
   );
 }
@@ -102,249 +62,6 @@ export default async function AdminSectionPage({
   if (!(rawSection in sectionTitles)) notFound();
   const section = rawSection as Section;
   const db = getDatabase();
-
-  if (section === "sito" || section === "matrimonio") {
-    const key = section === "sito" ? "hero" : "wedding";
-    const existingRows = await db
-      .select({ value: siteSettings.value })
-      .from(siteSettings)
-      .where(eq(siteSettings.key, key))
-      .limit(1);
-    const existing = (existingRows[0]?.value ?? {}) as {
-      title?: string;
-      description?: string;
-      published?: boolean;
-      weddingDate?: string;
-      displayDate?: string;
-      place?: string;
-      locations?: Array<{
-        kind: "ceremony" | "reception";
-        name: string;
-        address: string;
-        time: string;
-        parking?: string;
-        mapsUrl: string;
-      }>;
-    };
-    const ceremony = existing.locations?.find(
-      (location) => location.kind === "ceremony"
-    );
-    const reception = existing.locations?.find(
-      (location) => location.kind === "reception"
-    );
-    return (
-      <>
-        <PageHeader section={section} />
-        <StructuredEditor
-          title={sectionTitles[section][0]}
-          description="Campi testuali controllati, senza HTML libero."
-          action={saveStructuredContentAction}
-          hidden={{ key }}
-          submitLabel="Salva contenuto"
-          fields={[
-            {
-              name: "title",
-              label: "Titolo",
-              type: "text",
-              required: true,
-              defaultValue: existing.title ?? ""
-            },
-            {
-              name: "description",
-              label: "Testo",
-              type: "textarea",
-              defaultValue: existing.description ?? ""
-            },
-            ...(section === "matrimonio"
-              ? [
-                  {
-                    name: "weddingDate",
-                    label: "Data ISO con fuso",
-                    type: "text" as const,
-                    required: true,
-                    defaultValue: existing.weddingDate ?? ""
-                  },
-                  {
-                    name: "displayDate",
-                    label: "Data visualizzata",
-                    type: "text" as const,
-                    defaultValue: existing.displayDate ?? ""
-                  },
-                  {
-                    name: "place",
-                    label: "Luogo",
-                    type: "text" as const,
-                    defaultValue: existing.place ?? ""
-                  },
-                  ...(["ceremony", "reception"] as const).flatMap((kind) => {
-                    const location = kind === "ceremony" ? ceremony : reception;
-                    const prefix =
-                      kind === "ceremony" ? "Cerimonia" : "Ricevimento";
-                    return [
-                      {
-                        name: `${kind}Name`,
-                        label: `${prefix}: nome`,
-                        type: "text" as const,
-                        required: true,
-                        defaultValue: location?.name ?? ""
-                      },
-                      {
-                        name: `${kind}Address`,
-                        label: `${prefix}: indirizzo`,
-                        type: "text" as const,
-                        required: true,
-                        defaultValue: location?.address ?? ""
-                      },
-                      {
-                        name: `${kind}Time`,
-                        label: `${prefix}: orario`,
-                        type: "text" as const,
-                        required: true,
-                        defaultValue: location?.time ?? ""
-                      },
-                      {
-                        name: `${kind}Parking`,
-                        label: `${prefix}: parcheggio`,
-                        type: "textarea" as const,
-                        defaultValue: location?.parking ?? ""
-                      },
-                      {
-                        name: `${kind}MapsUrl`,
-                        label: `${prefix}: link Maps HTTPS`,
-                        type: "text" as const,
-                        required: true,
-                        defaultValue: location?.mapsUrl ?? ""
-                      }
-                    ];
-                  })
-                ]
-              : []),
-            {
-              name: "published",
-              label: "Pubblicato",
-              type: "checkbox",
-              defaultValue: existing.published === true
-            }
-          ]}
-        />
-      </>
-    );
-  }
-
-  if (section === "storia") {
-    const [rows, storyMedia] = await Promise.all([
-      db
-        .select()
-        .from(storyMoments)
-        .where(isNull(storyMoments.archivedAt))
-        .orderBy(asc(storyMoments.sortOrder)),
-      db
-        .select()
-        .from(mediaAssets)
-        .where(isNull(mediaAssets.archivedAt))
-        .orderBy(desc(mediaAssets.createdAt))
-    ]);
-    const mediaOptions = [
-      { label: "Nessun media", value: "" },
-      ...storyMedia.map((asset) => ({ label: asset.altText, value: asset.id }))
-    ];
-    return (
-      <>
-        <PageHeader section={section} />
-        <StructuredEditor
-          title="Nuovo momento"
-          description="Testo narrativo e data, senza editor HTML."
-          action={saveStoryMomentAction}
-          fields={[
-            { name: "title", label: "Titolo", type: "text", required: true },
-            { name: "occurredOn", label: "Data", type: "date" },
-            {
-              name: "mediaAssetId",
-              label: "Media",
-              type: "select",
-              options: mediaOptions
-            },
-            {
-              name: "sortOrder",
-              label: "Ordine",
-              type: "number",
-              defaultValue: rows.length
-            },
-            { name: "published", label: "Pubblicato", type: "checkbox" },
-            {
-              name: "body",
-              label: "Racconto",
-              type: "textarea",
-              required: true
-            }
-          ]}
-        />
-        <SimpleTable
-          headers={["Titolo", "Ordine", "Stato"]}
-          rows={rows.map((row) => [
-            row.title,
-            row.sortOrder,
-            row.published ? "Pubblicato" : "Bozza"
-          ])}
-        />
-        {rows.map((row) => (
-          <details key={`edit-${row.id}`} className="admin-editor">
-            <summary>Modifica / riordina / archivia: {row.title}</summary>
-            <StructuredEditor
-              title={row.title}
-              description="Modifica contenuto, ordine e pubblicazione."
-              action={saveStoryMomentAction}
-              hidden={{ id: row.id }}
-              fields={[
-                {
-                  name: "title",
-                  label: "Titolo",
-                  type: "text",
-                  required: true,
-                  defaultValue: row.title
-                },
-                {
-                  name: "occurredOn",
-                  label: "Data",
-                  type: "date",
-                  defaultValue: row.occurredOn?.toISOString().slice(0, 10) ?? ""
-                },
-                {
-                  name: "mediaAssetId",
-                  label: "Media",
-                  type: "select",
-                  defaultValue: row.mediaAssetId ?? "",
-                  options: mediaOptions
-                },
-                {
-                  name: "sortOrder",
-                  label: "Ordine",
-                  type: "number",
-                  defaultValue: row.sortOrder
-                },
-                {
-                  name: "published",
-                  label: "Pubblicato",
-                  type: "checkbox",
-                  defaultValue: row.published
-                },
-                {
-                  name: "body",
-                  label: "Racconto",
-                  type: "textarea",
-                  required: true,
-                  defaultValue: row.body
-                }
-              ]}
-            />
-            <form action={deleteStoryMomentAction.bind(null, row.id)}>
-              <button type="submit">Elimina</button>
-            </form>
-          </details>
-        ))}
-      </>
-    );
-  }
 
   if (section === "regali") {
     const [categories, giftRows] = await Promise.all([
@@ -407,17 +124,6 @@ export default async function AdminSectionPage({
               label: "Prezzo (euro)",
               type: "number",
               required: true
-            },
-            {
-              name: "progressMode",
-              label: "Progresso",
-              type: "select",
-              defaultValue: "discreet",
-              options: [
-                { label: "Discreto", value: "discreet" },
-                { label: "Esatto", value: "exact" },
-                { label: "Nascosto", value: "hidden" }
-              ]
             },
             {
               name: "sortOrder",
@@ -522,17 +228,6 @@ export default async function AdminSectionPage({
                           type: "number",
                           required: true,
                           defaultValue: row.priceEuros
-                        },
-                        {
-                          name: "progressMode",
-                          label: "Progresso",
-                          type: "select",
-                          defaultValue: row.progressMode,
-                          options: [
-                            { label: "Discreto", value: "discreet" },
-                            { label: "Esatto", value: "exact" },
-                            { label: "Nascosto", value: "hidden" }
-                          ]
                         },
                         {
                           name: "sortOrder",
@@ -816,186 +511,13 @@ export default async function AdminSectionPage({
     );
   }
 
-  if (section === "media") {
-    const [rows, mediaSettingRows] = await Promise.all([
-      db
-        .select()
-        .from(mediaAssets)
-        .where(isNull(mediaAssets.archivedAt))
-        .orderBy(desc(mediaAssets.createdAt)),
-      db
-        .select({ value: siteSettings.value })
-        .from(siteSettings)
-        .where(eq(siteSettings.key, "media_settings"))
-        .limit(1)
-    ]);
-    const mediaSettings = (mediaSettingRows[0]?.value ?? {}) as {
-      requiredMediaIds?: string[];
-    };
-    return (
-      <>
-        <PageHeader section={section} />
-        <StructuredEditor
-          title="Registra un media"
-          description="Solo metadati; il caricamento Blob resta una boundary separata."
-          action={saveMediaMetadataAction}
-          fields={[
-            {
-              name: "pathname",
-              label: "Percorso",
-              type: "text",
-              required: true
-            },
-            {
-              name: "contentType",
-              label: "Tipo",
-              type: "select",
-              options: [
-                "image/jpeg",
-                "image/png",
-                "image/webp",
-                "video/mp4"
-              ].map((value) => ({ label: value, value }))
-            },
-            {
-              name: "sizeBytes",
-              label: "Dimensione (byte)",
-              type: "number",
-              required: true
-            },
-            {
-              name: "altText",
-              label: "Testo alternativo",
-              type: "textarea",
-              required: true
-            }
-          ]}
-        />
-        <StructuredEditor
-          title="Media obbligatori"
-          description="ID media referenziati che devono esistere prima della pubblicazione."
-          action={saveStructuredContentAction}
-          hidden={{
-            key: "media_settings",
-            title: "Media obbligatori",
-            description: ""
-          }}
-          fields={[
-            {
-              name: "requiredMediaIds",
-              label: "ID separati da virgola",
-              type: "text",
-              required: true,
-              defaultValue: mediaSettings.requiredMediaIds?.join(", ") ?? ""
-            },
-            {
-              name: "published",
-              label: "Configurazione verificata",
-              type: "checkbox",
-              defaultValue: true
-            }
-          ]}
-        />
-        <SimpleTable
-          headers={["Percorso", "Tipo", "Alt"]}
-          rows={rows.map((row) => [row.pathname, row.contentType, row.altText])}
-        />
-        {rows.map((row) => (
-          <details key={`edit-${row.id}`} className="admin-editor">
-            <summary>Modifica / elimina: {row.pathname}</summary>
-            <StructuredEditor
-              title={row.pathname}
-              description="Aggiorna metadati e testo alternativo."
-              action={saveMediaMetadataAction}
-              hidden={{ id: row.id }}
-              fields={[
-                {
-                  name: "pathname",
-                  label: "Percorso",
-                  type: "text",
-                  required: true,
-                  defaultValue: row.pathname
-                },
-                {
-                  name: "contentType",
-                  label: "Tipo",
-                  type: "select",
-                  defaultValue: row.contentType,
-                  options: [
-                    "image/jpeg",
-                    "image/png",
-                    "image/webp",
-                    "video/mp4"
-                  ].map((value) => ({ label: value, value }))
-                },
-                {
-                  name: "sizeBytes",
-                  label: "Dimensione (byte)",
-                  type: "number",
-                  required: true,
-                  defaultValue: row.sizeBytes
-                },
-                {
-                  name: "altText",
-                  label: "Testo alternativo",
-                  type: "textarea",
-                  required: true,
-                  defaultValue: row.altText
-                }
-              ]}
-            />
-            <form action={deleteMediaMetadataAction.bind(null, row.id)}>
-              <button type="submit">Elimina</button>
-            </form>
-          </details>
-        ))}
-      </>
-    );
-  }
-
   if (section === "impostazioni") {
     const principal = await getAdminPrincipal();
-    const readiness = principal?.role === "owner" ? await loadReadiness() : [];
-    const settingsRows = await db
-      .select({ value: siteSettings.value })
-      .from(siteSettings)
-      .where(eq(siteSettings.key, "admin_settings"))
-      .limit(1);
-    const currentSettings = (settingsRows[0]?.value ?? {}) as {
-      privacyReviewed?: boolean;
-      requestHoldHours?: number;
-      publicContactLabel?: string;
-    };
     return (
       <>
         <PageHeader section={section} />
         {principal?.role === "owner" ? (
           <>
-            <StructuredEditor
-              title="Impostazioni generali"
-              description="Controlli di privacy e durata delle richieste."
-              action={saveAdminSettingsAction}
-              fields={[
-                {
-                  name: "privacyReviewed",
-                  label: "Privacy verificata",
-                  type: "checkbox",
-                  defaultValue: currentSettings.privacyReviewed === true
-                },
-                {
-                  name: "requestHoldHours",
-                  label: "Durata riserva (ore)",
-                  type: "number",
-                  defaultValue: currentSettings.requestHoldHours ?? 48
-                },
-                {
-                  name: "publicContactLabel",
-                  label: "Etichetta contatto",
-                  type: "text",
-                  defaultValue: currentSettings.publicContactLabel ?? ""
-                }
-              ]}
-            />
             <StructuredEditor
               title="Coordinate bancarie"
               description="Cifrate sul server; i valori correnti non entrano nel bundle iniziale."
@@ -1014,39 +536,6 @@ export default async function AdminSectionPage({
               ]}
             />
             <BankingReveal />
-            <section className="admin-editor">
-              <p className="eyebrow">Readiness</p>
-              <h2>Prima di pubblicare</h2>
-              <ul>
-                {readiness.map((item) => (
-                  <li key={item.key}>
-                    {item.ready ? "✓" : "○"} {item.label}
-                  </li>
-                ))}
-              </ul>
-              <form
-                action={async (data) => {
-                  "use server";
-                  await publishSiteAction(data);
-                }}
-              >
-                <label>
-                  Scrivi PUBBLICA per confermare{" "}
-                  <input name="confirmation" required />
-                </label>
-                <button className="admin-action" type="submit">
-                  Pubblica il sito
-                </button>
-              </form>
-              <form
-                action={async () => {
-                  "use server";
-                  await unpublishSiteAction();
-                }}
-              >
-                <button type="submit">Revoca pubblicazione</button>
-              </form>
-            </section>
           </>
         ) : (
           <p>Le impostazioni sensibili richiedono il ruolo proprietario.</p>
@@ -1055,63 +544,5 @@ export default async function AdminSectionPage({
     );
   }
 
-  const rows = await db
-    .select()
-    .from(auditLogs)
-    .orderBy(desc(auditLogs.createdAt))
-    .limit(250);
-  return (
-    <>
-      <PageHeader section="audit" />
-      <table className="admin-table">
-        <thead>
-          <tr>
-            <th>Data</th>
-            <th>Azione</th>
-            <th>Tipo</th>
-            <th>Attore</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <td>{row.createdAt.toLocaleString("it-IT")}</td>
-              <td>{row.action}</td>
-              <td>{row.targetType}</td>
-              <td>{row.actorType}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </>
-  );
-}
-
-function SimpleTable({
-  headers,
-  rows
-}: {
-  headers: string[];
-  rows: Array<Array<string | number>>;
-}) {
-  return (
-    <table className="admin-table">
-      <thead>
-        <tr>
-          {headers.map((header) => (
-            <th key={header}>{header}</th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((row, rowIndex) => (
-          <tr key={rowIndex}>
-            {row.map((cell, cellIndex) => (
-              <td key={`${rowIndex}-${cellIndex}`}>{cell}</td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
+  notFound();
 }

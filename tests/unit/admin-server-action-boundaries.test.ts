@@ -1,18 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { saveStructuredContentAction } from "@/actions/admin/content";
 import { saveGiftAction } from "@/actions/admin/gifts";
 import { rejectRequestAction } from "@/actions/admin/requests";
-import { publishSiteAction, saveBankingAction } from "@/actions/admin/settings";
+import { saveBankingAction } from "@/actions/admin/settings";
 import { withAdminAuthDependencies } from "@/actions/admin/shared";
 
 const unauthenticated = { getPrincipal: async () => null };
 const boundaries: Array<[string, () => Promise<unknown>]> = [
-  ["content", () => saveStructuredContentAction(new FormData())],
   ["gift", () => saveGiftAction(new FormData())],
   ["request", () => rejectRequestAction(new FormData())],
-  ["banking", () => saveBankingAction(new FormData())],
-  ["publish", () => publishSiteAction(new FormData())]
+  ["banking", () => saveBankingAction(new FormData())]
 ];
 
 describe("exported admin Server Action auth boundaries", () => {

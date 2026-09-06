@@ -2,17 +2,15 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { PublicHome } from "@/components/sections/public-home";
-import {
-  demoPublicContent,
-  getDemoPublicContent,
-  type PublicContent
-} from "@/data/demo-content";
+import { siteContent, type PublicContent } from "@/data/site-content";
+
+const publicContent: PublicContent = { ...siteContent, gifts: [] };
 
 afterEach(cleanup);
 
 describe("PublicHome", () => {
   it("espone una struttura semantica con un solo titolo principale", () => {
-    render(<PublicHome content={demoPublicContent} demoMode />);
+    render(<PublicHome content={publicContent} />);
 
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("navigation")).toHaveAccessibleName(
@@ -30,7 +28,7 @@ describe("PublicHome", () => {
   });
 
   it("pubblica soltanto i dati confermati del matrimonio", () => {
-    render(<PublicHome content={demoPublicContent} demoMode />);
+    render(<PublicHome content={publicContent} />);
 
     expect(screen.getByText("24 ottobre 2026")).toBeInTheDocument();
     expect(screen.getAllByText("Caleppio di Settala")).toHaveLength(2);
@@ -44,22 +42,22 @@ describe("PublicHome", () => {
 
   it("nasconde Maps quando il link manca o non è HTTPS", () => {
     const content = {
-      ...demoPublicContent,
-      locations: demoPublicContent.locations.map((location, index) => ({
+      ...publicContent,
+      locations: siteContent.locations.map((location, index) => ({
         ...location,
         mapsUrl: index === 0 ? undefined : "http://example.com/location"
       }))
     } as unknown as PublicContent;
 
-    render(<PublicHome content={content} demoMode />);
+    render(<PublicHome content={content} />);
 
     expect(
       screen.queryByRole("link", { name: /Apri Maps per/ })
     ).not.toBeInTheDocument();
   });
 
-  it("mantiene generici e riconoscibili i cinque momenti demo", () => {
-    render(<PublicHome content={demoPublicContent} demoMode />);
+  it("mantiene riconoscibili i cinque momenti della storia", () => {
+    render(<PublicHome content={publicContent} />);
 
     const story = screen.getByRole("region", {
       name: "Un sentiero da raccontare"
@@ -73,14 +71,12 @@ describe("PublicHome", () => {
     ].forEach((title) => {
       expect(within(story).getByText(title)).toBeInTheDocument();
     });
-    expect(
-      within(story).getByText("Contenuti dimostrativi")
-    ).toBeInTheDocument();
+    expect(within(story).queryByText("Contenuti dimostrativi")).toBeNull();
   });
 
   it("mostra la fotografia di un momento con next/image, alt e focal point", () => {
     const content: PublicContent = {
-      ...demoPublicContent,
+      ...publicContent,
       story: [
         {
           marker: "01",
@@ -109,7 +105,7 @@ describe("PublicHome", () => {
 
   it("usa la line art quando un momento non ha una fotografia", () => {
     const content: PublicContent = {
-      ...demoPublicContent,
+      ...publicContent,
       story: [
         {
           marker: "01",
@@ -131,11 +127,5 @@ describe("PublicHome", () => {
     expect(
       within(story).getByRole("img", { name: /Solo testo/ })
     ).toBeInTheDocument();
-  });
-
-  it("non rende mai disponibili i contenuti demo in produzione", () => {
-    expect(getDemoPublicContent("production")).toBeNull();
-    expect(getDemoPublicContent("development")).toBe(demoPublicContent);
-    expect(getDemoPublicContent("test")).toBe(demoPublicContent);
   });
 });

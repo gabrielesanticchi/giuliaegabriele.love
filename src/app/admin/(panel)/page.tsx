@@ -20,14 +20,6 @@ export default async function AdminDashboardPage() {
           <p className="eyebrow">Panoramica</p>
           <h1>Il sito, in breve</h1>
         </div>
-        <div>
-          <a className="admin-action" href="/admin/preview">
-            Anteprima
-          </a>{" "}
-          <a className="admin-action" href="/admin/impostazioni">
-            Pubblica il sito
-          </a>
-        </div>
       </header>
       <section className="admin-grid" aria-label="Indicatori principali">
         {cards.map(([label, value]) => (
