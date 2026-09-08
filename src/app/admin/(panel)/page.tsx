@@ -9,9 +9,9 @@ export default async function AdminDashboardPage() {
     ["Regali", String(summary.giftCount)],
     ["Richieste", String(summary.intentCount)],
     ["Scadute", String(summary.expiredCount)],
-    ["Valore richiesto", formatCurrency(summary.requestedEuros)],
-    ["Valore ricevuto", formatCurrency(summary.receivedEuros)],
-    ["Valore applicato", formatCurrency(summary.appliedEuros)]
+    ["Valore richiesto", formatCurrency(summary.requestedCents)],
+    ["Valore ricevuto", formatCurrency(summary.receivedCents)],
+    ["Valore applicato", formatCurrency(summary.appliedCents)]
   ];
   return (
     <>
@@ -46,7 +46,7 @@ export default async function AdminDashboardPage() {
               <tr key={item.id}>
                 <td>{item.reference}</td>
                 <td>{item.status}</td>
-                <td>{formatCurrency(item.amountEuros)}</td>
+                <td>{formatCurrency(item.amountCents)}</td>
                 <td>{item.createdAt.toLocaleDateString("it-IT")}</td>
               </tr>
             ))}

@@ -96,7 +96,7 @@ export default async function AdminSectionPage({
         />
         <StructuredEditor
           title="Nuovo regalo"
-          description="Importi sempre espressi in euro interi."
+          description="Inserisci il prezzo in euro; sono ammessi due decimali."
           action={saveGiftAction}
           fields={[
             {
@@ -122,8 +122,18 @@ export default async function AdminSectionPage({
             {
               name: "priceEuros",
               label: "Prezzo (euro)",
-              type: "number",
+              type: "text",
               required: true
+            },
+            {
+              name: "productUrl",
+              label: "Link prodotto (HTTPS)",
+              type: "text"
+            },
+            {
+              name: "imagePath",
+              label: "Percorso immagine",
+              type: "text"
             },
             {
               name: "sortOrder",
@@ -184,7 +194,7 @@ export default async function AdminSectionPage({
             {giftRows.map((row) => (
               <tr key={row.id}>
                 <td>{row.title}</td>
-                <td>{formatCurrency(row.priceEuros)}</td>
+                <td>{formatCurrency(row.priceCents)}</td>
                 <td>{row.published ? "Pubblicato" : "Nascosto"}</td>
                 <td>
                   <details>
@@ -225,9 +235,21 @@ export default async function AdminSectionPage({
                         {
                           name: "priceEuros",
                           label: "Prezzo (euro)",
-                          type: "number",
+                          type: "text",
                           required: true,
-                          defaultValue: row.priceEuros
+                          defaultValue: (row.priceCents / 100).toFixed(2)
+                        },
+                        {
+                          name: "productUrl",
+                          label: "Link prodotto (HTTPS)",
+                          type: "text",
+                          defaultValue: row.productUrl ?? ""
+                        },
+                        {
+                          name: "imagePath",
+                          label: "Percorso immagine",
+                          type: "text",
+                          defaultValue: row.imagePath ?? ""
                         },
                         {
                           name: "sortOrder",
@@ -327,7 +349,7 @@ export default async function AdminSectionPage({
             {
               name: "amountEuros",
               label: "Importo ricevuto (euro)",
-              type: "number",
+              type: "text",
               required: true
             },
             { name: "firstName", label: "Nome", type: "text", required: true },
@@ -357,11 +379,11 @@ export default async function AdminSectionPage({
                 <td>{row.publicReference}</td>
                 <td>{row.kind}</td>
                 <td>{row.status}</td>
-                <td>{formatCurrency(row.amountEuros)}</td>
+                <td>{formatCurrency(row.amountCents)}</td>
                 <td>
-                  {row.receivedAmountEuros == null
+                  {row.receivedAmountCents == null
                     ? "—"
-                    : formatCurrency(row.receivedAmountEuros)}
+                    : formatCurrency(row.receivedAmountCents)}
                 </td>
                 <td>
                   <form
@@ -372,10 +394,11 @@ export default async function AdminSectionPage({
                   >
                     <input type="hidden" name="intentId" value={row.id} />
                     <input
-                      type="number"
+                      type="text"
                       name="receivedAmountEuros"
-                      defaultValue={row.receivedAmountEuros ?? row.amountEuros}
-                      min={0}
+                      defaultValue={(
+                        (row.receivedAmountCents ?? row.amountCents) / 100
+                      ).toFixed(2)}
                       aria-label={`Importo ricevuto ${row.publicReference}`}
                       required
                     />

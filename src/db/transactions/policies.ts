@@ -4,41 +4,41 @@ export type IntentRequestSemantics = {
   giftId: string;
   kind: "full_gift" | "contribution";
   method: "external_purchase" | "bank_transfer";
-  amountEuros: number;
+  amountCents: number;
   requestFingerprintHash: string;
 };
 
-function assertEuros(value: number, field: string): void {
+function assertCents(value: number, field: string): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${field} deve essere un intero non negativo`);
   }
 }
 
 export function getVerificationAmounts(input: {
-  priceEuros: number;
-  alreadyAppliedEuros: number;
-  intentAmountEuros: number;
-  receivedAmountEuros: number;
+  priceCents: number;
+  alreadyAppliedCents: number;
+  intentAmountCents: number;
+  receivedAmountCents: number;
 }) {
-  assertEuros(input.priceEuros, "priceEuros");
-  assertEuros(input.alreadyAppliedEuros, "alreadyAppliedEuros");
-  assertEuros(input.intentAmountEuros, "intentAmountEuros");
-  assertEuros(input.receivedAmountEuros, "receivedAmountEuros");
+  assertCents(input.priceCents, "priceCents");
+  assertCents(input.alreadyAppliedCents, "alreadyAppliedCents");
+  assertCents(input.intentAmountCents, "intentAmountCents");
+  assertCents(input.receivedAmountCents, "receivedAmountCents");
 
-  const remainingEuros = Math.max(
+  const remainingCents = Math.max(
     0,
-    input.priceEuros - input.alreadyAppliedEuros
+    input.priceCents - input.alreadyAppliedCents
   );
-  const appliedAmountEuros = Math.min(
-    input.receivedAmountEuros,
-    input.intentAmountEuros,
-    remainingEuros
+  const appliedAmountCents = Math.min(
+    input.receivedAmountCents,
+    input.intentAmountCents,
+    remainingCents
   );
   return {
-    receivedAmountEuros: input.receivedAmountEuros,
-    appliedAmountEuros,
+    receivedAmountCents: input.receivedAmountCents,
+    appliedAmountCents,
     completesGift:
-      input.alreadyAppliedEuros + appliedAmountEuros >= input.priceEuros
+      input.alreadyAppliedCents + appliedAmountCents >= input.priceCents
   };
 }
 
@@ -69,8 +69,8 @@ export function assertGiftReservationAvailable(input: {
   contributions: Array<{
     status: "pending" | "verified" | "cancelled" | "expired" | "rejected";
     expiresAt: Date;
-    amountEuros: number;
-    appliedAmountEuros: number;
+    amountCents: number;
+    appliedAmountCents: number;
   }>;
 }): void {
   const hasCommittedContribution = input.contributions.some(
@@ -91,7 +91,7 @@ export function assertIdempotentRequestMatches(
     existing.giftId !== requested.giftId ||
     existing.kind !== requested.kind ||
     existing.method !== requested.method ||
-    existing.amountEuros !== requested.amountEuros ||
+    existing.amountCents !== requested.amountCents ||
     existing.requestFingerprintHash !== requested.requestFingerprintHash
   ) {
     throw new TransactionError("duplicate_request");

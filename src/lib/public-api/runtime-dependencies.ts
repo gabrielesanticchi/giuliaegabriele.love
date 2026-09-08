@@ -122,7 +122,7 @@ export function createGiftRuntimeDependencies(
           id: gifts.id,
           publicReference: gifts.publicReference,
           title: gifts.title,
-          priceEuros: gifts.priceEuros
+          priceCents: gifts.priceCents
         })
         .from(gifts)
         .where(and(eq(gifts.id, giftId), eq(gifts.published, true)))
@@ -160,9 +160,9 @@ export function createGiftRuntimeDependencies(
                 : "bank_transfer",
             guestName: `${input.request.guest.firstName} ${input.request.guest.lastName}`,
             amount: formatCurrency(
-              "amountEuros" in input.request
-                ? input.request.amountEuros
-                : input.gift.priceEuros
+              "amountCents" in input.request
+                ? input.request.amountCents
+                : input.gift.priceCents
             ),
             createdAt: new Intl.DateTimeFormat("it-IT", {
               dateStyle: "long",

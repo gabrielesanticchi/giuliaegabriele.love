@@ -44,11 +44,13 @@ export interface PublicGift {
   category: string;
   name: string;
   description: string;
-  priceEuros: number;
+  productUrl: string | null;
+  imagePath: string | null;
+  priceCents: number;
   status: PublicGiftStatus;
   allowFullGift: boolean;
   allowContributions: boolean;
-  confirmedContributionEuros: number;
+  confirmedContributionCents: number;
 }
 
 export interface PublicContent {

@@ -40,7 +40,7 @@ export type MutationInput = {
   idempotencyKey: string;
   publicReference: string;
   method: "external_purchase" | "bank_transfer";
-  amountEuros: number;
+  amountCents: number;
   requestFingerprintHash: string;
   guestTokenHash: string;
   guestDetailsEncrypted: string;
@@ -61,7 +61,7 @@ type GiftForMutation = {
   id: string;
   publicReference: string;
   title: string;
-  priceEuros: number;
+  priceCents: number;
 };
 
 export type BankInstructions = {
@@ -171,7 +171,7 @@ function requestFingerprint(
     phone: request.guest.phone,
     message: request.guest.message ?? null,
     method: "method" in request ? request.method : "bank_transfer",
-    amountEuros: "amountEuros" in request ? request.amountEuros : undefined,
+    amountCents: "amountCents" in request ? request.amountCents : undefined,
     privacyVersion: request.privacyVersion
   });
   return hashFingerprint(semanticPayload, secret);
@@ -251,10 +251,10 @@ export function createGiftIntentHandler(
       const guestToken = randomBytes(32).toString("base64url");
       const method =
         "method" in parsed.data ? parsed.data.method : "bank_transfer";
-      const amountEuros =
-        "amountEuros" in parsed.data
-          ? parsed.data.amountEuros
-          : gift.priceEuros;
+      const amountCents =
+        "amountCents" in parsed.data
+          ? parsed.data.amountCents
+          : gift.priceCents;
       const encryptedBankInstructions =
         method === "bank_transfer"
           ? await dependencies.loadEncryptedBankInstructions()
@@ -265,7 +265,7 @@ export function createGiftIntentHandler(
         idempotencyKey: parsed.data.idempotencyKey,
         publicReference: `REQ-${randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`,
         method,
-        amountEuros,
+        amountCents,
         requestFingerprintHash: requestFingerprint(
           parsed.data,
           gift.id,

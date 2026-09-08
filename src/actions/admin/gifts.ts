@@ -7,6 +7,8 @@ import { z } from "zod";
 
 import { getDatabase } from "@/db";
 import { giftCategories, gifts } from "@/db/schema";
+import { httpsUrlSchema } from "@/lib/domain/schemas";
+import { parseEuroAmount } from "@/lib/public-api/validation";
 
 import {
   type AdminActionResult,
@@ -32,7 +34,13 @@ const giftSchema = z.object({
   categoryId: z.uuid().optional(),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2_000).optional(),
-  priceEuros: z.coerce.number().int().min(0).max(1_000_000),
+  productUrl: httpsUrlSchema.optional(),
+  imagePath: z
+    .string()
+    .trim()
+    .regex(/^\/gifts\/[a-z0-9][a-z0-9._-]*$/)
+    .optional(),
+  priceCents: z.number().int().positive().max(100_000_000),
   sortOrder: z.coerce.number().int().min(0),
   published: z.boolean()
 });
@@ -101,7 +109,9 @@ export async function saveGiftAction(
     categoryId: formData.get("categoryId") || undefined,
     title: formData.get("title"),
     description: formData.get("description") || undefined,
-    priceEuros: formData.get("priceEuros"),
+    productUrl: formData.get("productUrl") || undefined,
+    imagePath: formData.get("imagePath") || undefined,
+    priceCents: parseEuroAmount(String(formData.get("priceEuros") ?? "")),
     sortOrder: formData.get("sortOrder") ?? 0,
     published: formData.get("published") === "on"
   });
@@ -114,7 +124,7 @@ export async function saveGiftAction(
     targetType: "gift",
     targetId: id,
     metadata: {
-      priceEuros: values.priceEuros,
+      priceCents: values.priceCents,
       published: values.published,
       sortOrder: values.sortOrder
     },

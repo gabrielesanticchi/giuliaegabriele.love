@@ -11,13 +11,15 @@ type DatabaseGift = {
   id: string;
   title: string;
   description: string | null;
-  priceEuros: number;
+  productUrl: string | null;
+  imagePath: string | null;
+  priceCents: number;
   completed: boolean;
   published: boolean;
   archivedAt: Date | null;
   categoryName: string | null;
   hasLock: boolean;
-  verifiedEuros: number;
+  verifiedCents: number;
 };
 
 type GiftSnapshot = {
@@ -32,14 +34,16 @@ export function mapPublicGifts(snapshot: GiftSnapshot): PublicGift[] {
       category: gift.categoryName ?? "Lista nozze",
       name: gift.title,
       description: gift.description ?? "",
-      priceEuros: gift.priceEuros,
+      productUrl: gift.productUrl,
+      imagePath: gift.imagePath,
+      priceCents: gift.priceCents,
       status: getPublicGiftStatus({
-        completed: gift.completed || gift.verifiedEuros >= gift.priceEuros,
+        completed: gift.completed || gift.verifiedCents >= gift.priceCents,
         hasFullGiftLock: gift.hasLock
       }),
-      allowFullGift: true,
+      allowFullGift: gift.verifiedCents === 0,
       allowContributions: true,
-      confirmedContributionEuros: gift.verifiedEuros
+      confirmedContributionCents: gift.verifiedCents
     }));
 }
 
@@ -51,7 +55,9 @@ export async function loadPublicGifts(): Promise<PublicGift[]> {
         id: gifts.id,
         title: gifts.title,
         description: gifts.description,
-        priceEuros: gifts.priceEuros,
+        productUrl: gifts.productUrl,
+        imagePath: gifts.imagePath,
+        priceCents: gifts.priceCents,
         completed: gifts.completed,
         published: gifts.published,
         archivedAt: gifts.archivedAt,
@@ -71,7 +77,7 @@ export async function loadPublicGifts(): Promise<PublicGift[]> {
       .select({
         giftId: giftIntents.giftId,
         status: giftIntents.status,
-        appliedAmountEuros: giftIntents.appliedAmountEuros
+        appliedAmountCents: giftIntents.appliedAmountCents
       })
       .from(giftIntents)
   ]);
@@ -83,9 +89,9 @@ export async function loadPublicGifts(): Promise<PublicGift[]> {
       hasLock: lockRows.some(
         (lock) => lock.giftId === gift.id && lock.expiresAt > now
       ),
-      verifiedEuros: intents
+      verifiedCents: intents
         .filter((intent) => intent.status === "verified")
-        .reduce((sum, intent) => sum + intent.appliedAmountEuros, 0)
+        .reduce((sum, intent) => sum + intent.appliedAmountCents, 0)
     };
   });
   return mapPublicGifts({ gifts: mappedGifts });

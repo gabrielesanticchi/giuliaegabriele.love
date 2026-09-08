@@ -23,11 +23,11 @@ const common = {
 };
 
 describe("public API validation", () => {
-  it("accetta solo importi in euro interi positivi", () => {
-    expect(parseEuroAmount("50")).toBe(50);
-    expect(parseEuroAmount("1234")).toBe(1234);
-    expect(parseEuroAmount("12.34")).toBeNull();
-    expect(parseEuroAmount("12,34")).toBeNull();
+  it("converte importi in euro con al massimo due decimali in centesimi", () => {
+    expect(parseEuroAmount("50")).toBe(5000);
+    expect(parseEuroAmount("169,01")).toBe(16901);
+    expect(parseEuroAmount("12.34")).toBe(1234);
+    expect(parseEuroAmount("12,345")).toBeNull();
     expect(parseEuroAmount("1e2")).toBeNull();
     expect(parseEuroAmount("0")).toBeNull();
   });
@@ -80,16 +80,16 @@ describe("public API validation", () => {
     expect(parsed.success).toBe(false);
   });
 
-  it("accetta soltanto contributi in euro interi positivi", () => {
+  it("accetta soltanto contributi in centesimi interi positivi", () => {
     expect(
-      contributionRequestSchema.safeParse({ ...common, amountEuros: 0 }).success
+      contributionRequestSchema.safeParse({ ...common, amountCents: 0 }).success
     ).toBe(false);
     expect(
-      contributionRequestSchema.safeParse({ ...common, amountEuros: 12.5 })
+      contributionRequestSchema.safeParse({ ...common, amountCents: 12.5 })
         .success
     ).toBe(false);
     expect(
-      contributionRequestSchema.safeParse({ ...common, amountEuros: 1250 })
+      contributionRequestSchema.safeParse({ ...common, amountCents: 1250 })
         .success
     ).toBe(true);
   });

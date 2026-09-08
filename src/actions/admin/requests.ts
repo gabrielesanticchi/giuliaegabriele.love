@@ -21,6 +21,7 @@ import {
 import { runAdminIdempotentTransaction as executeOnce } from "@/lib/admin/idempotency";
 import { encryptSecret } from "@/lib/security/crypto";
 import { hashEmail, hashFingerprint, hashToken } from "@/lib/security/hashing";
+import { parseEuroAmount } from "@/lib/public-api/validation";
 
 import {
   type AdminActionResult,
@@ -36,12 +37,15 @@ export async function verifyRequestAction(formData: FormData) {
   const parsed = z
     .object({
       intentId: intentIdSchema,
-      receivedAmountEuros: z.coerce.number().int().min(0),
+      receivedAmountCents: z.number().int().min(0),
       idempotencyKey: idempotencySchema
     })
     .parse({
       intentId: formData.get("intentId"),
-      receivedAmountEuros: formData.get("receivedAmountEuros"),
+      receivedAmountCents:
+        String(formData.get("receivedAmountEuros") ?? "").trim() === "0"
+          ? 0
+          : parseEuroAmount(String(formData.get("receivedAmountEuros") ?? "")),
       idempotencyKey: formData.get("idempotencyKey")
     });
   const outcome = await executeOnce({
@@ -49,7 +53,7 @@ export async function verifyRequestAction(formData: FormData) {
     action: "request.verify",
     entityId: parsed.intentId,
     idempotencyKey: parsed.idempotencyKey,
-    payload: { receivedAmountEuros: parsed.receivedAmountEuros },
+    payload: { receivedAmountCents: parsed.receivedAmountCents },
     effect: async (tx) => {
       const initial = await tx
         .select({ giftId: giftIntents.giftId })
@@ -80,7 +84,7 @@ export async function verifyRequestAction(formData: FormData) {
       if (intent.status !== "pending")
         throw new TransactionError("intent_not_pending");
       const verified = await tx
-        .select({ appliedAmountEuros: giftIntents.appliedAmountEuros })
+        .select({ appliedAmountCents: giftIntents.appliedAmountCents })
         .from(giftIntents)
         .where(
           and(
@@ -89,21 +93,21 @@ export async function verifyRequestAction(formData: FormData) {
           )
         );
       const amounts = getVerificationAmounts({
-        priceEuros: gift.priceEuros,
-        alreadyAppliedEuros: verified.reduce(
-          (sum, row) => sum + row.appliedAmountEuros,
+        priceCents: gift.priceCents,
+        alreadyAppliedCents: verified.reduce(
+          (sum, row) => sum + row.appliedAmountCents,
           0
         ),
-        intentAmountEuros: intent.amountEuros,
-        receivedAmountEuros: parsed.receivedAmountEuros
+        intentAmountCents: intent.amountCents,
+        receivedAmountCents: parsed.receivedAmountCents
       });
       const now = new Date();
       const updated = await tx
         .update(giftIntents)
         .set({
           status: "verified",
-          receivedAmountEuros: amounts.receivedAmountEuros,
-          appliedAmountEuros: amounts.appliedAmountEuros,
+          receivedAmountCents: amounts.receivedAmountCents,
+          appliedAmountCents: amounts.appliedAmountCents,
           verifiedAt: now,
           updatedAt: now
         })
@@ -132,7 +136,7 @@ export async function verifyRequestAction(formData: FormData) {
       action: "gift_intent.verified",
       targetType: "gift_intent",
       targetId: result.intentId,
-      metadata: { receivedAmountEuros: parsed.receivedAmountEuros }
+      metadata: { receivedAmountCents: parsed.receivedAmountCents }
     })
   });
   await deliverQueuedVerificationNotification(getDatabase(), {
@@ -391,13 +395,16 @@ export async function createManualRequestAction(
       giftId: z.uuid(),
       kind: z.enum(["full_gift", "contribution"]),
       method: z.enum(["external_purchase", "bank_transfer"]),
-      amountEuros: z.coerce.number().int().positive(),
+      amountCents: z.number().int().positive(),
       firstName: z.string().trim().min(1).max(80),
       lastName: z.string().trim().min(1).max(80),
       email: z.email(),
       idempotencyKey: idempotencySchema
     })
-    .safeParse(Object.fromEntries(formData));
+    .safeParse({
+      ...Object.fromEntries(formData),
+      amountCents: parseEuroAmount(String(formData.get("amountEuros") ?? ""))
+    });
   if (!parsed.success) return { ok: false, message: "Richiesta non valida" };
   const encryptionKey = required("DATA_ENCRYPTION_KEY");
   const pepper = required("REQUEST_FINGERPRINT_SECRET");
@@ -407,7 +414,7 @@ export async function createManualRequestAction(
     publicReference: `M-${randomUUID()}`,
     giftId: parsed.data.giftId,
     method: parsed.data.method,
-    amountEuros: parsed.data.amountEuros,
+    amountCents: parsed.data.amountCents,
     idempotencyKey: randomUUID(),
     requestFingerprintHash: hashFingerprint(`manual:${intentId}`, pepper),
     guestTokenHash: hashToken(guestToken, required("GUEST_TOKEN_SECRET")),
@@ -431,7 +438,7 @@ export async function createManualRequestAction(
     payload: {
       kind: parsed.data.kind,
       method: parsed.data.method,
-      amountEuros: parsed.data.amountEuros,
+      amountCents: parsed.data.amountCents,
       identityHash: hashFingerprint(
         JSON.stringify({
           firstName: parsed.data.firstName,
@@ -457,14 +464,14 @@ export async function createManualRequestAction(
         .select({
           kind: giftIntents.kind,
           status: giftIntents.status,
-          amountEuros: giftIntents.amountEuros,
-          appliedAmountEuros: giftIntents.appliedAmountEuros,
+          amountCents: giftIntents.amountCents,
+          appliedAmountCents: giftIntents.appliedAmountCents,
           expiresAt: giftIntents.expiresAt
         })
         .from(giftIntents)
         .where(eq(giftIntents.giftId, gift.id));
       if (parsed.data.kind === "full_gift") {
-        if (parsed.data.amountEuros !== gift.priceEuros)
+        if (parsed.data.amountCents !== gift.priceCents)
           throw new TransactionError("gift_unavailable");
         assertGiftReservationAvailable({
           now: new Date(),
@@ -478,20 +485,20 @@ export async function createManualRequestAction(
           .limit(1);
         if (fullLock[0]) throw new TransactionError("gift_unavailable");
         const now = new Date();
-        const verifiedEuros = commitments
+        const verifiedCents = commitments
           .filter((item) => item.status === "verified")
-          .reduce((sum, item) => sum + item.appliedAmountEuros, 0);
-        const pendingEuros = commitments
+          .reduce((sum, item) => sum + item.appliedAmountCents, 0);
+        const pendingCents = commitments
           .filter(
             (item) =>
               item.kind === "contribution" &&
               item.status === "pending" &&
               item.expiresAt > now
           )
-          .reduce((sum, item) => sum + item.amountEuros, 0);
+          .reduce((sum, item) => sum + item.amountCents, 0);
         if (
-          parsed.data.amountEuros >
-          Math.max(0, gift.priceEuros - verifiedEuros - pendingEuros)
+          parsed.data.amountCents >
+          Math.max(0, gift.priceCents - verifiedCents - pendingCents)
         )
           throw new TransactionError("amount_unavailable");
       }
@@ -516,7 +523,7 @@ export async function createManualRequestAction(
       action: "gift_intent.manual_created",
       targetType: "gift_intent",
       targetId: result.intentId,
-      metadata: { kind: parsed.data.kind, amountEuros: parsed.data.amountEuros }
+      metadata: { kind: parsed.data.kind, amountCents: parsed.data.amountCents }
     })
   });
   await refreshAdmin("/admin/richieste");

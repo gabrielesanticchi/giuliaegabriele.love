@@ -173,7 +173,7 @@ export async function deliverQueuedVerificationNotification(
       idempotencyKey: emailDeliveries.idempotencyKey,
       encryptedGuest: giftIntents.guestDetailsEncrypted,
       reference: giftIntents.publicReference,
-      amountEuros: giftIntents.appliedAmountEuros,
+      amountCents: giftIntents.appliedAmountCents,
       giftTitle: gifts.title
     })
     .from(emailDeliveries)
@@ -209,7 +209,7 @@ export async function deliverQueuedVerificationNotification(
       firstName: guest.firstName,
       giftName: queued.giftTitle,
       reference: queued.reference,
-      amount: formatCurrency(queued.amountEuros)
+      amount: formatCurrency(queued.amountCents)
     });
     const result = await new Resend(apiKey).emails.send(
       {
@@ -284,7 +284,7 @@ export async function deliverVerificationNotification(
       encryptedGuest: giftIntents.guestDetailsEncrypted,
       recipientHash: giftIntents.guestEmailHash,
       reference: giftIntents.publicReference,
-      amountEuros: giftIntents.appliedAmountEuros,
+      amountCents: giftIntents.appliedAmountCents,
       giftTitle: gifts.title
     })
     .from(giftIntents)
@@ -321,7 +321,7 @@ export async function deliverVerificationNotification(
       firstName: guest.firstName,
       giftName: intent.giftTitle,
       reference: intent.reference,
-      amount: formatCurrency(intent.amountEuros)
+      amount: formatCurrency(intent.amountCents)
     })
   });
 }

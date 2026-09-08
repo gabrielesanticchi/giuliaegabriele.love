@@ -91,7 +91,7 @@ integration(
       ]);
     });
 
-    it("removes obsolete storage from the final database schema", async () => {
+    it("uses cents and direct product fields in the final gift schema", async () => {
       const tables = await adminSql<Array<{ table_name: string }>>`
         select table_name
         from information_schema.tables
@@ -104,11 +104,32 @@ integration(
         from information_schema.columns
         where table_schema = ${schemaName}
           and table_name = 'gifts'
-          and column_name in ('media_asset_id', 'progress_mode')
+          and column_name in (
+            'image_path',
+            'media_asset_id',
+            'price_cents',
+            'price_euros',
+            'product_url',
+            'progress_mode'
+          )
+        order by column_name
+      `;
+      const intentColumns = await adminSql<Array<{ column_name: string }>>`
+        select column_name
+        from information_schema.columns
+        where table_schema = ${schemaName}
+          and table_name = 'gift_intents'
+          and column_name in ('amount_cents', 'amount_euros')
+        order by column_name
       `;
 
       expect(tables).toEqual([]);
-      expect(giftColumns).toEqual([]);
+      expect(giftColumns).toEqual([
+        { column_name: "image_path" },
+        { column_name: "price_cents" },
+        { column_name: "product_url" }
+      ]);
+      expect(intentColumns).toEqual([{ column_name: "amount_cents" }]);
     });
 
     it.each([
@@ -204,11 +225,11 @@ integration(
         publicReference: `G-${giftId}`,
         title: "Regalo bootstrap",
         published: true,
-        priceEuros: 10_000
+        priceCents: 10_000
       });
       const input = {
         giftId,
-        amountEuros: 10_000,
+        amountCents: 10_000,
         idempotencyKey: randomUUID(),
         requestFingerprintHash: randomBytes(32).toString("hex"),
         publicReference: `I-${randomUUID()}`,

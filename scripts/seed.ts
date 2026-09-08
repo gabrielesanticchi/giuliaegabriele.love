@@ -64,7 +64,7 @@ async function main() {
         categoryId: IDS.category,
         title: "Tavolo per le cene insieme",
         description: "Un luogo quotidiano per ritrovarsi e ospitare.",
-        priceEuros: 1200,
+        priceCents: 120_000,
         published: true,
         sortOrder: 0
       })

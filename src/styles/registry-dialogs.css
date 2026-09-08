@@ -87,6 +87,13 @@
   font-size: 0.7rem;
   letter-spacing: 0.12em;
 }
+.gift-art--image img {
+  object-fit: contain;
+}
+.gift-art--image::before,
+.gift-art--image::after {
+  content: none;
+}
 .gift-copy {
   padding: 1.5rem 0.25rem 1rem;
 }
@@ -126,6 +133,21 @@
 .gift-price {
   font-size: 0.78rem;
   font-weight: 650;
+}
+.gift-product-link {
+  width: fit-content;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--color-forest);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-underline-offset: 0.2em;
+}
+.gift-product-link svg {
+  width: 1rem;
+  height: 1rem;
 }
 .gift-progress p {
   margin-bottom: 0.5rem;

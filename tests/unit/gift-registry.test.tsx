@@ -18,33 +18,39 @@ const testGifts: PublicGift[] = [
     category: "Cucina",
     name: "Tavolo",
     description: "Un tavolo per stare insieme.",
-    priceEuros: 1000,
+    priceCents: 100000,
+    productUrl: "https://example.com/tavolo",
+    imagePath: "/gifts/tavolo.png",
     status: "available",
     allowFullGift: true,
     allowContributions: true,
-    confirmedContributionEuros: 250
+    confirmedContributionCents: 0
   },
   {
     id: "reserved",
     category: "Soggiorno",
     name: "Libreria",
     description: "Una libreria per i nostri ricordi.",
-    priceEuros: 500,
+    priceCents: 50000,
+    productUrl: null,
+    imagePath: null,
     status: "reserved",
     allowFullGift: true,
     allowContributions: false,
-    confirmedContributionEuros: 0
+    confirmedContributionCents: 0
   },
   {
     id: "gifted",
     category: "Camera",
     name: "Tessili",
     description: "Tessili per la nostra camera.",
-    priceEuros: 300,
+    priceCents: 30000,
+    productUrl: null,
+    imagePath: null,
     status: "gifted",
     allowFullGift: true,
     allowContributions: false,
-    confirmedContributionEuros: 300
+    confirmedContributionCents: 30000
   }
 ];
 
@@ -73,6 +79,38 @@ describe("GiftRegistry", () => {
       screen.getByText("QUALCUNO STA GIÀ PENSANDO A QUESTO REGALO")
     ).toBeInTheDocument();
     expect(screen.getAllByText("REGALATO ❤️").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("mostra immagine e collegamento del prodotto", () => {
+    render(<GiftRegistry gifts={[testGifts[0]]} />);
+
+    expect(screen.getByText(/Prezzo di listino\s+1000,00/)).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Tavolo" })).toHaveAttribute(
+      "src",
+      expect.stringContaining("%2Fgifts%2Ftavolo.png")
+    );
+    expect(
+      screen.getByRole("link", { name: "Vedi il prodotto" })
+    ).toHaveAttribute("href", "https://example.com/tavolo");
+  });
+
+  it("nasconde Regala dopo un contributo verificato e mantiene Contribuisci", () => {
+    render(
+      <GiftRegistry
+        gifts={[
+          {
+            ...testGifts[0],
+            allowFullGift: false,
+            confirmedContributionCents: 25000
+          }
+        ]}
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Regala" })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Contribuisci" })
+    ).toBeInTheDocument();
   });
 
   it("filtra i regali e aggiorna il conteggio accessibile", async () => {
@@ -194,22 +232,22 @@ describe("GiftRegistry", () => {
     );
     await fillGuestForm(user);
     const amount = screen.getByLabelText("Importo in euro");
-    await user.type(amount, "12,34");
+    await user.type(amount, "12,345");
     await user.click(screen.getByRole("button", { name: "Continua" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Inserisci un importo in euro interi"
+      "Inserisci un importo con al massimo due decimali"
     );
     expect(fetchMock).not.toHaveBeenCalled();
 
     await user.clear(amount);
-    await user.type(amount, "1234");
+    await user.type(amount, "12,34");
     await user.click(screen.getByRole("button", { name: "Continua" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const sent = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as {
-      amountEuros: number;
+      amountCents: number;
       privacyVersion: string;
     };
-    expect(sent.amountEuros).toBe(1234);
+    expect(sent.amountCents).toBe(1234);
     expect(sent.privacyVersion).toBe("2026-09-05");
   });
 

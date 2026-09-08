@@ -3,6 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowUpRight, X } from "lucide-react";
+import Image from "next/image";
 import {
   type RefObject,
   useEffect,
@@ -88,15 +89,28 @@ export function GiftRegistry({
           const progress = Math.min(
             100,
             Math.round(
-              (gift.confirmedContributionEuros / gift.priceEuros) * 100
+              (gift.confirmedContributionCents / gift.priceCents) * 100
             )
           );
           return (
             <article className="gift-card" key={gift.id}>
-              <div className="gift-art" aria-hidden="true">
-                <span>{String(gifts.indexOf(gift) + 1).padStart(2, "0")}</span>
-                <i />
-              </div>
+              {gift.imagePath ? (
+                <div className="gift-art gift-art--image">
+                  <Image
+                    src={gift.imagePath}
+                    alt={gift.name}
+                    fill
+                    sizes="(max-width: 767px) 100vw, 50vw"
+                  />
+                </div>
+              ) : (
+                <div className="gift-art" aria-hidden="true">
+                  <span>
+                    {String(gifts.indexOf(gift) + 1).padStart(2, "0")}
+                  </span>
+                  <i />
+                </div>
+              )}
               <div className="gift-copy">
                 <div className="gift-meta">
                   <span>{gift.category}</span>
@@ -107,10 +121,20 @@ export function GiftRegistry({
                   {statusLabels[gift.status]}
                 </p>
                 <p className="gift-price">
-                  Valore indicativo {formatCurrency(gift.priceEuros)}
+                  Prezzo di listino {formatCurrency(gift.priceCents)}
                 </p>
+                {gift.productUrl ? (
+                  <a
+                    className="gift-product-link"
+                    href={gift.productUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Vedi il prodotto <ArrowUpRight aria-hidden="true" />
+                  </a>
+                ) : null}
                 {gift.allowContributions &&
-                gift.confirmedContributionEuros > 0 ? (
+                gift.confirmedContributionCents > 0 ? (
                   <div className="gift-progress">
                     <p>La nostra casa sta prendendo forma</p>
                     <div
@@ -343,7 +367,7 @@ function GiftIntentForm({
       const payload = isContribution
         ? {
             ...common,
-            amountEuros: parseEuroAmount(values.amount ?? "")
+            amountCents: parseEuroAmount(values.amount ?? "")
           }
         : { ...common, method: values.method };
 

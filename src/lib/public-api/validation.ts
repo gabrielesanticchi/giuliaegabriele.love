@@ -35,11 +35,12 @@ const commonGiftRequestSchema = z.object({
 
 export function parseEuroAmount(value: string): number | null {
   const normalized = value.trim();
-  const match = /^[1-9]\d*$/.exec(normalized);
+  const match = /^(0|[1-9]\d*)(?:[.,](\d{1,2}))?$/.exec(normalized);
   if (!match) return null;
-  const euros = BigInt(normalized);
-  if (euros <= 0n || euros > 1_000_000n) return null;
-  return Number(euros);
+  const cents =
+    BigInt(match[1]) * 100n + BigInt((match[2] ?? "").padEnd(2, "0") || "0");
+  if (cents <= 0n || cents > 100_000_000n) return null;
+  return Number(cents);
 }
 
 export const euroAmountInputSchema = z
@@ -48,7 +49,7 @@ export const euroAmountInputSchema = z
   .min(1, "Inserisci un importo")
   .refine(
     (value) => parseEuroAmount(value) !== null,
-    "Inserisci un importo in euro interi"
+    "Inserisci un importo con al massimo due decimali"
   );
 
 export const reserveGiftRequestSchema = commonGiftRequestSchema
@@ -59,11 +60,11 @@ export const reserveGiftRequestSchema = commonGiftRequestSchema
 
 export const contributionRequestSchema = commonGiftRequestSchema
   .extend({
-    amountEuros: z
+    amountCents: z
       .number({ error: "Inserisci un importo" })
       .int("Inserisci un importo valido")
       .positive("Inserisci un importo positivo")
-      .max(1_000_000, "L’importo supera il limite")
+      .max(100_000_000, "L’importo supera il limite")
   })
   .strict();
 

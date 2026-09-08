@@ -14,7 +14,7 @@ type MutationInput = {
   idempotencyKey: string;
   publicReference: string;
   method: "bank_transfer";
-  amountEuros: number;
+  amountCents: number;
   requestFingerprintHash: string;
   guestTokenHash: string;
   guestDetailsEncrypted: string;
@@ -40,13 +40,13 @@ const operations = [
   }
 ] as const;
 
-function input(amountEuros = 10_000): MutationInput {
+function input(amountCents = 10_000): MutationInput {
   return {
     giftId: randomUUID(),
     idempotencyKey: randomUUID(),
     publicReference: `I-${randomUUID()}`,
     method: "bank_transfer",
-    amountEuros,
+    amountCents,
     requestFingerprintHash: "a".repeat(64),
     guestTokenHash: "b".repeat(64),
     guestDetailsEncrypted: "encrypted-guest-details",
@@ -73,7 +73,7 @@ function fakeDatabase(options: {
     ...options.mutationInput,
     kind: options.kind === "reserve" ? "full_gift" : "contribution",
     status: "pending",
-    appliedAmountEuros: 0
+    appliedAmountCents: 0
   };
   const selectResults: unknown[][] = options.replay
     ? [[intent]]
@@ -86,7 +86,7 @@ function fakeDatabase(options: {
               completed: false,
               published: true,
               archivedAt: null,
-              priceEuros: options.mutationInput.amountEuros
+              priceCents: options.mutationInput.amountCents
             }
           ],
           []
@@ -99,7 +99,7 @@ function fakeDatabase(options: {
               completed: false,
               published: true,
               archivedAt: null,
-              priceEuros: options.mutationInput.amountEuros
+              priceCents: options.mutationInput.amountCents
             }
           ],
           [],

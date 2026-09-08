@@ -62,8 +62,8 @@ integration(
         kind: "contribution",
         method: "bank_transfer",
         status: "pending",
-        amountEuros: 5000,
-        appliedAmountEuros: 5000,
+        amountCents: 5000,
+        appliedAmountCents: 5000,
         idempotencyKey: randomUUID(),
         requestFingerprintHash: randomBytes(32).toString("hex"),
         guestTokenHash: randomBytes(32).toString("hex"),
@@ -109,7 +109,7 @@ integration(
         id: giftId,
         publicReference: `G-${giftId}`,
         title: "Tavolo",
-        priceEuros: 10000
+        priceCents: 10000
       });
     });
 

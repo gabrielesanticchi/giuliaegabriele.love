@@ -5,8 +5,8 @@ const EXPORT_COLUMNS = [
   "guest",
   "note",
   "status",
-  "amountEuros",
-  "receivedAmountEuros",
+  "amountCents",
+  "receivedAmountCents",
   "createdAt",
   "expiresAt"
 ] as const;

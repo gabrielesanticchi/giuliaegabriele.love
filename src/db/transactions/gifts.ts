@@ -34,7 +34,7 @@ type NewIntentInput = {
   idempotencyKey: string;
   publicReference: string;
   method: GiftMethod;
-  amountEuros: number;
+  amountCents: number;
   requestFingerprintHash: string;
   guestTokenHash: string;
   guestDetailsEncrypted: string;
@@ -106,7 +106,7 @@ function intentSemantics(intent: GiftIntent): IntentRequestSemantics {
     giftId: intent.giftId,
     kind: intent.kind,
     method: intent.method,
-    amountEuros: intent.amountEuros,
+    amountCents: intent.amountCents,
     requestFingerprintHash: intent.requestFingerprintHash
   };
 }
@@ -119,7 +119,7 @@ function requestSemantics(
     giftId: input.giftId,
     kind,
     method: input.method,
-    amountEuros: input.amountEuros,
+    amountCents: input.amountCents,
     requestFingerprintHash: input.requestFingerprintHash
   };
 }
@@ -155,7 +155,7 @@ export async function reserveGift(
         gift.completed ||
         !gift.published ||
         gift.archivedAt !== null ||
-        input.amountEuros !== gift.priceEuros
+        input.amountCents !== gift.priceCents
       ) {
         throw new TransactionError("gift_unavailable");
       }
@@ -164,8 +164,8 @@ export async function reserveGift(
         .select({
           status: giftIntents.status,
           expiresAt: giftIntents.expiresAt,
-          amountEuros: giftIntents.amountEuros,
-          appliedAmountEuros: giftIntents.appliedAmountEuros
+          amountCents: giftIntents.amountCents,
+          appliedAmountCents: giftIntents.appliedAmountCents
         })
         .from(giftIntents)
         .where(
@@ -182,7 +182,7 @@ export async function reserveGift(
           ...input,
           kind: "full_gift",
           status: "pending",
-          amountEuros: input.amountEuros
+          amountCents: input.amountCents
         })
         .returning();
       const intent = inserted[0];
@@ -221,7 +221,7 @@ export async function contributeToGift(
   input: NewIntentInput,
   boundary: GiftMutationBoundary = {}
 ): Promise<GiftMutationResult> {
-  if (!Number.isSafeInteger(input.amountEuros) || input.amountEuros <= 0) {
+  if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
     throw new TransactionError("amount_unavailable");
   }
 
@@ -258,29 +258,29 @@ export async function contributeToGift(
         .select({
           kind: giftIntents.kind,
           status: giftIntents.status,
-          amountEuros: giftIntents.amountEuros,
-          appliedAmountEuros: giftIntents.appliedAmountEuros,
+          amountCents: giftIntents.amountCents,
+          appliedAmountCents: giftIntents.appliedAmountCents,
           expiresAt: giftIntents.expiresAt
         })
         .from(giftIntents)
         .where(eq(giftIntents.giftId, gift.id));
       const now = new Date();
-      const verifiedEuros = commitments
+      const verifiedCents = commitments
         .filter((intent) => intent.status === "verified")
-        .reduce((sum, intent) => sum + intent.appliedAmountEuros, 0);
-      const activePendingEuros = commitments
+        .reduce((sum, intent) => sum + intent.appliedAmountCents, 0);
+      const activePendingCents = commitments
         .filter(
           (intent) =>
             intent.kind === "contribution" &&
             intent.status === "pending" &&
             intent.expiresAt > now
         )
-        .reduce((sum, intent) => sum + intent.amountEuros, 0);
-      const availableEuros = Math.max(
+        .reduce((sum, intent) => sum + intent.amountCents, 0);
+      const availableCents = Math.max(
         0,
-        gift.priceEuros - verifiedEuros - activePendingEuros
+        gift.priceCents - verifiedCents - activePendingCents
       );
-      if (input.amountEuros > availableEuros) {
+      if (input.amountCents > availableCents) {
         throw new TransactionError("amount_unavailable");
       }
 
@@ -312,16 +312,16 @@ export async function verifyIntent(
   db: WeddingDatabase,
   input: {
     intentId: string;
-    receivedAmountEuros: number;
+    receivedAmountCents: number;
     actorAdminId?: string;
   }
 ): Promise<GiftIntent> {
   if (
-    !Number.isSafeInteger(input.receivedAmountEuros) ||
-    input.receivedAmountEuros < 0
+    !Number.isSafeInteger(input.receivedAmountCents) ||
+    input.receivedAmountCents < 0
   ) {
     throw new TypeError(
-      "receivedAmountEuros deve essere un intero non negativo"
+      "receivedAmountCents deve essere un intero non negativo"
     );
   }
 
@@ -351,28 +351,28 @@ export async function verifyIntent(
     }
 
     const verified = await tx
-      .select({ appliedAmountEuros: giftIntents.appliedAmountEuros })
+      .select({ appliedAmountCents: giftIntents.appliedAmountCents })
       .from(giftIntents)
       .where(
         and(eq(giftIntents.giftId, gift.id), eq(giftIntents.status, "verified"))
       );
-    const alreadyAppliedEuros = verified.reduce(
-      (sum, row) => sum + row.appliedAmountEuros,
+    const alreadyAppliedCents = verified.reduce(
+      (sum, row) => sum + row.appliedAmountCents,
       0
     );
     const amounts = getVerificationAmounts({
-      priceEuros: gift.priceEuros,
-      alreadyAppliedEuros,
-      intentAmountEuros: intent.amountEuros,
-      receivedAmountEuros: input.receivedAmountEuros
+      priceCents: gift.priceCents,
+      alreadyAppliedCents,
+      intentAmountCents: intent.amountCents,
+      receivedAmountCents: input.receivedAmountCents
     });
     const now = new Date();
     const updated = await tx
       .update(giftIntents)
       .set({
         status: "verified",
-        receivedAmountEuros: amounts.receivedAmountEuros,
-        appliedAmountEuros: amounts.appliedAmountEuros,
+        receivedAmountCents: amounts.receivedAmountCents,
+        appliedAmountCents: amounts.appliedAmountCents,
         verifiedAt: now,
         updatedAt: now
       })
