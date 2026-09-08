@@ -7,18 +7,24 @@ import { SiteHeader } from "@/components/layout/site-header";
 import { GiftRegistry } from "@/components/sections/gift-registry";
 import { HeroMedia } from "@/components/sections/hero-media";
 import { WeddingCountdown } from "@/components/sections/wedding-countdown";
-import type { PublicContent } from "@/data/site-content";
+import type { PublicContent, WeddingLocation } from "@/data/site-content";
 import { isSafeExternalUrl } from "@/lib/domain/urls";
 
 export interface PublicHomeProps {
   content: PublicContent;
+  includeReception?: boolean;
   initialNow?: string;
 }
 
 export function PublicHome({
   content,
+  includeReception = false,
   initialNow = new Date().toISOString()
 }: PublicHomeProps) {
+  const visibleLocations = includeReception
+    ? content.locations
+    : content.locations.filter((location) => location.kind === "ceremony");
+
   return (
     <div className="public-shell">
       <a className="skip-link" href="#contenuto">
@@ -27,7 +33,7 @@ export function PublicHome({
       <SiteHeader />
       <main id="contenuto">
         <Hero content={content} initialNow={initialNow} />
-        <WeddingSection content={content} />
+        <WeddingSection locations={visibleLocations} />
         <StorySection content={content} />
         <section
           className="registry-section section-pad"
@@ -105,7 +111,11 @@ function Hero({
   );
 }
 
-function WeddingSection({ content }: { content: PublicContent }) {
+function WeddingSection({ locations }: { locations: WeddingLocation[] }) {
+  const includesReception = locations.some(
+    (location) => location.kind === "reception"
+  );
+
   return (
     <section
       className="wedding-section section-pad"
@@ -115,13 +125,13 @@ function WeddingSection({ content }: { content: PublicContent }) {
       <div className="section-heading">
         <p className="eyebrow">Il matrimonio · 01</p>
         <h2 id="wedding-title">
-          Due luoghi,
+          {includesReception ? "Due luoghi," : "Un luogo,"}
           <br />
           un solo giorno
         </h2>
       </div>
       <div className="locations-layout">
-        {content.locations.map((location) => (
+        {locations.map((location) => (
           <article
             className={`location location--${location.kind}`}
             key={location.name}

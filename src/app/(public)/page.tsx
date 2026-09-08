@@ -6,5 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const gifts = await loadPublicGiftsSafely();
-  return <PublicHome content={{ ...siteContent, gifts }} />;
+  return (
+    <PublicHome content={{ ...siteContent, gifts }} includeReception={false} />
+  );
 }

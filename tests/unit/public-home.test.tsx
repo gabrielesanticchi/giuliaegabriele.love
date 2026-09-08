@@ -27,16 +27,35 @@ describe("PublicHome", () => {
     ).toHaveAttribute("href", "#contenuto");
   });
 
-  it("pubblica soltanto i dati confermati del matrimonio", () => {
+  it("mostra soltanto la cerimonia nella pagina pubblica", () => {
     render(<PublicHome content={publicContent} />);
 
     expect(screen.getByText("24 ottobre 2026")).toBeInTheDocument();
     expect(screen.getAllByText("Caleppio di Settala")).toHaveLength(2);
     expect(screen.getByText("Chiesa San Giovanni Bosco")).toBeInTheDocument();
     expect(
+      screen.getByRole("heading", { name: "Un luogo, un solo giorno" })
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Villa Cavenago")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Via Giuseppe Carcassola 15, Trezzo sull'Adda")
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("11:00 – 12:30")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Dalle 13:00 alle 21:30")
+    ).not.toBeInTheDocument();
+  });
+
+  it("aggiunge il ricevimento soltanto nella variante riservata", () => {
+    render(<PublicHome content={publicContent} includeReception />);
+
+    expect(
+      screen.getByRole("heading", { name: "Due luoghi, un solo giorno" })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Villa Cavenago")).toBeInTheDocument();
+    expect(
       screen.getByText("Via Giuseppe Carcassola 15, Trezzo sull'Adda")
     ).toBeInTheDocument();
-    expect(screen.getByText("11:00 – 12:30")).toBeInTheDocument();
     expect(screen.getByText("Dalle 13:00 alle 21:30")).toBeInTheDocument();
   });
 
