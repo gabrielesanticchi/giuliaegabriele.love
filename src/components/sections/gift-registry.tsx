@@ -207,7 +207,7 @@ function GiftActionDialog({
   const contentRef = useRef<HTMLDivElement>(null);
   const isContribution = selection?.action === "contribute";
   const title = isContribution
-    ? "Anche un piccolo contributo può diventare un mattone della nostra casa."
+    ? "Un contributo che rappresenta un mattone della nostra casa."
     : "Vuoi regalarci questo pezzo della nostra casa?";
   const description = isContribution
     ? "Scegli l’importo che desideri. Il pagamento avverrà tramite bonifico e verrà conteggiato nella lista soltanto dopo la nostra verifica."

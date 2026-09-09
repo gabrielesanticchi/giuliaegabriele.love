@@ -230,7 +230,7 @@ function StorySection({ content }: { content: PublicContent }) {
                 />
               )}
             </div>
-            <div>
+            <div className="story-copy">
               <p className="eyebrow">Capitolo {moment.marker}</p>
               <h3>{moment.title}</h3>
               <p>{moment.description}</p>
