@@ -52,14 +52,9 @@ export function PublicHome({
           </div>
           <div className="registry-intro">
             <p>
-              Nessun pagamento avviene su questo sito. Potrete acquistare il
-              regalo dal negozio indicato oppure scegliere il bonifico. Saremo
-              noi a verificare manualmente ogni acquisto o contributo.
-            </p>
-            <p>
-              La vostra presenza sarà già il regalo più bello. Questa lista è
-              soltanto per chi desidera aiutarci a costruire qualcosa che
-              resterà con noi.
+              Nessun pagamento avviene su questo sito. Se volete Regalarci un pensiero, potrete acquistarlo dal negozio indicato 
+              oppure scegliere il bonifico con il prezzo di listino indicato.
+              Altrimenti, è possibile Contribuire tramite bonifico a uno degli oggetti ancora disponibili nella lista. 
             </p>
           </div>
           <GiftRegistry gifts={content.gifts} />
@@ -125,9 +120,9 @@ function WeddingSection({ locations }: { locations: WeddingLocation[] }) {
       <div className="section-heading">
         <p className="eyebrow">Il matrimonio · 01</p>
         <h2 id="wedding-title">
-          {includesReception ? "Due luoghi," : "Un luogo,"}
+          Una giornata
           <br />
-          un solo giorno
+          speciale
         </h2>
       </div>
       <div className="locations-layout">
