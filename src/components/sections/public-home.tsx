@@ -45,9 +45,7 @@ export function PublicHome({
             <h2 id="registry-title">Costruiamo casa insieme</h2>
             <p className="lead">
               Abbiamo immaginato questa lista come la nostra futura casa: una
-              stanza, un oggetto e un piccolo progetto alla volta. Se desiderate
-              farci un regalo, potete aiutarci a costruirla insieme, mattone
-              dopo mattone.
+              stanza, un oggetto e un piccolo progetto alla volta.
             </p>
           </div>
           <div className="registry-intro">
