@@ -50,9 +50,11 @@ export function PublicHome({
           </div>
           <div className="registry-intro">
             <p>
-              Nessun pagamento avviene su questo sito. Se volete Regalarci un pensiero, potrete acquistarlo dal negozio indicato 
-              oppure scegliere il bonifico con il prezzo di listino indicato.
-              Altrimenti, è possibile Contribuire tramite bonifico a uno degli oggetti ancora disponibili nella lista. 
+              Nessun pagamento avviene su questo sito. Se volete Regalarci un
+              pensiero, potrete acquistarlo dal negozio indicato oppure
+              scegliere il bonifico con il prezzo di listino indicato.
+              Altrimenti, è possibile Contribuire tramite bonifico a uno degli
+              oggetti ancora disponibili nella lista.
             </p>
           </div>
           <GiftRegistry gifts={content.gifts} />
@@ -207,7 +209,11 @@ function StorySection({ content }: { content: PublicContent }) {
             <div className="story-marker" aria-hidden="true">
               {moment.marker}
             </div>
-            <div className="story-art">
+            <div
+              className={`story-art${
+                moment.media?.fit === "contain" ? " story-art--contain" : ""
+              }`}
+            >
               {moment.media ? (
                 <Image
                   className="story-photo"
@@ -217,6 +223,7 @@ function StorySection({ content }: { content: PublicContent }) {
                   height={720}
                   sizes="(max-width: 768px) 100vw, 33vw"
                   style={{
+                    objectFit: moment.media.fit ?? "cover",
                     objectPosition: `${moment.media.focalPoint.x}% ${moment.media.focalPoint.y}%`
                   }}
                   // User-supplied media of arbitrary origin; the optimizer is

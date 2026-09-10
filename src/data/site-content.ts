@@ -30,6 +30,7 @@ export interface StoryMedia {
   url: string;
   alt: string;
   focalPoint: { x: number; y: number };
+  fit?: "cover" | "contain";
 }
 
 export interface StoryMoment {
@@ -92,29 +93,59 @@ export const siteContent: Omit<PublicContent, "gifts"> = {
   story: [
     {
       marker: "01",
-      title: "Il primo incontro",
-      description: "Il capitolo da cui è iniziato il nostro cammino insieme."
+      title: "Tutto è iniziato tra i banchi di scuola",
+      description:
+        "Ci siamo conosciuti tra i banchi del liceo, quando eravamo ancora due ragazzi e il futuro sembrava tutto da scrivere. Siamo cresciuti insieme, dal diploma fino all’università, scegliendo strade diverse: Giulia nelle Professioni Sanitarie, Gabriele in Ingegneria Biomedica. Poi un master per lei, un dottorato aziendale per lui e due percorsi professionali differenti. Dieci anni di cambiamenti, traguardi e nuove sfide, affrontati continuando a scegliere, ogni giorno, di crescere insieme.",
+      media: {
+        url: "/story/1-banchi-di-scuola.jpeg",
+        alt: "Giulia e Gabriele tra i banchi di scuola",
+        focalPoint: { x: 50, y: 50 }
+      }
     },
     {
       marker: "02",
-      title: "Il primo viaggio",
-      description: "Uno dei ricordi che custodiamo con più affetto."
+      title: "Il mondo, un viaggio alla volta",
+      description:
+        "Viaggiare è sempre stato uno dei nostri modi preferiti di crescere insieme. Abbiamo attraversato l’Europa, dalle capitali come Parigi e Berlino ai viaggi on the road tra Andalusia, Algarve e Portogallo, fino ai paesaggi della Finlandia. Abbiamo scoperto insieme tanti angoli d’Italia, dalla Puglia alla Calabria e alla Liguria, per poi spingerci più lontano, fino al Madagascar. Ogni viaggio ci ha lasciato qualcosa, ma soprattutto ci ha insegnato che il posto più bello è quello che scopriamo insieme.",
+      media: {
+        url: "/story/2-viaggi-insieme.jpeg",
+        alt: "Giulia e Gabriele circondati dai ricordi dei loro viaggi",
+        focalPoint: { x: 50, y: 50 }
+      }
     },
     {
       marker: "03",
-      title: "La nostra prima casa",
-      description: "Il luogo in cui abbiamo iniziato a costruire il futuro."
+      title: "La proposta più inaspettata",
+      description:
+        "Abbiamo sempre avuto passioni molto diverse: il judo per Gabriele, il mondo subacqueo per Giulia. Alle Maldive, però, questi due mondi si sono incontrati: Gabriele ha deciso di prendere il brevetto da sub per poter condividere con lei anche questa avventura. E proprio durante un’immersione, circondati dal blu dell’oceano e dalle mante, è arrivata la sorpresa più grande. Una proposta di matrimonio sott’acqua, completamente inaspettata, e un “sì” che non aveva bisogno di parole.",
+      media: {
+        url: "/story/3-proposta-sottacqua.jpeg",
+        alt: "Gabriele propone a Giulia di sposarlo durante un’immersione",
+        focalPoint: { x: 50, y: 50 },
+        fit: "contain"
+      }
     },
     {
       marker: "04",
-      title: "La proposta",
+      title: "Un nuovo capitolo, tutto da costruire",
       description:
-        "Il momento in cui il nostro prossimo capitolo ha preso forma."
+        "Da poco abbiamo comprato la nostra casa, un luogo ancora tutto da immaginare, trasformare e rendere davvero nostro. Ci aspettano lavori, progetti, scelte e tanti piccoli mattoncini da mettere al loro posto, uno dopo l’altro. Dopo essere cresciuti insieme per tanti anni, oggi stiamo costruendo, anche nel vero senso della parola, il posto in cui continuerà la nostra storia.",
+      media: {
+        url: "/story/4-la-nostra-nuova-casa.jpeg",
+        alt: "Giulia e Gabriele al lavoro nella loro nuova casa",
+        focalPoint: { x: 50, y: 50 }
+      }
     },
     {
       marker: "05",
-      title: "Verso il grande giorno",
-      description: "Il sentiero che ci porterà al 24 ottobre 2026."
+      title: "Verso il nostro “Sì”",
+      description:
+        "E adesso ci siamo quasi. Tra preparativi, emozioni, qualche ansia e quell’impazienza che cresce ogni giorno, ci stiamo avvicinando a uno dei momenti più importanti della nostra storia. Dopo tutto quello che abbiamo vissuto e costruito insieme, siamo pronti a iniziare un nuovo capitolo. E la cosa più bella sarà farlo circondati dalle persone che amiamo, condividendo con voi il nostro “Sì” e l’inizio di tutto ciò che verrà. ❤️",
+      media: {
+        url: "/story/5-verso-il-matrimonio.jpeg",
+        alt: "Giulia e Gabriele si preparano al matrimonio",
+        focalPoint: { x: 50, y: 50 }
+      }
     }
   ]
 };

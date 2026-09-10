@@ -121,6 +121,10 @@
   box-shadow: 0 1.5rem 4rem rgb(42 29 21 / 14%);
   isolation: isolate;
 }
+.story-art--contain {
+  height: auto;
+  aspect-ratio: 3 / 2;
+}
 .story-art::before,
 .story-art::after {
   position: absolute;

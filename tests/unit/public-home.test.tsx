@@ -34,7 +34,7 @@ describe("PublicHome", () => {
     expect(screen.getAllByText("Caleppio di Settala")).toHaveLength(2);
     expect(screen.getByText("Chiesa San Giovanni Bosco")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Un luogo, un solo giorno" })
+      screen.getByRole("heading", { name: "Una giornata speciale" })
     ).toBeInTheDocument();
     expect(screen.queryByText("Villa Cavenago")).not.toBeInTheDocument();
     expect(
@@ -50,7 +50,7 @@ describe("PublicHome", () => {
     render(<PublicHome content={publicContent} includeReception />);
 
     expect(
-      screen.getByRole("heading", { name: "Due luoghi, un solo giorno" })
+      screen.getByRole("heading", { name: "Una giornata speciale" })
     ).toBeInTheDocument();
     expect(screen.getByText("Villa Cavenago")).toBeInTheDocument();
     expect(
@@ -75,21 +75,57 @@ describe("PublicHome", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("mantiene riconoscibili i cinque momenti della storia", () => {
+  it("mostra i cinque capitoli finali nell'ordine corretto con le relative immagini", () => {
     render(<PublicHome content={publicContent} />);
 
     const story = screen.getByRole("region", {
       name: "Un sentiero da raccontare"
     });
-    [
-      "Il primo incontro",
-      "Il primo viaggio",
-      "La nostra prima casa",
-      "La proposta",
-      "Verso il grande giorno"
-    ].forEach((title) => {
-      expect(within(story).getByText(title)).toBeInTheDocument();
+    const expectedChapters = [
+      {
+        title: "Tutto è iniziato tra i banchi di scuola",
+        image: "/story/1-banchi-di-scuola.jpeg",
+        alt: "Giulia e Gabriele tra i banchi di scuola"
+      },
+      {
+        title: "Il mondo, un viaggio alla volta",
+        image: "/story/2-viaggi-insieme.jpeg",
+        alt: "Giulia e Gabriele circondati dai ricordi dei loro viaggi"
+      },
+      {
+        title: "La proposta più inaspettata",
+        image: "/story/3-proposta-sottacqua.jpeg",
+        alt: "Gabriele propone a Giulia di sposarlo durante un’immersione"
+      },
+      {
+        title: "Un nuovo capitolo, tutto da costruire",
+        image: "/story/4-la-nostra-nuova-casa.jpeg",
+        alt: "Giulia e Gabriele al lavoro nella loro nuova casa"
+      },
+      {
+        title: "Verso il nostro “Sì”",
+        image: "/story/5-verso-il-matrimonio.jpeg",
+        alt: "Giulia e Gabriele si preparano al matrimonio"
+      }
+    ];
+
+    expect(
+      within(story)
+        .getAllByRole("heading", { level: 3 })
+        .map((heading) => heading.textContent)
+    ).toEqual(expectedChapters.map(({ title }) => title));
+
+    expectedChapters.forEach(({ alt, image }) => {
+      expect(within(story).getByRole("img", { name: alt })).toHaveAttribute(
+        "src",
+        image
+      );
     });
+    const proposalImage = within(story).getByRole("img", {
+      name: "Gabriele propone a Giulia di sposarlo durante un’immersione"
+    });
+    expect(proposalImage).toHaveStyle({ objectFit: "contain" });
+    expect(proposalImage.parentElement).toHaveClass("story-art--contain");
     expect(within(story).queryByText("Contenuti dimostrativi")).toBeNull();
   });
 
