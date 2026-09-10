@@ -94,8 +94,8 @@
 .story-list li {
   position: relative;
   display: grid;
-  gap: 1.25rem;
-  margin-bottom: 4.5rem;
+  row-gap: 1rem;
+  margin: 0;
 }
 .story-marker {
   position: absolute;
@@ -113,7 +113,8 @@
 }
 .story-art {
   position: relative;
-  height: min(110vw, 31rem);
+  aspect-ratio: 1;
+  min-height: 0;
   padding: 1.1rem 1.5rem;
   overflow: hidden;
   color: var(--color-forest);
@@ -121,16 +122,12 @@
   box-shadow: 0 1.5rem 4rem rgb(42 29 21 / 14%);
   isolation: isolate;
 }
-.story-art--contain {
-  height: auto;
-  aspect-ratio: 3 / 2;
-}
 .story-art::before,
 .story-art::after {
   position: absolute;
   z-index: 2;
-  top: 0.7rem;
-  bottom: 0.7rem;
+  top: 0;
+  bottom: 0;
   width: 0.46rem;
   content: "";
   background: repeating-linear-gradient(
@@ -151,9 +148,11 @@
   background: #ece0cf;
 }
 .story-photo {
+  position: absolute !important;
+  inset: 1.1rem 1.5rem !important;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: calc(100% - 3rem) !important;
+  height: calc(100% - 2.2rem) !important;
   object-fit: cover;
 }
 .story-list h3 {
@@ -177,11 +176,11 @@
 @keyframes story-frame-develop {
   from {
     opacity: 0.58;
-    transform: scale(0.965);
+    transform: none;
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: none;
   }
 }
 
@@ -218,8 +217,8 @@
   }
   .story-list li {
     grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.8fr);
-    min-height: 80svh;
-    gap: clamp(3rem, 7vw, 7rem);
+    column-gap: clamp(2rem, 4vw, 4rem);
+    row-gap: 0;
     margin-bottom: 0;
     align-items: center;
   }

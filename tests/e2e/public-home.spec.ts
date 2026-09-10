@@ -47,16 +47,18 @@ test.describe("public home", () => {
     }
   });
 
-  test("presents the desktop story as a full-height film strip", async ({
+  test("presents the desktop story as a continuous square film strip", async ({
     page
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/");
 
-    const firstMoment = page.locator(".story-list > li").first();
-    const firstFrame = firstMoment.locator(".story-art");
-    const momentBox = await firstMoment.boundingBox();
-    const frameBox = await firstFrame.boundingBox();
+    const frames = page.locator(".story-list > li .story-art");
+    await expect(frames).toHaveCount(5);
+    const frameBoxes = await Promise.all(
+      (await frames.all()).map((frame) => frame.boundingBox())
+    );
+    const firstFrame = frames.first();
     const filmStyles = await firstFrame.evaluate((element) => {
       const frame = getComputedStyle(element);
       const before = getComputedStyle(element, "::before");
@@ -73,10 +75,38 @@ test.describe("public home", () => {
       };
     });
 
-    expect(momentBox).not.toBeNull();
-    expect(frameBox).not.toBeNull();
-    expect(momentBox!.height).toBeGreaterThanOrEqual(720);
-    expect(frameBox!.height).toBeGreaterThan(300);
+    expect(frameBoxes.every((frame) => frame !== null)).toBe(true);
+    frameBoxes.forEach((frame) => {
+      expect(frame!.height / frame!.width).toBeCloseTo(1, 1);
+    });
+    frameBoxes.slice(1).forEach((frame, index) => {
+      const previous = frameBoxes[index]!;
+      expect(
+        Math.abs(frame!.y - (previous.y + previous.height))
+      ).toBeLessThanOrEqual(1);
+    });
+    const proposalBounds = await frames.nth(2).evaluate((frame) => {
+      const image = frame.querySelector("img");
+      if (!image) {
+        return null;
+      }
+
+      const frameBox = frame.getBoundingClientRect();
+      const imageBox = image.getBoundingClientRect();
+      return {
+        leftInset: imageBox.left - frameBox.left,
+        rightInset: frameBox.right - imageBox.right,
+        topInset: imageBox.top - frameBox.top,
+        bottomInset: frameBox.bottom - imageBox.bottom,
+        objectFit: getComputedStyle(image).objectFit
+      };
+    });
+    expect(proposalBounds).not.toBeNull();
+    expect(proposalBounds!.leftInset).toBeGreaterThan(0);
+    expect(proposalBounds!.rightInset).toBeGreaterThan(0);
+    expect(proposalBounds!.topInset).toBeGreaterThan(0);
+    expect(proposalBounds!.bottomInset).toBeGreaterThan(0);
+    expect(proposalBounds!.objectFit).toBe("contain");
     expect(filmStyles.backgroundColor).toBe("rgb(41, 37, 31)");
     expect(filmStyles.beforeContent).toBe('\"\"');
     expect(filmStyles.afterContent).toBe('\"\"');
@@ -106,8 +136,7 @@ test.describe("public home", () => {
         copyClip: copyStyle.clipPath,
         copyTransform: copyStyle.transform,
         frameAnimation: frameStyle.animationName,
-        frameOpacity: Number.parseFloat(frameStyle.opacity),
-        frameTransform: frameStyle.transform
+        frameOpacity: Number.parseFloat(frameStyle.opacity)
       };
     });
 
@@ -123,9 +152,6 @@ test.describe("public home", () => {
       ),
       frameOpacity: await frame.evaluate((element) =>
         Number.parseFloat(getComputedStyle(element).opacity)
-      ),
-      frameTransform: await frame.evaluate(
-        (element) => getComputedStyle(element).transform
       )
     };
 
@@ -134,7 +160,6 @@ test.describe("public home", () => {
     expect(after.copyClip).not.toBe(before.copyClip);
     expect(after.copyTransform).not.toBe(before.copyTransform);
     expect(after.frameOpacity).toBeGreaterThan(before.frameOpacity);
-    expect(after.frameTransform).not.toBe(before.frameTransform);
   });
 
   test("shows a static complete story when reduced motion is requested", async ({

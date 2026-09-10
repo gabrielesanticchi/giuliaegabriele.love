@@ -219,8 +219,7 @@ function StorySection({ content }: { content: PublicContent }) {
                   className="story-photo"
                   src={moment.media.url}
                   alt={moment.media.alt}
-                  width={640}
-                  height={720}
+                  fill
                   sizes="(max-width: 768px) 100vw, 33vw"
                   style={{
                     objectFit: moment.media.fit ?? "cover",
