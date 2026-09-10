@@ -28,7 +28,7 @@ import { BankingReveal } from "@/components/admin/banking-reveal";
 import { getDatabase } from "@/db";
 import { giftCategories, giftIntents, gifts } from "@/db/schema";
 import { getAdminPrincipal } from "@/lib/auth/session";
-import { formatCurrency } from "@/lib/domain/currency";
+import { formatCurrency, wholeEurosFromCents } from "@/lib/domain/currency";
 
 export const dynamic = "force-dynamic";
 
@@ -96,7 +96,7 @@ export default async function AdminSectionPage({
         />
         <StructuredEditor
           title="Nuovo regalo"
-          description="Inserisci il prezzo in euro; sono ammessi due decimali."
+          description="Inserisci il prezzo in euro interi."
           action={saveGiftAction}
           fields={[
             {
@@ -237,7 +237,7 @@ export default async function AdminSectionPage({
                           label: "Prezzo (euro)",
                           type: "text",
                           required: true,
-                          defaultValue: (row.priceCents / 100).toFixed(2)
+                          defaultValue: Math.floor(row.priceCents / 100)
                         },
                         {
                           name: "productUrl",
@@ -396,9 +396,9 @@ export default async function AdminSectionPage({
                     <input
                       type="text"
                       name="receivedAmountEuros"
-                      defaultValue={(
-                        (row.receivedAmountCents ?? row.amountCents) / 100
-                      ).toFixed(2)}
+                      defaultValue={wholeEurosFromCents(
+                        row.receivedAmountCents ?? row.amountCents
+                      )}
                       aria-label={`Importo ricevuto ${row.publicReference}`}
                       required
                     />

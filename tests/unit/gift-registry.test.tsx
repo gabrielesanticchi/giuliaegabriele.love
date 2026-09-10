@@ -82,9 +82,11 @@ describe("GiftRegistry", () => {
   });
 
   it("mostra immagine e collegamento del prodotto", () => {
-    render(<GiftRegistry gifts={[testGifts[0]]} />);
+    render(<GiftRegistry gifts={[{ ...testGifts[0], priceCents: 100099 }]} />);
 
-    expect(screen.getByText(/Prezzo di listino\s+1000,00/)).toBeInTheDocument();
+    expect(screen.getByText(/Prezzo di listino/)).toHaveTextContent(
+      "Prezzo di listino 1.000 €"
+    );
     expect(screen.getByRole("img", { name: "Tavolo" })).toHaveAttribute(
       "src",
       expect.stringContaining("%2Fgifts%2Ftavolo.png")
@@ -211,7 +213,7 @@ describe("GiftRegistry", () => {
     expect(message).toHaveAttribute("aria-describedby");
   });
 
-  it("accetta la virgola ma rifiuta più di due decimali", async () => {
+  it("accetta soltanto contributi in euro interi", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
@@ -232,23 +234,87 @@ describe("GiftRegistry", () => {
     );
     await fillGuestForm(user);
     const amount = screen.getByLabelText("Importo in euro");
-    await user.type(amount, "12,345");
+    await user.type(amount, "12,34");
     await user.click(screen.getByRole("button", { name: "Continua" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Inserisci un importo con al massimo due decimali"
+      "Inserisci un importo in euro interi"
     );
     expect(fetchMock).not.toHaveBeenCalled();
 
     await user.clear(amount);
-    await user.type(amount, "12,34");
+    await user.type(amount, "12");
     await user.click(screen.getByRole("button", { name: "Continua" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const sent = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string) as {
       amountCents: number;
       privacyVersion: string;
     };
-    expect(sent.amountCents).toBe(1234);
+    expect(sent.amountCents).toBe(1200);
     expect(sent.privacyVersion).toBe("2026-09-05");
+  });
+
+  it("mostra un riepilogo essenziale e consente di copiare l’IBAN", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            reference: "REQ-1",
+            expiresAt: "2026-08-21T12:00:00.000Z",
+            personalLink: "/richiesta/token",
+            instructions: {
+              type: "bank_transfer",
+              accountHolder: "Persona A & Persona B",
+              iban: "IT00X0000000000000000000000",
+              bankName: "Banca di prova",
+              transferReason: "CASA-REGALO-REQ-1",
+              instructions:
+                'Suggeriamo di usare una causale chiara, es. "Regalo di nozze – liberalità"'
+            }
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+    );
+    render(<GiftRegistry gifts={testGifts} />);
+    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await fillGuestForm(user);
+    await user.click(screen.getByRole("button", { name: "Continua" }));
+
+    const summary = await screen.findByRole("status");
+    expect(summary).toHaveTextContent(
+      "Richiesta registrata. Conserva il link personale."
+    );
+    expect(summary).toHaveTextContent("Intestatario: Persona A & Persona B");
+    expect(summary).toHaveTextContent("IBAN: IT00X0000000000000000000000");
+    expect(summary).toHaveTextContent("Banca: Banca di prova");
+    expect(summary).toHaveTextContent(/Suggeriamo di usare una causale chiara/);
+    expect(summary).not.toHaveTextContent("Riferimento:");
+    expect(summary).not.toHaveTextContent("CASA-REGALO-REQ-1");
+    expect(
+      within(summary).queryByRole("link", { name: "Gestisci la richiesta" })
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(summary).getByRole("button", { name: "Copia IBAN" })
+    );
+    expect(
+      await within(summary).findByText("IBAN copiato")
+    ).toBeInTheDocument();
+
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValueOnce(
+      new Error("Clipboard non disponibile")
+    );
+    await user.click(
+      within(summary).getByRole("button", { name: "Copia IBAN" })
+    );
+    expect(
+      await within(summary).findByText(
+        "Copia non riuscita. Seleziona l’IBAN e copialo manualmente."
+      )
+    ).toBeInTheDocument();
   });
 
   it("conserva la idempotency key al retry dopo un errore", async () => {

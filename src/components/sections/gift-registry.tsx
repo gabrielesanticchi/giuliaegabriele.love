@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowUpRight, X } from "lucide-react";
+import { ArrowUpRight, Copy, X } from "lucide-react";
 import Image from "next/image";
 import {
   type RefObject,
@@ -15,7 +15,7 @@ import {
 import { type Resolver, useForm } from "react-hook-form";
 
 import type { PublicGift } from "@/data/site-content";
-import { formatCurrency } from "@/lib/domain/currency";
+import { formatWholeEuro } from "@/lib/domain/currency";
 import {
   contributionGiftFormSchema,
   parseEuroAmount,
@@ -121,7 +121,7 @@ export function GiftRegistry({
                   {statusLabels[gift.status]}
                 </p>
                 <p className="gift-price">
-                  Prezzo di listino {formatCurrency(gift.priceCents)}
+                  Prezzo di listino {formatWholeEuro(gift.priceCents)}
                 </p>
                 {gift.productUrl ? (
                   <a
@@ -320,6 +320,9 @@ function GiftIntentForm({
     message: string;
     result?: GiftSuccess;
   } | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">(
+    "idle"
+  );
   const resolver = zodResolver(
     isContribution ? contributionGiftFormSchema : reserveGiftRequestSchema
   ) as Resolver<GiftFormValues>;
@@ -349,8 +352,25 @@ function GiftIntentForm({
   });
 
   useEffect(() => {
-    if (feedback?.kind === "error") summaryRef.current?.focus();
+    if (feedback?.kind === "error") {
+      summaryRef.current?.focus();
+      return;
+    }
+    if (feedback?.result) {
+      summaryRef.current
+        ?.closest<HTMLElement>(".gift-dialog")
+        ?.scrollTo?.({ top: 0 });
+    }
   }, [feedback]);
+
+  const copyIban = async (iban: string) => {
+    try {
+      await navigator.clipboard.writeText(iban);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+  };
 
   const submit = handleSubmit(
     async (values) => {
@@ -465,6 +485,13 @@ function GiftIntentForm({
         {message}
       </span>
     ) : null;
+  const firstResult =
+    feedback?.result &&
+    (!("replayed" in feedback.result) || !feedback.result.replayed)
+      ? feedback.result
+      : null;
+  const instructions = firstResult?.instructions;
+  const iban = instructions?.iban;
 
   return (
     <form className="gift-intent-form" onSubmit={submit} noValidate>
@@ -488,31 +515,40 @@ function GiftIntentForm({
           ) : null}
           {feedback.result ? (
             <div className="one-time-instructions">
-              <p>Riferimento: {feedback.result.reference}</p>
-              {!("replayed" in feedback.result) || !feedback.result.replayed ? (
+              {instructions ? (
                 <>
-                  {feedback.result.instructions.accountHolder ? (
-                    <p>
-                      Intestatario: {feedback.result.instructions.accountHolder}
+                  {instructions.accountHolder ? (
+                    <p>Intestatario: {instructions.accountHolder}</p>
+                  ) : null}
+                  {iban ? (
+                    <div className="iban-copy-row">
+                      <p>IBAN: {iban}</p>
+                      <button
+                        type="button"
+                        className="copy-iban"
+                        aria-label="Copia IBAN"
+                        onClick={() => void copyIban(iban)}
+                      >
+                        <Copy aria-hidden="true" />
+                        Copia
+                      </button>
+                      <span className="copy-feedback" aria-live="polite">
+                        {copyStatus === "copied"
+                          ? "IBAN copiato"
+                          : copyStatus === "error"
+                            ? "Copia non riuscita. Seleziona l’IBAN e copialo manualmente."
+                            : ""}
+                      </span>
+                    </div>
+                  ) : null}
+                  {instructions.bankName ? (
+                    <p>Banca: {instructions.bankName}</p>
+                  ) : null}
+                  {instructions.instructions ? (
+                    <p className="transfer-guidance">
+                      {instructions.instructions}
                     </p>
                   ) : null}
-                  {feedback.result.instructions.iban ? (
-                    <p>IBAN: {feedback.result.instructions.iban}</p>
-                  ) : null}
-                  {feedback.result.instructions.bankName ? (
-                    <p>Banca: {feedback.result.instructions.bankName}</p>
-                  ) : null}
-                  {feedback.result.instructions.transferReason ? (
-                    <p>
-                      Causale: {feedback.result.instructions.transferReason}
-                    </p>
-                  ) : null}
-                  {feedback.result.instructions.instructions ? (
-                    <p>{feedback.result.instructions.instructions}</p>
-                  ) : null}
-                  <a href={feedback.result.personalLink}>
-                    Gestisci la richiesta
-                  </a>
                 </>
               ) : null}
             </div>
@@ -595,7 +631,8 @@ function GiftIntentForm({
               <input
                 id={`${formId}-amount`}
                 type="text"
-                inputMode="decimal"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 aria-invalid={Boolean(errors.amount)}
                 aria-describedby={
                   errors.amount ? `${formId}-amount-error` : undefined
