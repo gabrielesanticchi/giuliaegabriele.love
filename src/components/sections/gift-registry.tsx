@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowUpRight, Copy, X } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Copy, X } from "lucide-react";
 import Image from "next/image";
 import {
   type RefObject,
@@ -142,7 +142,15 @@ export function GiftRegistry({
           </article>
         ))}
       </div>
-      <section className="registry-fund" aria-labelledby="registry-fund-title">
+      <p className="registry-fund-cue">
+        Se preferisci lasciare un’offerta libera…
+        <ArrowDown aria-hidden="true" />
+      </p>
+      <section
+        className="registry-fund"
+        id="fondo-comune"
+        aria-labelledby="registry-fund-title"
+      >
         <div className="registry-fund-art" aria-hidden="true">
           <Image
             src="/graphics/wedding-fund-piggy-bank.png"

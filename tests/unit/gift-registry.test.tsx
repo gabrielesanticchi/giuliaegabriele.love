@@ -107,6 +107,7 @@ describe("GiftRegistry", () => {
     render(<GiftRegistry gifts={testGifts} />);
 
     const lastGift = screen.getAllByRole("article").at(-1);
+    const cue = screen.getByText("Se preferisci lasciare un’offerta libera…");
     const fundTitle = screen.getByRole("heading", {
       name: "Un piccolo regalo, un progetto comune"
     });
@@ -115,6 +116,9 @@ describe("GiftRegistry", () => {
     expect(
       lastGift!.compareDocumentPosition(fundTitle) &
         Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      cue.compareDocumentPosition(fundTitle) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
 

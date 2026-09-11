@@ -52,9 +52,11 @@ export function PublicHome({
             <p>
               Nessun pagamento avviene su questo sito. Per i singoli regali
               potete scegliere l’acquisto sul sito del negozio oppure il
-              bonifico dell’intero prezzo di listino. Se preferite lasciarci un
-              pensiero libero, potete contribuire tramite bonifico al fondo
-              comune.
+              bonifico dell’intero prezzo di listino.{" "}
+              <strong>
+                Se preferite lasciarci un pensiero libero, potete contribuire
+                tramite bonifico al <a href="#fondo-comune">fondo comune</a>.
+              </strong>
             </p>
           </div>
           <GiftRegistry gifts={content.gifts} />

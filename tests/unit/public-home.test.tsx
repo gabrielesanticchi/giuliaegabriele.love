@@ -31,6 +31,9 @@ describe("PublicHome", () => {
       "section-step"
     );
     expect(screen.getByText("Lista nozze · 03")).toHaveClass("section-step");
+    const commonFundLink = screen.getByRole("link", { name: "fondo comune" });
+    expect(commonFundLink).toHaveAttribute("href", "#fondo-comune");
+    expect(commonFundLink.closest("strong")).not.toBeNull();
     expect(
       screen.getByRole("link", { name: "Vai al contenuto principale" })
     ).toHaveAttribute("href", "#contenuto");

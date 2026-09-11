@@ -10,6 +10,10 @@ test.describe("public home", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Giulia & Gabriele" })
     ).toBeVisible();
+    await expect(page.getByText("Ci sposiamo", { exact: true })).toHaveCSS(
+      "font-size",
+      "30px"
+    );
     await expect(
       page.getByRole("link", { name: "Vai al contenuto principale" })
     ).toHaveAttribute("href", "#contenuto");

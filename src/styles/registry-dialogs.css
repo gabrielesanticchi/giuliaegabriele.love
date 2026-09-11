@@ -16,11 +16,34 @@
   gap: 1rem;
   color: var(--color-muted);
 }
+.registry-intro strong {
+  color: var(--color-forest);
+}
+.registry-intro a:hover,
+.registry-intro a:focus-visible {
+  color: var(--color-clay);
+}
+.registry-fund-cue {
+  display: flex;
+  gap: 0.65rem;
+  margin-top: clamp(3rem, 7vw, 6rem);
+  align-items: center;
+  justify-content: center;
+  color: var(--color-forest);
+  font-weight: 700;
+  text-align: center;
+}
+.registry-fund-cue svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+}
 .registry-fund {
   display: grid;
   gap: clamp(1.5rem, 4vw, 4rem);
-  margin-top: clamp(3rem, 7vw, 6rem);
+  margin-top: 1.25rem;
   padding: clamp(1.25rem, 4vw, 3rem);
+  scroll-margin-top: 6rem;
   align-items: center;
   border: 1px solid var(--color-line);
   background: var(--color-ivory);
