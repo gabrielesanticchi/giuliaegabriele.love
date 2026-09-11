@@ -79,6 +79,28 @@ integration(
           and tablename = 'gift_intents'
           and indexname = 'gift_intents_request_fingerprint_idx'
       `;
+      const registryColumns = await adminSql<
+        Array<{ column_name: string; is_nullable: "YES" | "NO" }>
+      >`
+        select column_name, is_nullable
+        from information_schema.columns
+        where table_schema = ${schemaName}
+          and table_name = 'gift_intents'
+          and column_name = 'gift_id'
+      `;
+      const registryConstraints = await adminSql<
+        Array<{ constraint_name: string }>
+      >`
+        select constraint_name
+        from information_schema.table_constraints
+        where table_schema = ${schemaName}
+          and table_name = 'gift_intents'
+          and constraint_name in (
+            'gift_intents_full_gift_requires_gift',
+            'gift_intents_contribution_has_no_gift'
+          )
+        order by constraint_name
+      `;
 
       expect(columns).toEqual([
         { column_name: "guest_cancel_idempotency_key", is_nullable: "YES" },
@@ -88,6 +110,13 @@ integration(
       ]);
       expect(indexes).toEqual([
         { indexname: "gift_intents_request_fingerprint_idx" }
+      ]);
+      expect(registryColumns).toEqual([
+        { column_name: "gift_id", is_nullable: "YES" }
+      ]);
+      expect(registryConstraints).toEqual([
+        { constraint_name: "gift_intents_contribution_has_no_gift" },
+        { constraint_name: "gift_intents_full_gift_requires_gift" }
       ]);
     });
 

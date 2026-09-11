@@ -53,7 +53,7 @@ export const euroAmountInputSchema = z
 
 export const reserveGiftRequestSchema = commonGiftRequestSchema
   .extend({
-    method: z.enum(["external_purchase", "bank_transfer"])
+    method: z.literal("bank_transfer")
   })
   .strict();
 

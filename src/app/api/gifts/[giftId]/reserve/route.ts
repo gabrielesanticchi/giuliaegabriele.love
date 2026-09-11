@@ -13,7 +13,7 @@ export async function POST(
   try {
     const handler = createGiftIntentHandler(
       "reserve",
-      createGiftRuntimeDependencies("reserve")
+      createGiftRuntimeDependencies()
     );
     return handler(request, await params);
   } catch {

@@ -25,15 +25,15 @@ la direttiva nei propri metadata.
 La Lista Nozze supporta:
 
 - regalo intero tramite acquisto esterno o bonifico;
-- contributi parziali tramite bonifico;
+- contributi di importo libero a un unico fondo comune tramite bonifico;
 - immagini locali e link HTTPS alle pagine prodotto;
 - prezzi di listino in centesimi interi;
 - prenotazioni esclusive di 48 ore per i regali interi;
 - verifica manuale da parte degli amministratori.
 
-Quando esiste già un contributo verificato, “Regala” viene nascosto per evitare
-un regalo intero duplicato; “Contribuisci” resta disponibile fino al
-completamento.
+I contributi comuni non modificano disponibilità o stato dei singoli regali. Un
+acquisto sul sito del venditore è preceduto da un avviso che invita a confermare
+il regalo via WhatsApp; l’admin può quindi rimuovere l’elemento dalla lista.
 
 ## Area amministrativa
 
@@ -170,7 +170,7 @@ flowchart TB
     PAGES["Pagine pubbliche condivise<br/>/ · /ricevimento · /privacy"]
     GUEST["Pagina richiesta personale<br/>/richiesta/[token]"]
     ADMIN["Admin<br/>panoramica · regali · richieste · impostazioni"]
-    API["API<br/>reserve · contribute · complete · cancel · auth"]
+    API["API<br/>reserve · common contribution · complete · cancel · auth"]
     ACTIONS["Server Actions admin<br/>autorizzazione · audit · receipt"]
     DOMAIN["Dominio e sicurezza<br/>disponibilità · centesimi · cifratura · rate limit"]
     DBTX["Drizzle + transazioni serializzabili"]
@@ -208,7 +208,7 @@ src/
 ├── data/site-content.ts       # hero, data, cerimonia, ricevimento e storia
 ├── db/
 │   ├── schema/                # enum, tabelle, indici e vincoli Drizzle
-│   └── transactions/          # prenotazione, contributo e policy importi
+│   └── transactions/          # prenotazione, fondo comune e policy importi
 ├── lib/                       # dominio, sicurezza, auth, email e adapter pubblici
 └── styles/                    # design tokens e CSS
 
@@ -228,10 +228,10 @@ sequenceDiagram
   participant PG as PostgreSQL
 
   U->>API: POST validato + idempotency key
-  API->>TX: reserveGift / contributeToGift
-  TX->>PG: lock regalo e calcolo verified + pending
+  API->>TX: reserveGift / declareRegistryContribution
+  TX->>PG: lock del regalo intero oppure contributo senza gift_id
   alt richiesta accettata
-    TX->>PG: crea gift_intent e, se necessario, gift_lock
+    TX->>PG: crea gift_intent e gift_lock solo per il regalo intero
     API-->>U: 200 + istruzioni una-tantum, no-store
   else conflitto o importo indisponibile
     API-->>U: 409 con errore di dominio

@@ -105,7 +105,7 @@ export function renderContributionEmail(input: {
     subject,
     html: document(subject, [
       `Grazie ${escapeHtml(input.firstName)}!`,
-      `Il tuo contributo di ${escapeHtml(input.amount)} è associato a ${escapeHtml(input.giftName)}.`,
+      `Il tuo contributo di ${escapeHtml(input.amount)} è destinato al ${escapeHtml(input.giftName)}.`,
       `Riferimento: ${escapeHtml(input.reference)}`,
       escapeHtml(input.instructions),
       "Il contributo sarà conteggiato dopo il nostro controllo manuale.",
@@ -113,7 +113,7 @@ export function renderContributionEmail(input: {
     ]),
     text: [
       `Grazie ${input.firstName}!`,
-      `Il tuo contributo di ${input.amount} è associato a ${input.giftName}.`,
+      `Il tuo contributo di ${input.amount} è destinato al ${input.giftName}.`,
       `Riferimento: ${input.reference}`,
       input.instructions,
       "Il contributo sarà conteggiato dopo il nostro controllo manuale.",

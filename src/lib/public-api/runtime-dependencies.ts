@@ -7,7 +7,7 @@ import { getDatabase } from "@/db";
 import { giftIntents, gifts, siteSettings } from "@/db/schema";
 import {
   cancelIntent,
-  contributeToGift,
+  declareRegistryContribution,
   declareIntentPayment,
   reserveGift
 } from "@/db/transactions";
@@ -21,7 +21,8 @@ import { consumeRateLimit } from "@/lib/security/rate-limit";
 import {
   type BankInstructions,
   type GiftIntentHandlerDependencies,
-  PublicServiceUnavailableError
+  PublicServiceUnavailableError,
+  type RegistryContributionHandlerDependencies
 } from "./gift-handler";
 import type { RequestActionDependencies } from "./request-handler";
 
@@ -95,9 +96,7 @@ function decryptBankInstructions(encrypted: string): BankInstructions {
   }
 }
 
-export function createGiftRuntimeDependencies(
-  kind: "reserve" | "contribute"
-): GiftIntentHandlerDependencies {
+export function createGiftRuntimeDependencies(): GiftIntentHandlerDependencies {
   const config = publicConfig();
   const db = getDatabase();
   const limit = positiveInteger(process.env.PUBLIC_FORM_RATE_LIMIT, 8);
@@ -130,9 +129,7 @@ export function createGiftRuntimeDependencies(
       return rows[0] ?? null;
     },
     mutate: ({ beforeCommit, ...input }) =>
-      kind === "reserve"
-        ? reserveGift(db, input, { beforeCommit })
-        : contributeToGift(db, input, { beforeCommit }),
+      reserveGift(db, input, { beforeCommit }),
     loadEncryptedBankInstructions,
     decryptBankInstructions,
     encryptGuestDetails: (details) =>
@@ -153,17 +150,10 @@ export function createGiftRuntimeDependencies(
           email: renderAdminIntentEmail({
             giftName: input.gift.title,
             reference: input.reference,
-            kind: kind === "reserve" ? "Prenotazione" : "Contributo",
-            method:
-              "method" in input.request
-                ? input.request.method
-                : "bank_transfer",
+            kind: "Prenotazione",
+            method: input.request.method,
             guestName: `${input.request.guest.firstName} ${input.request.guest.lastName}`,
-            amount: formatCurrency(
-              "amountCents" in input.request
-                ? input.request.amountCents
-                : input.gift.priceCents
-            ),
+            amount: formatCurrency(input.gift.priceCents),
             createdAt: new Intl.DateTimeFormat("it-IT", {
               dateStyle: "long",
               timeStyle: "short",
@@ -177,6 +167,65 @@ export function createGiftRuntimeDependencies(
           hashingSecret: config.fingerprintSecret
         });
       }
+    }
+  };
+}
+
+export function createRegistryContributionRuntimeDependencies(): RegistryContributionHandlerDependencies {
+  const config = publicConfig();
+  const db = getDatabase();
+  const limit = positiveInteger(process.env.PUBLIC_FORM_RATE_LIMIT, 8);
+  const windowSeconds = positiveInteger(
+    process.env.PUBLIC_FORM_RATE_WINDOW_SECONDS,
+    900
+  );
+  const holdHours = positiveInteger(process.env.GIFT_HOLD_HOURS, 48);
+
+  return {
+    ...config,
+    holdDurationMs: holdHours * 60 * 60 * 1_000,
+    consumeRateLimit: (input) =>
+      consumeRateLimit(db, {
+        ...input,
+        limit,
+        windowMs: windowSeconds * 1_000
+      }),
+    mutate: ({ beforeCommit, ...input }) =>
+      declareRegistryContribution(db, input, { beforeCommit }),
+    loadEncryptedBankInstructions,
+    decryptBankInstructions,
+    encryptGuestDetails: (details) =>
+      encryptSecret(
+        JSON.stringify(details),
+        requiredEnvironment("DATA_ENCRYPTION_KEY")
+      ),
+    notify: async (input) => {
+      const siteOrigin = new URL(config.siteOrigin).origin;
+      const admin = process.env.ADMIN_NOTIFICATION_EMAIL?.trim();
+      if (!admin) return;
+      await deliverTransactionalEmail(db, {
+        intentId: input.intentId,
+        recipient: admin,
+        templateKey: "admin_gift_intent",
+        email: renderAdminIntentEmail({
+          giftName: input.gift.title,
+          reference: input.reference,
+          kind: "Contributo",
+          method: "bank_transfer",
+          guestName: `${input.request.guest.firstName} ${input.request.guest.lastName}`,
+          amount: formatCurrency(input.gift.priceCents),
+          createdAt: new Intl.DateTimeFormat("it-IT", {
+            dateStyle: "long",
+            timeStyle: "short",
+            timeZone: "Europe/Rome"
+          }).format(new Date()),
+          adminUrl: new URL(
+            `/admin/requests/${input.intentId}`,
+            siteOrigin
+          ).toString()
+        }),
+        hashingSecret: config.fingerprintSecret
+      });
     }
   };
 }

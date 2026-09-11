@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import { Resend } from "resend";
 import { z } from "zod";
 
@@ -174,11 +174,11 @@ export async function deliverQueuedVerificationNotification(
       encryptedGuest: giftIntents.guestDetailsEncrypted,
       reference: giftIntents.publicReference,
       amountCents: giftIntents.appliedAmountCents,
-      giftTitle: gifts.title
+      giftTitle: sql<string>`coalesce(${gifts.title}, 'Fondo comune Lista Nozze')`
     })
     .from(emailDeliveries)
     .innerJoin(giftIntents, eq(giftIntents.id, emailDeliveries.intentId))
-    .innerJoin(gifts, eq(gifts.id, giftIntents.giftId))
+    .leftJoin(gifts, eq(gifts.id, giftIntents.giftId))
     .where(eq(emailDeliveries.id, input.deliveryId))
     .limit(1);
   const queued = rows[0];
@@ -285,10 +285,10 @@ export async function deliverVerificationNotification(
       recipientHash: giftIntents.guestEmailHash,
       reference: giftIntents.publicReference,
       amountCents: giftIntents.appliedAmountCents,
-      giftTitle: gifts.title
+      giftTitle: sql<string>`coalesce(${gifts.title}, 'Fondo comune Lista Nozze')`
     })
     .from(giftIntents)
-    .innerJoin(gifts, eq(gifts.id, giftIntents.giftId))
+    .leftJoin(gifts, eq(gifts.id, giftIntents.giftId))
     .where(eq(giftIntents.id, input.intentId))
     .limit(1);
   const intent = rows[0];

@@ -19,9 +19,18 @@ describe("PublicHome", () => {
     expect(screen.getByRole("main")).toHaveAttribute("id", "contenuto");
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Giulia & Gabriele" })
-    ).toBeInTheDocument();
+    const title = screen.getByRole("heading", {
+      level: 1,
+      name: "Giulia e Gabriele"
+    });
+    expect(title).toBeInTheDocument();
+    expect(title.querySelectorAll(".hero-name-line")).toHaveLength(2);
+    expect(title.querySelector(".hero-and-line")).toHaveTextContent("e");
+    expect(screen.getByText("Il matrimonio · 01")).toHaveClass("section-step");
+    expect(screen.getByText("La nostra storia · 02")).toHaveClass(
+      "section-step"
+    );
+    expect(screen.getByText("Lista nozze · 03")).toHaveClass("section-step");
     expect(
       screen.getByRole("link", { name: "Vai al contenuto principale" })
     ).toHaveAttribute("href", "#contenuto");

@@ -12,9 +12,9 @@ import {
 } from "./errors";
 import {
   assertCancellationAllowed,
-  assertGiftReservationAvailable,
   assertIdempotentRequestMatches,
   assertPaymentDeclarationAllowed,
+  getContributionVerificationAmounts,
   getVerificationAmounts,
   type IntentRequestSemantics
 } from "./policies";
@@ -42,6 +42,11 @@ type NewIntentInput = {
   fingerprintHash?: string;
   expiresAt: Date;
 };
+
+export type RegistryContributionInput = Omit<
+  NewIntentInput,
+  "giftId" | "method"
+>;
 
 function isUniqueViolation(error: unknown): boolean {
   return findPostgresError(error)?.code === "23505";
@@ -160,22 +165,6 @@ export async function reserveGift(
         throw new TransactionError("gift_unavailable");
       }
 
-      const contributions = await tx
-        .select({
-          status: giftIntents.status,
-          expiresAt: giftIntents.expiresAt,
-          amountCents: giftIntents.amountCents,
-          appliedAmountCents: giftIntents.appliedAmountCents
-        })
-        .from(giftIntents)
-        .where(
-          and(
-            eq(giftIntents.giftId, gift.id),
-            eq(giftIntents.kind, "contribution")
-          )
-        );
-      assertGiftReservationAvailable({ now: new Date(), contributions });
-
       const inserted = await tx
         .insert(giftIntents)
         .values({
@@ -216,16 +205,22 @@ export async function reserveGift(
   }
 }
 
-export async function contributeToGift(
+export async function declareRegistryContribution(
   db: WeddingDatabase,
-  input: NewIntentInput,
+  input: RegistryContributionInput,
   boundary: GiftMutationBoundary = {}
 ): Promise<GiftMutationResult> {
   if (!Number.isSafeInteger(input.amountCents) || input.amountCents <= 0) {
     throw new TransactionError("amount_unavailable");
   }
 
-  const requested = requestSemantics(input, "contribution");
+  const requested: IntentRequestSemantics = {
+    giftId: null,
+    kind: "contribution",
+    method: "bank_transfer",
+    amountCents: input.amountCents,
+    requestFingerprintHash: input.requestFingerprintHash
+  };
   try {
     return await runSerializable(db, async (tx) => {
       const idempotent = await tx
@@ -237,58 +232,13 @@ export async function contributeToGift(
         return resolveIdempotentIntent(idempotent[0], requested);
       }
 
-      const gift = await lockAndReadGift(tx, input.giftId);
-      if (
-        !gift ||
-        gift.completed ||
-        !gift.published ||
-        gift.archivedAt !== null
-      ) {
-        throw new TransactionError("gift_unavailable");
-      }
-
-      const fullLock = await tx
-        .select({ giftId: giftLocks.giftId })
-        .from(giftLocks)
-        .where(eq(giftLocks.giftId, gift.id))
-        .limit(1);
-      if (fullLock[0]) throw new TransactionError("gift_unavailable");
-
-      const commitments = await tx
-        .select({
-          kind: giftIntents.kind,
-          status: giftIntents.status,
-          amountCents: giftIntents.amountCents,
-          appliedAmountCents: giftIntents.appliedAmountCents,
-          expiresAt: giftIntents.expiresAt
-        })
-        .from(giftIntents)
-        .where(eq(giftIntents.giftId, gift.id));
-      const now = new Date();
-      const verifiedCents = commitments
-        .filter((intent) => intent.status === "verified")
-        .reduce((sum, intent) => sum + intent.appliedAmountCents, 0);
-      const activePendingCents = commitments
-        .filter(
-          (intent) =>
-            intent.kind === "contribution" &&
-            intent.status === "pending" &&
-            intent.expiresAt > now
-        )
-        .reduce((sum, intent) => sum + intent.amountCents, 0);
-      const availableCents = Math.max(
-        0,
-        gift.priceCents - verifiedCents - activePendingCents
-      );
-      if (input.amountCents > availableCents) {
-        throw new TransactionError("amount_unavailable");
-      }
-
       const inserted = await tx
         .insert(giftIntents)
         .values({
           ...input,
+          giftId: null,
           kind: "contribution",
+          method: "bank_transfer",
           status: "pending"
         })
         .returning();
@@ -326,15 +276,6 @@ export async function verifyIntent(
   }
 
   return runSerializable(db, async (tx) => {
-    const initial = await tx
-      .select({ giftId: giftIntents.giftId })
-      .from(giftIntents)
-      .where(eq(giftIntents.id, input.intentId))
-      .limit(1);
-    if (!initial[0]) throw new TransactionError("intent_not_found", 404);
-
-    const gift = await lockAndReadGift(tx, initial[0].giftId);
-    if (!gift) throw new TransactionError("gift_unavailable");
     await tx.execute(
       sql`select id from ${giftIntents} where id = ${input.intentId} for update`
     );
@@ -350,22 +291,40 @@ export async function verifyIntent(
       throw new TransactionError("intent_not_pending");
     }
 
-    const verified = await tx
-      .select({ appliedAmountCents: giftIntents.appliedAmountCents })
-      .from(giftIntents)
-      .where(
-        and(eq(giftIntents.giftId, gift.id), eq(giftIntents.status, "verified"))
-      );
-    const alreadyAppliedCents = verified.reduce(
-      (sum, row) => sum + row.appliedAmountCents,
-      0
-    );
-    const amounts = getVerificationAmounts({
-      priceCents: gift.priceCents,
-      alreadyAppliedCents,
-      intentAmountCents: intent.amountCents,
-      receivedAmountCents: input.receivedAmountCents
-    });
+    let completedGiftId: string | null = null;
+    const amounts =
+      intent.kind === "contribution"
+        ? getContributionVerificationAmounts({
+            intentAmountCents: intent.amountCents,
+            receivedAmountCents: input.receivedAmountCents
+          })
+        : await (async () => {
+            if (!intent.giftId) {
+              throw new TransactionError("gift_unavailable");
+            }
+            const gift = await lockAndReadGift(tx, intent.giftId);
+            if (!gift) throw new TransactionError("gift_unavailable");
+            const verified = await tx
+              .select({ appliedAmountCents: giftIntents.appliedAmountCents })
+              .from(giftIntents)
+              .where(
+                and(
+                  eq(giftIntents.giftId, gift.id),
+                  eq(giftIntents.status, "verified")
+                )
+              );
+            const giftAmounts = getVerificationAmounts({
+              priceCents: gift.priceCents,
+              alreadyAppliedCents: verified.reduce(
+                (sum, row) => sum + row.appliedAmountCents,
+                0
+              ),
+              intentAmountCents: intent.amountCents,
+              receivedAmountCents: input.receivedAmountCents
+            });
+            if (giftAmounts.completesGift) completedGiftId = gift.id;
+            return giftAmounts;
+          })();
     const now = new Date();
     const updated = await tx
       .update(giftIntents)
@@ -379,11 +338,11 @@ export async function verifyIntent(
       .where(eq(giftIntents.id, intent.id))
       .returning();
 
-    if (amounts.completesGift) {
+    if (completedGiftId) {
       await tx
         .update(gifts)
         .set({ completed: true, updatedAt: now })
-        .where(eq(gifts.id, gift.id));
+        .where(eq(gifts.id, completedGiftId));
     }
     await tx.delete(giftLocks).where(eq(giftLocks.intentId, intent.id));
     await tx.insert(auditLogs).values({
@@ -409,14 +368,6 @@ export async function cancelIntent(
   }
 ): Promise<GiftActionResult> {
   return runSerializable(db, async (tx) => {
-    const initial = await tx
-      .select({ giftId: giftIntents.giftId })
-      .from(giftIntents)
-      .where(eq(giftIntents.id, input.intentId))
-      .limit(1);
-    if (!initial[0]) throw new TransactionError("intent_not_found", 404);
-
-    await lockAndReadGift(tx, initial[0].giftId);
     await tx.execute(
       sql`select id from ${giftIntents} where id = ${input.intentId} for update`
     );
@@ -472,14 +423,6 @@ export async function declareIntentPayment(
   input: { intentId: string; idempotencyKey?: string }
 ): Promise<GiftActionResult> {
   return runSerializable(db, async (tx) => {
-    const initial = await tx
-      .select({ giftId: giftIntents.giftId })
-      .from(giftIntents)
-      .where(eq(giftIntents.id, input.intentId))
-      .limit(1);
-    if (!initial[0]) throw new TransactionError("intent_not_found", 404);
-
-    await lockAndReadGift(tx, initial[0].giftId);
     await tx.execute(
       sql`select id from ${giftIntents} where id = ${input.intentId} for update`
     );

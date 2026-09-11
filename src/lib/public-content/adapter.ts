@@ -4,7 +4,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 
 import type { PublicGift } from "@/data/site-content";
 import { getDatabase } from "@/db";
-import { giftCategories, giftIntents, giftLocks, gifts } from "@/db/schema";
+import { giftCategories, giftLocks, gifts } from "@/db/schema";
 import { getPublicGiftStatus } from "@/lib/domain/gifts";
 
 type DatabaseGift = {
@@ -19,7 +19,6 @@ type DatabaseGift = {
   archivedAt: Date | null;
   categoryName: string | null;
   hasLock: boolean;
-  verifiedCents: number;
 };
 
 type GiftSnapshot = {
@@ -38,18 +37,16 @@ export function mapPublicGifts(snapshot: GiftSnapshot): PublicGift[] {
       imagePath: gift.imagePath,
       priceCents: gift.priceCents,
       status: getPublicGiftStatus({
-        completed: gift.completed || gift.verifiedCents >= gift.priceCents,
+        completed: gift.completed,
         hasFullGiftLock: gift.hasLock
       }),
-      allowFullGift: gift.verifiedCents === 0,
-      allowContributions: true,
-      confirmedContributionCents: gift.verifiedCents
+      allowFullGift: !gift.completed && !gift.hasLock
     }));
 }
 
 export async function loadPublicGifts(): Promise<PublicGift[]> {
   const db = getDatabase();
-  const [giftRows, lockRows, intentRows] = await Promise.all([
+  const [giftRows, lockRows] = await Promise.all([
     db
       .select({
         id: gifts.id,
@@ -72,26 +69,15 @@ export async function loadPublicGifts(): Promise<PublicGift[]> {
         )
       )
       .orderBy(asc(gifts.sortOrder)),
-    db.select().from(giftLocks),
-    db
-      .select({
-        giftId: giftIntents.giftId,
-        status: giftIntents.status,
-        appliedAmountCents: giftIntents.appliedAmountCents
-      })
-      .from(giftIntents)
+    db.select().from(giftLocks)
   ]);
   const now = new Date();
   const mappedGifts = giftRows.map((gift) => {
-    const intents = intentRows.filter((intent) => intent.giftId === gift.id);
     return {
       ...gift,
       hasLock: lockRows.some(
         (lock) => lock.giftId === gift.id && lock.expiresAt > now
-      ),
-      verifiedCents: intents
-        .filter((intent) => intent.status === "verified")
-        .reduce((sum, intent) => sum + intent.appliedAmountCents, 0)
+      )
     };
   });
   return mapPublicGifts({ gifts: mappedGifts });

@@ -46,6 +46,15 @@ describe("public API validation", () => {
     });
   });
 
+  it("accetta il bonifico come unico metodo di prenotazione sul sito", () => {
+    expect(
+      reserveGiftRequestSchema.safeParse({
+        ...common,
+        method: "external_purchase"
+      }).success
+    ).toBe(false);
+  });
+
   it("richiede il telefono e rifiuta privacy non accettata e campi oltre limite", () => {
     const parsed = reserveGiftRequestSchema.safeParse({
       ...common,

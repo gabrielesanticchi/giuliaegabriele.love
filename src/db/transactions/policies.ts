@@ -1,7 +1,7 @@
 import { TransactionError } from "./errors";
 
 export type IntentRequestSemantics = {
-  giftId: string;
+  giftId: string | null;
   kind: "full_gift" | "contribution";
   method: "external_purchase" | "bank_transfer";
   amountCents: number;
@@ -42,6 +42,21 @@ export function getVerificationAmounts(input: {
   };
 }
 
+export function getContributionVerificationAmounts(input: {
+  intentAmountCents: number;
+  receivedAmountCents: number;
+}) {
+  assertCents(input.intentAmountCents, "intentAmountCents");
+  assertCents(input.receivedAmountCents, "receivedAmountCents");
+  return {
+    receivedAmountCents: input.receivedAmountCents,
+    appliedAmountCents: Math.min(
+      input.intentAmountCents,
+      input.receivedAmountCents
+    )
+  };
+}
+
 export function assertCancellationAllowed(input: {
   actor: "guest" | "admin";
   status: "pending" | "verified" | "cancelled" | "expired" | "rejected";
@@ -61,25 +76,6 @@ export function assertPaymentDeclarationAllowed(input: {
 }): void {
   if (input.status !== "pending") {
     throw new TransactionError("intent_not_pending");
-  }
-}
-
-export function assertGiftReservationAvailable(input: {
-  now: Date;
-  contributions: Array<{
-    status: "pending" | "verified" | "cancelled" | "expired" | "rejected";
-    expiresAt: Date;
-    amountCents: number;
-    appliedAmountCents: number;
-  }>;
-}): void {
-  const hasCommittedContribution = input.contributions.some(
-    (contribution) =>
-      contribution.status === "verified" ||
-      (contribution.status === "pending" && contribution.expiresAt > input.now)
-  );
-  if (hasCommittedContribution) {
-    throw new TransactionError("gift_unavailable");
   }
 }
 

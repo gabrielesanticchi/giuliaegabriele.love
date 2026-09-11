@@ -1,4 +1,4 @@
-# Stato del repository — 9 settembre 2026
+# Stato del repository — 11 settembre 2026
 
 Questo documento è uno snapshot dell’architettura attiva. Non contiene backlog
 storici o migrazioni future ipotetiche.
@@ -21,7 +21,10 @@ storici o migrazioni future ipotetiche.
   rate limiting ed email sono in PostgreSQL.
 - La Lista Nozze usa prezzi di listino in centesimi, immagini locali e link
   prodotto HTTPS.
-- “Regala” è nascosto appena esiste un contributo verificato sul regalo.
+- Ogni regalo è acquistabile per intero sul sito del venditore oppure
+  prenotabile per un bonifico dell’intero prezzo di listino.
+- I contributi confluiscono in un unico fondo comune e non modificano stato,
+  disponibilità o avanzamento dei singoli regali.
 
 ## Amministrazione
 
@@ -41,7 +44,7 @@ e receipt idempotente nella stessa transazione.
 - Dieci tabelle PostgreSQL definite in `src/db/schema/tables.ts`.
 - Quattro enum per tipo/metodo/stato delle richieste e stato email.
 - Ultima migrazione richiesta dallo schema corrente:
-  `drizzle/0006_gift_cents_and_media.sql`.
+  `drizzle/0007_registry_common_fund.sql`.
 - Nessun layer di compatibilità per nomi di colonna precedenti.
 - Modello dettagliato: `docs/DATA_MODEL.md`.
 
@@ -52,7 +55,8 @@ e receipt idempotente nella stessa transazione.
 - Dati personali e bancari cifrati; token, email di lookup e fingerprint hashati.
 - IBAN disponibile soltanto nella risposta `no-store` della mutation appena
   accettata, mai nelle GET o nei replay.
-- Prenotazioni intere protette da lock esclusivo; durata predefinita 48 ore.
+- Prenotazioni intere tramite bonifico protette da lock esclusivo; durata
+  predefinita 48 ore. I contributi comuni non creano lock sui regali.
 - Form pubblici protetti da origin check, honeypot, idempotenza e rate limiting
   PostgreSQL.
 

@@ -9,7 +9,7 @@ import { createDatabase, type WeddingDatabase } from "@/db";
 import { gifts, giftIntents, giftLocks } from "@/db/schema";
 import {
   cancelIntent,
-  contributeToGift,
+  declareRegistryContribution,
   declareIntentPayment,
   reserveGift,
   TransactionError,
@@ -25,6 +25,7 @@ integration(
     let sql: postgres.Sql;
     let db: WeddingDatabase;
     const giftIds: string[] = [];
+    const commonIntentIds: string[] = [];
 
     beforeAll(async () => {
       sql = postgres(databaseUrl!, { max: 8, prepare: false });
@@ -34,6 +35,11 @@ integration(
 
     afterAll(async () => {
       if (!sql) return;
+      if (commonIntentIds.length > 0) {
+        await db
+          .delete(giftIntents)
+          .where(inArray(giftIntents.id, commonIntentIds));
+      }
       if (giftIds.length > 0) {
         await db.delete(gifts).where(inArray(gifts.id, giftIds));
       }
@@ -115,16 +121,13 @@ integration(
       expect((rejected?.reason as TransactionError).httpStatus).toBe(409);
     });
 
-    it("serializes concurrent contributions so their sum never exceeds the price", async () => {
-      const giftId = await createGift(10_000);
+    it("accetta contributi comuni concorrenti senza associarli a un regalo", async () => {
       const attempts = [6_000, 6_000].map((amountCents, index) =>
-        contributeToGift(db, {
-          giftId,
+        declareRegistryContribution(db, {
           amountCents,
           idempotencyKey: randomUUID(),
           requestFingerprintHash: tokenHash(),
           publicReference: `C-${index}-${randomUUID()}`,
-          method: "bank_transfer",
           guestTokenHash: tokenHash(),
           guestDetailsEncrypted: "encrypted-guest-details",
           expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
@@ -134,63 +137,46 @@ integration(
       const results = await Promise.allSettled(attempts);
       expect(
         results.filter((result) => result.status === "fulfilled")
-      ).toHaveLength(1);
-      const rejected = results.find(
-        (result): result is PromiseRejectedResult =>
-          result.status === "rejected"
+      ).toHaveLength(2);
+      commonIntentIds.push(
+        ...results.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value.id] : []
+        )
       );
-      expect((rejected?.reason as TransactionError).code).toBe(
-        "amount_unavailable"
-      );
+      const created = await db
+        .select({ giftId: giftIntents.giftId })
+        .from(giftIntents)
+        .where(eq(giftIntents.kind, "contribution"));
+      expect(created.slice(-2).every((row) => row.giftId === null)).toBe(true);
     });
 
-    it("verifies idempotently while separating received and applied amounts", async () => {
+    it("verifica un contributo comune senza completare alcun regalo", async () => {
       const giftId = await createGift(10_000);
-      const first = await contributeToGift(db, {
-        giftId,
+      const first = await declareRegistryContribution(db, {
         amountCents: 6_000,
         idempotencyKey: randomUUID(),
         requestFingerprintHash: tokenHash(),
         publicReference: `C-${randomUUID()}`,
-        method: "bank_transfer",
         guestTokenHash: tokenHash(),
         guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
-      const second = await contributeToGift(db, {
-        giftId,
-        amountCents: 4_000,
-        idempotencyKey: randomUUID(),
-        requestFingerprintHash: tokenHash(),
-        publicReference: `C-${randomUUID()}`,
-        method: "bank_transfer",
-        guestTokenHash: tokenHash(),
-        guestDetailsEncrypted: "encrypted-guest-details",
-        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
-      });
-
+      commonIntentIds.push(first.id);
       const firstVerified = await verifyIntent(db, {
         intentId: first.id,
         receivedAmountCents: 10_000
       });
-
-      const verified = await verifyIntent(db, {
-        intentId: second.id,
-        receivedAmountCents: 4_000
-      });
       const repeated = await verifyIntent(db, {
-        intentId: second.id,
+        intentId: first.id,
         receivedAmountCents: 9_000
       });
 
       expect(firstVerified.receivedAmountCents).toBe(10_000);
       expect(firstVerified.appliedAmountCents).toBe(6_000);
-      expect(verified.receivedAmountCents).toBe(4_000);
-      expect(verified.appliedAmountCents).toBe(4_000);
-      expect(repeated.receivedAmountCents).toBe(4_000);
-      expect(repeated.appliedAmountCents).toBe(4_000);
+      expect(repeated.receivedAmountCents).toBe(10_000);
+      expect(repeated.appliedAmountCents).toBe(6_000);
       const gift = await db.select().from(gifts).where(eq(gifts.id, giftId));
-      expect(gift[0]?.completed).toBe(true);
+      expect(gift[0]?.completed).toBe(false);
     });
 
     it("cancels pending commitments but rejects guest cancellation after payment declaration", async () => {
@@ -281,20 +267,19 @@ integration(
     });
 
     it.each(["pending", "verified"] as const)(
-      "rejects a full-gift reservation with a %s contribution",
+      "consente una prenotazione completa con un contributo comune %s",
       async (contributionStatus) => {
         const giftId = await createGift();
-        const contribution = await contributeToGift(db, {
-          giftId,
+        const contribution = await declareRegistryContribution(db, {
           amountCents: 2_000,
           idempotencyKey: randomUUID(),
           requestFingerprintHash: tokenHash(),
           publicReference: `C-${randomUUID()}`,
-          method: "bank_transfer",
           guestTokenHash: tokenHash(),
           guestDetailsEncrypted: "encrypted-guest-details",
           expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
         });
+        commonIntentIds.push(contribution.id);
         if (contributionStatus === "verified") {
           await verifyIntent(db, {
             intentId: contribution.id,
@@ -314,33 +299,29 @@ integration(
             guestDetailsEncrypted: "encrypted-guest-details",
             expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
           })
-        ).rejects.toMatchObject({ code: "gift_unavailable", httpStatus: 409 });
+        ).resolves.toMatchObject({ giftId, kind: "full_gift" });
       }
     );
 
     it("rejects a changed request that reuses an idempotency key", async () => {
-      const giftId = await createGift();
       const idempotencyKey = randomUUID();
-      await contributeToGift(db, {
-        giftId,
+      const contribution = await declareRegistryContribution(db, {
         amountCents: 2_000,
         idempotencyKey,
         requestFingerprintHash: tokenHash(),
         publicReference: `C-${randomUUID()}`,
-        method: "bank_transfer",
         guestTokenHash: tokenHash(),
         guestDetailsEncrypted: "encrypted-guest-details",
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       });
+      commonIntentIds.push(contribution.id);
 
       await expect(
-        contributeToGift(db, {
-          giftId,
+        declareRegistryContribution(db, {
           amountCents: 3_000,
           idempotencyKey,
           requestFingerprintHash: tokenHash(),
           publicReference: `C-${randomUUID()}`,
-          method: "bank_transfer",
           guestTokenHash: tokenHash(),
           guestDetailsEncrypted: "encrypted-guest-details",
           expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
@@ -350,7 +331,7 @@ integration(
 
     it.each([
       ["reserveGift", reserveGift, 10_000],
-      ["contributeToGift", contributeToGift, 3_000]
+      ["declareRegistryContribution", declareRegistryContribution, 3_000]
     ] as const)(
       "%s rolls back the intent when beforeCommit rejects",
       async (_name, mutation, amountCents) => {

@@ -50,6 +50,13 @@
       "when": 1788906147244,
       "tag": "0006_gift_cents_and_media",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789113409891,
+      "tag": "0007_registry_common_fund",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,10 @@
   max-width: 52rem;
   margin: 0 0 clamp(3rem, 7vw, 7rem);
 }
+.section-step {
+  font-size: clamp(1rem, 2.2vw, 1.32rem);
+  line-height: 1.25;
+}
 .wedding-section {
   width: min(100%, var(--content-max));
   margin: auto;

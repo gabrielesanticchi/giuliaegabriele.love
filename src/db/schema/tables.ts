@@ -121,9 +121,9 @@ export const giftIntents = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     publicReference: varchar("public_reference", { length: 100 }).notNull(),
-    giftId: uuid("gift_id")
-      .notNull()
-      .references(() => gifts.id, { onDelete: "cascade" }),
+    giftId: uuid("gift_id").references(() => gifts.id, {
+      onDelete: "cascade"
+    }),
     kind: giftIntentKind("kind").notNull(),
     method: giftIntentMethod("method").notNull(),
     status: giftIntentStatus("status").default("pending").notNull(),
@@ -186,6 +186,14 @@ export const giftIntents = pgTable(
     check(
       "gift_intents_applied_lte_received",
       sql`${table.receivedAmountCents} is null or ${table.appliedAmountCents} <= ${table.receivedAmountCents}`
+    ),
+    check(
+      "gift_intents_full_gift_requires_gift",
+      sql`${table.kind} <> 'full_gift' or ${table.giftId} is not null`
+    ),
+    check(
+      "gift_intents_contribution_has_no_gift",
+      sql`${table.kind} <> 'contribution' or ${table.giftId} is null`
     )
   ]
 );

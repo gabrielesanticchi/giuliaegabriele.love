@@ -10,7 +10,7 @@ import { auditLogs, giftIntents, giftLocks, gifts } from "@/db/schema";
 import { TransactionError } from "@/db/transactions/errors";
 import {
   assertCancellationAllowed,
-  assertGiftReservationAvailable,
+  getContributionVerificationAmounts,
   getVerificationAmounts
 } from "@/db/transactions/policies";
 import {
@@ -56,21 +56,30 @@ export async function verifyRequestAction(formData: FormData) {
     payload: { receivedAmountCents: parsed.receivedAmountCents },
     effect: async (tx) => {
       const initial = await tx
-        .select({ giftId: giftIntents.giftId })
+        .select({ giftId: giftIntents.giftId, kind: giftIntents.kind })
         .from(giftIntents)
         .where(eq(giftIntents.id, parsed.intentId))
         .limit(1);
       if (!initial[0]) throw new TransactionError("intent_not_found", 404);
-      await tx.execute(
-        sql`select id from ${gifts} where id = ${initial[0].giftId} for update`
-      );
-      const giftRows = await tx
-        .select()
-        .from(gifts)
-        .where(eq(gifts.id, initial[0].giftId))
-        .limit(1);
-      const gift = giftRows[0];
-      if (!gift) throw new TransactionError("gift_unavailable");
+      const giftId = initial[0].giftId;
+      const gift =
+        initial[0].kind === "full_gift"
+          ? await (async () => {
+              if (!giftId) throw new TransactionError("gift_unavailable");
+              await tx.execute(
+                sql`select id from ${gifts} where id = ${giftId} for update`
+              );
+              const giftRows = await tx
+                .select()
+                .from(gifts)
+                .where(eq(gifts.id, giftId))
+                .limit(1);
+              if (!giftRows[0]) {
+                throw new TransactionError("gift_unavailable");
+              }
+              return giftRows[0];
+            })()
+          : null;
       await tx.execute(
         sql`select id from ${giftIntents} where id = ${parsed.intentId} for update`
       );
@@ -83,24 +92,31 @@ export async function verifyRequestAction(formData: FormData) {
       if (!intent) throw new TransactionError("intent_not_found", 404);
       if (intent.status !== "pending")
         throw new TransactionError("intent_not_pending");
-      const verified = await tx
-        .select({ appliedAmountCents: giftIntents.appliedAmountCents })
-        .from(giftIntents)
-        .where(
-          and(
-            eq(giftIntents.giftId, gift.id),
-            eq(giftIntents.status, "verified")
-          )
-        );
-      const amounts = getVerificationAmounts({
-        priceCents: gift.priceCents,
-        alreadyAppliedCents: verified.reduce(
-          (sum, row) => sum + row.appliedAmountCents,
-          0
-        ),
-        intentAmountCents: intent.amountCents,
-        receivedAmountCents: parsed.receivedAmountCents
-      });
+      const amounts = gift
+        ? await (async () => {
+            const verified = await tx
+              .select({ appliedAmountCents: giftIntents.appliedAmountCents })
+              .from(giftIntents)
+              .where(
+                and(
+                  eq(giftIntents.giftId, gift.id),
+                  eq(giftIntents.status, "verified")
+                )
+              );
+            return getVerificationAmounts({
+              priceCents: gift.priceCents,
+              alreadyAppliedCents: verified.reduce(
+                (sum, row) => sum + row.appliedAmountCents,
+                0
+              ),
+              intentAmountCents: intent.amountCents,
+              receivedAmountCents: parsed.receivedAmountCents
+            });
+          })()
+        : getContributionVerificationAmounts({
+            intentAmountCents: intent.amountCents,
+            receivedAmountCents: parsed.receivedAmountCents
+          });
       const now = new Date();
       const updated = await tx
         .update(giftIntents)
@@ -116,7 +132,7 @@ export async function verifyRequestAction(formData: FormData) {
         )
         .returning();
       if (!updated[0]) throw new TransactionError("intent_not_pending");
-      if (amounts.completesGift)
+      if (gift && "completesGift" in amounts && amounts.completesGift)
         await tx
           .update(gifts)
           .set({ completed: true, updatedAt: now })
@@ -392,7 +408,10 @@ export async function createManualRequestAction(
   const admin = await authorizedAdmin("request.manual");
   const parsed = z
     .object({
-      giftId: z.uuid(),
+      giftId: z.preprocess(
+        (value) => (String(value ?? "").trim() === "" ? undefined : value),
+        z.uuid().optional()
+      ),
       kind: z.enum(["full_gift", "contribution"]),
       method: z.enum(["external_purchase", "bank_transfer"]),
       amountCents: z.number().int().positive(),
@@ -406,14 +425,21 @@ export async function createManualRequestAction(
       amountCents: parseEuroAmount(String(formData.get("amountEuros") ?? ""))
     });
   if (!parsed.success) return { ok: false, message: "Richiesta non valida" };
+  if (parsed.data.kind === "full_gift" && !parsed.data.giftId) {
+    return { ok: false, message: "Seleziona un regalo per il regalo completo" };
+  }
   const encryptionKey = required("DATA_ENCRYPTION_KEY");
   const pepper = required("REQUEST_FINGERPRINT_SECRET");
   const guestToken = randomBytes(32).toString("base64url");
   const intentId = randomUUID();
+  const effectiveMethod =
+    parsed.data.kind === "contribution"
+      ? ("bank_transfer" as const)
+      : parsed.data.method;
   const mutationInput = {
     publicReference: `M-${randomUUID()}`,
-    giftId: parsed.data.giftId,
-    method: parsed.data.method,
+    giftId: parsed.data.kind === "contribution" ? null : parsed.data.giftId!,
+    method: effectiveMethod,
     amountCents: parsed.data.amountCents,
     idempotencyKey: randomUUID(),
     requestFingerprintHash: hashFingerprint(`manual:${intentId}`, pepper),
@@ -433,11 +459,11 @@ export async function createManualRequestAction(
   await executeOnce({
     actorAdminId: admin.id,
     action: "request.manual",
-    entityId: parsed.data.giftId,
+    entityId: parsed.data.giftId ?? "registry_fund",
     idempotencyKey: parsed.data.idempotencyKey,
     payload: {
       kind: parsed.data.kind,
-      method: parsed.data.method,
+      method: effectiveMethod,
       amountCents: parsed.data.amountCents,
       identityHash: hashFingerprint(
         JSON.stringify({
@@ -449,58 +475,24 @@ export async function createManualRequestAction(
       )
     },
     effect: async (tx) => {
-      await tx.execute(
-        sql`select id from ${gifts} where id = ${parsed.data.giftId} for update`
-      );
-      const giftRows = await tx
-        .select()
-        .from(gifts)
-        .where(eq(gifts.id, parsed.data.giftId))
-        .limit(1);
-      const gift = giftRows[0];
-      if (!gift || gift.completed || !gift.published || gift.archivedAt)
-        throw new TransactionError("gift_unavailable");
-      const commitments = await tx
-        .select({
-          kind: giftIntents.kind,
-          status: giftIntents.status,
-          amountCents: giftIntents.amountCents,
-          appliedAmountCents: giftIntents.appliedAmountCents,
-          expiresAt: giftIntents.expiresAt
-        })
-        .from(giftIntents)
-        .where(eq(giftIntents.giftId, gift.id));
+      let giftIdForLock: string | null = null;
       if (parsed.data.kind === "full_gift") {
+        const giftId = parsed.data.giftId;
+        if (!giftId) throw new TransactionError("gift_unavailable");
+        await tx.execute(
+          sql`select id from ${gifts} where id = ${giftId} for update`
+        );
+        const giftRows = await tx
+          .select()
+          .from(gifts)
+          .where(eq(gifts.id, giftId))
+          .limit(1);
+        const gift = giftRows[0];
+        if (!gift || gift.completed || !gift.published || gift.archivedAt)
+          throw new TransactionError("gift_unavailable");
         if (parsed.data.amountCents !== gift.priceCents)
           throw new TransactionError("gift_unavailable");
-        assertGiftReservationAvailable({
-          now: new Date(),
-          contributions: commitments
-        });
-      } else {
-        const fullLock = await tx
-          .select({ id: giftLocks.giftId })
-          .from(giftLocks)
-          .where(eq(giftLocks.giftId, gift.id))
-          .limit(1);
-        if (fullLock[0]) throw new TransactionError("gift_unavailable");
-        const now = new Date();
-        const verifiedCents = commitments
-          .filter((item) => item.status === "verified")
-          .reduce((sum, item) => sum + item.appliedAmountCents, 0);
-        const pendingCents = commitments
-          .filter(
-            (item) =>
-              item.kind === "contribution" &&
-              item.status === "pending" &&
-              item.expiresAt > now
-          )
-          .reduce((sum, item) => sum + item.amountCents, 0);
-        if (
-          parsed.data.amountCents >
-          Math.max(0, gift.priceCents - verifiedCents - pendingCents)
-        )
-          throw new TransactionError("amount_unavailable");
+        giftIdForLock = gift.id;
       }
       const inserted = await tx
         .insert(giftIntents)
@@ -511,9 +503,9 @@ export async function createManualRequestAction(
         })
         .returning();
       if (!inserted[0]) throw new Error("Intent non creato");
-      if (parsed.data.kind === "full_gift")
+      if (giftIdForLock)
         await tx.insert(giftLocks).values({
-          giftId: gift.id,
+          giftId: giftIdForLock,
           intentId: inserted[0].id,
           expiresAt: mutationInput.expiresAt
         });

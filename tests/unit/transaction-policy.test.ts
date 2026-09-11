@@ -4,13 +4,22 @@ import { TransactionError } from "@/db/transactions";
 import { mapExhaustedSerializationFailure } from "@/db/transactions/errors";
 import {
   assertCancellationAllowed,
-  assertGiftReservationAvailable,
   assertIdempotentRequestMatches,
   assertPaymentDeclarationAllowed,
+  getContributionVerificationAmounts,
   getVerificationAmounts
 } from "@/db/transactions/policies";
 
 describe("gift transaction policies", () => {
+  it("applies a common contribution without any gift price", () => {
+    expect(
+      getContributionVerificationAmounts({
+        intentAmountCents: 5_000,
+        receivedAmountCents: 7_000
+      })
+    ).toEqual({ receivedAmountCents: 7_000, appliedAmountCents: 5_000 });
+  });
+
   it("applies only the remaining target while retaining the received amount", () => {
     expect(
       getVerificationAmounts({
@@ -85,51 +94,6 @@ describe("gift transaction policies", () => {
     ).toThrowError(
       expect.objectContaining({ code: "intent_not_pending", httpStatus: 409 })
     );
-  });
-
-  it.each([
-    {
-      label: "verified",
-      status: "verified" as const,
-      expiresAt: new Date("2026-08-19T09:00:00.000Z")
-    },
-    {
-      label: "active pending",
-      status: "pending" as const,
-      expiresAt: new Date("2026-08-19T11:00:00.000Z")
-    }
-  ])("rejects a full gift with a $label contribution", (commitment) => {
-    expect(() =>
-      assertGiftReservationAvailable({
-        now: new Date("2026-08-19T10:00:00.000Z"),
-        contributions: [
-          {
-            status: commitment.status,
-            expiresAt: commitment.expiresAt,
-            amountCents: 1_000,
-            appliedAmountCents: commitment.status === "verified" ? 1_000 : 0
-          }
-        ]
-      })
-    ).toThrowError(
-      expect.objectContaining({ code: "gift_unavailable", httpStatus: 409 })
-    );
-  });
-
-  it("allows a full gift when the only contribution is expired", () => {
-    expect(() =>
-      assertGiftReservationAvailable({
-        now: new Date("2026-08-19T10:00:00.000Z"),
-        contributions: [
-          {
-            status: "pending",
-            expiresAt: new Date("2026-08-19T09:00:00.000Z"),
-            amountCents: 1_000,
-            appliedAmountCents: 0
-          }
-        ]
-      })
-    ).not.toThrow();
   });
 
   it.each([

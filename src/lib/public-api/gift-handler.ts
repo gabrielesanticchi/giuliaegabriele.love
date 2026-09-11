@@ -50,6 +50,11 @@ export type MutationInput = {
   beforeCommit?: () => Promise<void>;
 };
 
+export type RegistryContributionMutationInput = Omit<
+  MutationInput,
+  "giftId" | "method"
+>;
+
 type MutationResult = {
   id: string;
   publicReference: string;
@@ -100,12 +105,28 @@ export type GiftIntentHandlerDependencies = {
     reference: string;
     expiresAt: Date;
     gift: GiftForMutation;
-    request: ReserveGiftRequest | ContributionRequest;
+    request: ReserveGiftRequest;
     instructions: Record<string, string | undefined>;
     personalLink: string;
   }) => Promise<void>;
   now?: () => Date;
   holdDurationMs?: number;
+};
+
+export type RegistryContributionHandlerDependencies = Omit<
+  GiftIntentHandlerDependencies,
+  "getGift" | "mutate" | "notify"
+> & {
+  mutate: (input: RegistryContributionMutationInput) => Promise<MutationResult>;
+  notify: (input: {
+    intentId: string;
+    reference: string;
+    expiresAt: Date;
+    gift: GiftForMutation;
+    request: ContributionRequest;
+    instructions: Record<string, string | undefined>;
+    personalLink: string;
+  }) => Promise<void>;
 };
 
 export class PublicServiceUnavailableError extends Error {
@@ -198,7 +219,7 @@ function mapError(error: unknown): Response {
 }
 
 export function createGiftIntentHandler(
-  kind: "reserve" | "contribute",
+  kind: "reserve",
   dependencies: GiftIntentHandlerDependencies
 ) {
   return async (request: Request, context: { giftId: string }) => {
@@ -210,11 +231,7 @@ export function createGiftIntentHandler(
       if (!body.ok) return publicError(400, "invalid_request");
 
       const giftId = z.uuid().safeParse(context.giftId);
-      const parsed = (
-        kind === "reserve"
-          ? reserveGiftRequestSchema
-          : contributionRequestSchema
-      ).safeParse(body.value);
+      const parsed = reserveGiftRequestSchema.safeParse(body.value);
       if (!giftId.success || !parsed.success) {
         return publicError(422, "validation_failed");
       }
@@ -249,16 +266,10 @@ export function createGiftIntentHandler(
 
       const now = dependencies.now?.() ?? new Date();
       const guestToken = randomBytes(32).toString("base64url");
-      const method =
-        "method" in parsed.data ? parsed.data.method : "bank_transfer";
-      const amountCents =
-        "amountCents" in parsed.data
-          ? parsed.data.amountCents
-          : gift.priceCents;
+      const method = parsed.data.method;
+      const amountCents = gift.priceCents;
       const encryptedBankInstructions =
-        method === "bank_transfer"
-          ? await dependencies.loadEncryptedBankInstructions()
-          : undefined;
+        await dependencies.loadEncryptedBankInstructions();
       let bankInstructions: BankInstructions | undefined;
       const intent = await dependencies.mutate({
         giftId: gift.id,
@@ -283,17 +294,11 @@ export function createGiftIntentHandler(
         expiresAt: new Date(
           now.getTime() + (dependencies.holdDurationMs ?? GIFT_HOLD_MS)
         ),
-        beforeCommit:
-          method === "bank_transfer"
-            ? async () => {
-                if (!encryptedBankInstructions) {
-                  throw new PublicServiceUnavailableError();
-                }
-                bankInstructions = dependencies.decryptBankInstructions(
-                  encryptedBankInstructions
-                );
-              }
-            : undefined
+        beforeCommit: async () => {
+          bankInstructions = dependencies.decryptBankInstructions(
+            encryptedBankInstructions
+          );
+        }
       });
 
       if (intent.replayed) {
@@ -301,7 +306,7 @@ export function createGiftIntentHandler(
           JSON.stringify({
             ok: true,
             reference: intent.publicReference,
-            giftStatus: kind === "reserve" ? "reserved" : "available",
+            giftStatus: "reserved",
             replayed: true
           }),
           { status: 200, headers: responseHeaders() }
@@ -309,18 +314,15 @@ export function createGiftIntentHandler(
       }
 
       const personalLink = `/richiesta/${guestToken}`;
-      let instructions: Record<string, string | undefined> = { type: method };
-      if (method === "bank_transfer") {
-        if (!bankInstructions) throw new PublicServiceUnavailableError();
-        instructions = {
-          type: method,
-          ...bankInstructions,
-          transferReason: buildTransferReason(
-            gift.publicReference,
-            intent.publicReference
-          )
-        };
-      }
+      if (!bankInstructions) throw new PublicServiceUnavailableError();
+      const instructions: Record<string, string | undefined> = {
+        type: method,
+        ...bankInstructions,
+        transferReason: buildTransferReason(
+          gift.publicReference,
+          intent.publicReference
+        )
+      };
 
       try {
         await dependencies.notify({
@@ -340,7 +342,138 @@ export function createGiftIntentHandler(
         JSON.stringify({
           ok: true,
           reference: intent.publicReference,
-          giftStatus: kind === "reserve" ? "reserved" : "available",
+          giftStatus: "reserved",
+          expiresAt: intent.expiresAt.toISOString(),
+          instructions,
+          personalLink
+        }),
+        { status: 200, headers: responseHeaders() }
+      );
+    } catch (error) {
+      return mapError(error);
+    }
+  };
+}
+
+export function createRegistryContributionHandler(
+  dependencies: RegistryContributionHandlerDependencies
+) {
+  return async (request: Request) => {
+    try {
+      if (!isAllowedOrigin(request, dependencies.siteOrigin)) {
+        return publicError(403, "forbidden");
+      }
+      const body = await readBoundedJson(request, MAX_BODY_BYTES);
+      if (!body.ok) return publicError(400, "invalid_request");
+
+      const parsed = contributionRequestSchema.safeParse(body.value);
+      if (!parsed.success) return publicError(422, "validation_failed");
+      if (parsed.data.honeypot.trim() !== "") {
+        return publicError(403, "forbidden");
+      }
+
+      const client = resolveClientIdentity(
+        request,
+        dependencies.clientIdentityPolicy ?? { production: false }
+      );
+      if (!dependencies.fingerprintSecret || !dependencies.guestTokenSecret) {
+        throw new PublicServiceUnavailableError();
+      }
+      const fingerprintHash = hashFingerprint(
+        client.fingerprintMaterial,
+        dependencies.fingerprintSecret
+      );
+      const rateLimit = await dependencies.consumeRateLimit({
+        fingerprintHash,
+        bucketKey: "gift:contribute"
+      });
+      if (!rateLimit.allowed) {
+        return publicError(429, "rate_limited", {
+          "retry-after": String(rateLimit.retryAfterSeconds)
+        });
+      }
+
+      const now = dependencies.now?.() ?? new Date();
+      const guestToken = randomBytes(32).toString("base64url");
+      const encryptedBankInstructions =
+        await dependencies.loadEncryptedBankInstructions();
+      let bankInstructions: BankInstructions | undefined;
+      const intent = await dependencies.mutate({
+        idempotencyKey: parsed.data.idempotencyKey,
+        publicReference: `REQ-${randomUUID().replaceAll("-", "").slice(0, 16).toUpperCase()}`,
+        amountCents: parsed.data.amountCents,
+        requestFingerprintHash: requestFingerprint(
+          parsed.data,
+          "registry_fund",
+          dependencies.fingerprintSecret
+        ),
+        guestTokenHash: hashToken(guestToken, dependencies.guestTokenSecret),
+        guestDetailsEncrypted: dependencies.encryptGuestDetails({
+          firstName: parsed.data.guest.firstName,
+          lastName: parsed.data.guest.lastName,
+          phone: parsed.data.guest.phone,
+          message: parsed.data.guest.message,
+          privacyVersion: parsed.data.privacyVersion
+        }),
+        fingerprintHash,
+        expiresAt: new Date(
+          now.getTime() + (dependencies.holdDurationMs ?? GIFT_HOLD_MS)
+        ),
+        beforeCommit: async () => {
+          bankInstructions = dependencies.decryptBankInstructions(
+            encryptedBankInstructions
+          );
+        }
+      });
+
+      if (intent.replayed) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            reference: intent.publicReference,
+            giftStatus: "available",
+            replayed: true
+          }),
+          { status: 200, headers: responseHeaders() }
+        );
+      }
+      if (!bankInstructions) throw new PublicServiceUnavailableError();
+
+      const personalLink = `/richiesta/${guestToken}`;
+      const instructions = {
+        type: "bank_transfer",
+        ...bankInstructions,
+        transferReason: buildTransferReason(
+          "FONDO-CASA",
+          intent.publicReference
+        )
+      };
+      const registryFund = {
+        id: "registry_fund",
+        publicReference: "FONDO-CASA",
+        title: "Fondo comune Lista Nozze",
+        priceCents: parsed.data.amountCents
+      };
+
+      try {
+        await dependencies.notify({
+          intentId: intent.id,
+          reference: intent.publicReference,
+          expiresAt: intent.expiresAt,
+          gift: registryFund,
+          request: parsed.data,
+          instructions,
+          personalLink
+        });
+      } catch {
+        // Le notifiche sono best-effort e non modificano l'esito persistito.
+      }
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          reference: intent.publicReference,
+          giftStatus: "available",
           expiresAt: intent.expiresAt.toISOString(),
           instructions,
           personalLink

@@ -41,7 +41,7 @@ export function PublicHome({
           aria-labelledby="registry-title"
         >
           <div className="section-heading registry-heading">
-            <p className="eyebrow">Lista nozze · 03</p>
+            <p className="eyebrow section-step">Lista nozze · 03</p>
             <h2 id="registry-title">Costruiamo casa insieme</h2>
             <p className="lead">
               Abbiamo immaginato questa lista come la nostra futura casa: una
@@ -50,11 +50,11 @@ export function PublicHome({
           </div>
           <div className="registry-intro">
             <p>
-              Nessun pagamento avviene su questo sito. Se volete Regalarci un
-              pensiero, potrete acquistarlo dal negozio indicato oppure
-              scegliere il bonifico con il prezzo di listino indicato.
-              Altrimenti, è possibile Contribuire tramite bonifico a uno degli
-              oggetti ancora disponibili nella lista.
+              Nessun pagamento avviene su questo sito. Per i singoli regali
+              potete scegliere l’acquisto sul sito del negozio oppure il
+              bonifico dell’intero prezzo di listino. Se preferite lasciarci un
+              pensiero libero, potete contribuire tramite bonifico al fondo
+              comune.
             </p>
           </div>
           <GiftRegistry gifts={content.gifts} />
@@ -83,7 +83,17 @@ function Hero({
       <div className="hero-content">
         <Monogram className="hero-monogram" />
         <p className="hero-kicker">Ci sposiamo</p>
-        <h1 id="hero-title">Giulia & Gabriele</h1>
+        <h1 id="hero-title" aria-label="Giulia e Gabriele">
+          <span className="hero-name-line" aria-hidden="true">
+            Giulia
+          </span>
+          <span className="hero-and-line" aria-hidden="true">
+            e
+          </span>
+          <span className="hero-name-line" aria-hidden="true">
+            Gabriele
+          </span>
+        </h1>
         {content.displayDate ? (
           <p className="hero-details">
             <time dateTime={content.weddingDate ?? undefined}>
@@ -107,10 +117,6 @@ function Hero({
 }
 
 function WeddingSection({ locations }: { locations: WeddingLocation[] }) {
-  const includesReception = locations.some(
-    (location) => location.kind === "reception"
-  );
-
   return (
     <section
       className="wedding-section section-pad"
@@ -118,7 +124,7 @@ function WeddingSection({ locations }: { locations: WeddingLocation[] }) {
       aria-labelledby="wedding-title"
     >
       <div className="section-heading">
-        <p className="eyebrow">Il matrimonio · 01</p>
+        <p className="eyebrow section-step">Il matrimonio · 01</p>
         <h2 id="wedding-title">
           Una giornata
           <br />
@@ -196,7 +202,7 @@ function StorySection({ content }: { content: PublicContent }) {
       aria-label="La nostra storia"
     >
       <div className="section-heading">
-        <p className="eyebrow">La nostra storia · 02</p>
+        <p className="eyebrow section-step">La nostra storia · 02</p>
         <h2 id="story-title">
           Un sentiero
           <br />

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { WeddingDatabase } from "@/db";
 import {
-  contributeToGift,
+  declareRegistryContribution,
   reserveGift,
   type GiftMutationResult
 } from "@/db/transactions";
@@ -34,8 +34,8 @@ const operations = [
     hasGiftLock: true
   },
   {
-    name: "contributeToGift",
-    mutation: contributeToGift as MutationWithBoundary,
+    name: "declareRegistryContribution",
+    mutation: declareRegistryContribution as MutationWithBoundary,
     hasGiftLock: false
   }
 ] as const;
@@ -71,6 +71,7 @@ function fakeDatabase(options: {
   const intent = {
     id: randomUUID(),
     ...options.mutationInput,
+    giftId: options.kind === "reserve" ? options.mutationInput.giftId : null,
     kind: options.kind === "reserve" ? "full_gift" : "contribution",
     status: "pending",
     appliedAmountCents: 0
@@ -91,20 +92,7 @@ function fakeDatabase(options: {
           ],
           []
         ]
-      : [
-          [],
-          [
-            {
-              id: options.mutationInput.giftId,
-              completed: false,
-              published: true,
-              archivedAt: null,
-              priceCents: options.mutationInput.amountCents
-            }
-          ],
-          [],
-          []
-        ];
+      : [[]];
   let selectIndex = 0;
 
   const tx = {
@@ -173,7 +161,7 @@ describe("gift transaction beforeCommit boundary", () => {
               "before-commit",
               "commit"
             ]
-          : ["begin", "lock-gift", "insert-intent", "before-commit", "commit"]
+          : ["begin", "insert-intent", "before-commit", "commit"]
       );
     }
   );

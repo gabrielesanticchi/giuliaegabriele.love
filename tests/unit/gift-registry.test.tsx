@@ -22,9 +22,7 @@ const testGifts: PublicGift[] = [
     productUrl: "https://example.com/tavolo",
     imagePath: "/gifts/tavolo.png",
     status: "available",
-    allowFullGift: true,
-    allowContributions: true,
-    confirmedContributionCents: 0
+    allowFullGift: true
   },
   {
     id: "reserved",
@@ -35,9 +33,7 @@ const testGifts: PublicGift[] = [
     productUrl: null,
     imagePath: null,
     status: "reserved",
-    allowFullGift: true,
-    allowContributions: false,
-    confirmedContributionCents: 0
+    allowFullGift: false
   },
   {
     id: "gifted",
@@ -48,9 +44,7 @@ const testGifts: PublicGift[] = [
     productUrl: null,
     imagePath: null,
     status: "gifted",
-    allowFullGift: true,
-    allowContributions: false,
-    confirmedContributionCents: 30000
+    allowFullGift: false
   }
 ];
 
@@ -81,38 +75,32 @@ describe("GiftRegistry", () => {
     expect(screen.getAllByText("REGALATO ❤️").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("mostra immagine e collegamento del prodotto", () => {
+  it("mostra l'immagine senza prezzo o link prodotto separato", () => {
     render(<GiftRegistry gifts={[{ ...testGifts[0], priceCents: 100099 }]} />);
 
-    expect(screen.getByText(/Prezzo di listino/)).toHaveTextContent(
-      "Prezzo di listino 1.000 €"
-    );
+    expect(screen.queryByText(/Prezzo di listino/)).toBeNull();
     expect(screen.getByRole("img", { name: "Tavolo" })).toHaveAttribute(
       "src",
       expect.stringContaining("%2Fgifts%2Ftavolo.png")
     );
-    expect(
-      screen.getByRole("link", { name: "Vedi il prodotto" })
-    ).toHaveAttribute("href", "https://example.com/tavolo");
+    expect(screen.queryByRole("link", { name: "Vedi il prodotto" })).toBeNull();
   });
 
-  it("nasconde Regala dopo un contributo verificato e mantiene Contribuisci", () => {
-    render(
-      <GiftRegistry
-        gifts={[
-          {
-            ...testGifts[0],
-            allowFullGift: false,
-            confirmedContributionCents: 25000
-          }
-        ]}
-      />
-    );
+  it("offre un solo contributo comune e nessun avanzamento sulle schede", () => {
+    render(<GiftRegistry gifts={testGifts} />);
 
-    expect(screen.queryByRole("button", { name: "Regala" })).toBeNull();
     expect(
-      screen.getByRole("button", { name: "Contribuisci" })
+      screen.getAllByRole("button", { name: "Contribuisci" })
+    ).toHaveLength(1);
+    expect(
+      screen.getByText(/Ti comunicheremo nelle prossime settimane/)
     ).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(
+      within(screen.getAllByRole("article")[0]!)
+        .getAllByRole("button")
+        .map((button) => button.textContent?.trim())
+    ).toEqual(["Regala tramite acquisto sul sito", "Regala tramite bonifico"]);
   });
 
   it("filtra i regali e aggiorna il conteggio accessibile", async () => {
@@ -135,7 +123,9 @@ describe("GiftRegistry", () => {
   it("ripristina il focus sulla CTA che ha aperto il dialog", async () => {
     const user = userEvent.setup();
     render(<GiftRegistry gifts={testGifts} />);
-    const trigger = screen.getAllByRole("button", { name: "Regala" })[0];
+    const trigger = screen.getByRole("button", {
+      name: "Regala tramite bonifico"
+    });
 
     await user.click(trigger);
     expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -149,12 +139,17 @@ describe("GiftRegistry", () => {
     const user = userEvent.setup();
     render(<GiftRegistry gifts={testGifts} />);
 
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await user.click(
+      screen.getByRole("button", { name: "Regala tramite bonifico" })
+    );
 
     const dialog = screen.getByRole("dialog", {
       name: "Vuoi regalarci questo pezzo della nostra casa?"
     });
     expect(dialog).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("Prezzo di listino pieno: 1.000 €")
+    ).toBeInTheDocument();
     expect(
       within(dialog).getByText(
         /Per evitare doppioni, terremo il regalo riservato a tuo nome per 48 ore\./
@@ -171,13 +166,40 @@ describe("GiftRegistry", () => {
     expect(
       within(dialog).getByRole("button", { name: "Chiudi" })
     ).toHaveFocus();
+    expect(within(dialog).queryByRole("radio")).toBeNull();
+  });
+
+  it("avvisa prima di aprire il sito del negozio", async () => {
+    const user = userEvent.setup();
+    render(<GiftRegistry gifts={testGifts} />);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "Regala tramite acquisto sul sito"
+      })
+    );
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Prima di acquistare il regalo"
+    });
+    expect(dialog).toHaveTextContent(
+      "contatta Giulia o Gabriele tramite WhatsApp"
+    );
+    expect(dialog).not.toHaveTextContent(/\b\d{3}[ .-]?\d{3}/);
+    expect(
+      within(dialog).getByRole("link", {
+        name: "Continua sul sito del negozio"
+      })
+    ).toHaveAttribute("href", "https://example.com/tavolo");
   });
 
   it("porta il focus al riepilogo errori quando il form è incompleto", async () => {
     const user = userEvent.setup();
     render(<GiftRegistry gifts={testGifts} />);
 
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await user.click(
+      screen.getByRole("button", { name: "Regala tramite bonifico" })
+    );
     await user.click(screen.getByRole("button", { name: "Continua" }));
 
     const summary = screen.getByRole("alert");
@@ -197,7 +219,9 @@ describe("GiftRegistry", () => {
   it("collega anche gli errori di telefono e messaggio ai relativi campi", async () => {
     const user = userEvent.setup();
     render(<GiftRegistry gifts={testGifts} />);
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await user.click(
+      screen.getByRole("button", { name: "Regala tramite bonifico" })
+    );
     const phone = screen.getByLabelText("Telefono");
     const message = screen.getByLabelText("Messaggio (facoltativo)");
     fireEvent.change(phone, { target: { value: "1".repeat(31) } });
@@ -229,9 +253,7 @@ describe("GiftRegistry", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     render(<GiftRegistry gifts={testGifts} />);
-    await user.click(
-      screen.getAllByRole("button", { name: "Contribuisci" })[0]
-    );
+    await user.click(screen.getByRole("button", { name: "Contribuisci" }));
     await fillGuestForm(user);
     const amount = screen.getByLabelText("Importo in euro");
     await user.type(amount, "12,34");
@@ -251,6 +273,7 @@ describe("GiftRegistry", () => {
     };
     expect(sent.amountCents).toBe(1200);
     expect(sent.privacyVersion).toBe("2026-09-05");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/registry/contribute");
   });
 
   it("mostra un riepilogo essenziale e consente di copiare l’IBAN", async () => {
@@ -279,7 +302,9 @@ describe("GiftRegistry", () => {
       )
     );
     render(<GiftRegistry gifts={testGifts} />);
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await user.click(
+      screen.getByRole("button", { name: "Regala tramite bonifico" })
+    );
     await fillGuestForm(user);
     await user.click(screen.getByRole("button", { name: "Continua" }));
 
@@ -334,14 +359,16 @@ describe("GiftRegistry", () => {
             reference: "REQ-1",
             expiresAt: "2026-08-21T12:00:00.000Z",
             personalLink: "/richiesta/token",
-            instructions: { type: "external_purchase" }
+            instructions: { type: "bank_transfer" }
           }),
           { status: 200, headers: { "content-type": "application/json" } }
         )
       );
     vi.stubGlobal("fetch", fetchMock);
     render(<GiftRegistry gifts={testGifts} />);
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await user.click(
+      screen.getByRole("button", { name: "Regala tramite bonifico" })
+    );
     await fillGuestForm(user);
     await user.click(screen.getByRole("button", { name: "Continua" }));
     await screen.findByText(
@@ -373,7 +400,9 @@ describe("GiftRegistry", () => {
       )
     );
     render(<GiftRegistry gifts={testGifts} />);
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await user.click(
+      screen.getByRole("button", { name: "Regala tramite bonifico" })
+    );
     await fillGuestForm(user);
     await user.click(screen.getByRole("button", { name: "Continua" }));
 
@@ -399,7 +428,9 @@ describe("GiftRegistry", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<GiftRegistry gifts={testGifts} />);
 
-    await user.click(screen.getAllByRole("button", { name: "Regala" })[0]);
+    await user.click(
+      screen.getByRole("button", { name: "Regala tramite bonifico" })
+    );
     await fillGuestForm(user);
     const submit = screen.getByRole("button", { name: "Continua" });
     await user.click(submit);
@@ -419,7 +450,7 @@ describe("GiftRegistry", () => {
           reference: "REQ-1",
           expiresAt: "2026-08-21T12:00:00.000Z",
           personalLink: "/richiesta/token",
-          instructions: { type: "external_purchase" }
+          instructions: { type: "bank_transfer" }
         }),
         { status: 200, headers: { "content-type": "application/json" } }
       )

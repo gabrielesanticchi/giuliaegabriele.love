@@ -64,7 +64,7 @@ test.describe("gift registry", () => {
     page
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.route("**/api/gifts/*/contribute", async (route) => {
+    await page.route("**/api/registry/contribute", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

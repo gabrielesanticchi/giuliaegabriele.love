@@ -1,9 +1,13 @@
 export { TransactionError } from "./errors";
 export {
   cancelIntent,
-  contributeToGift,
+  declareRegistryContribution,
   declareIntentPayment,
   reserveGift,
   verifyIntent
 } from "./gifts";
-export type { GiftMutationBoundary, GiftMutationResult } from "./gifts";
+export type {
+  GiftMutationBoundary,
+  GiftMutationResult,
+  RegistryContributionInput
+} from "./gifts";

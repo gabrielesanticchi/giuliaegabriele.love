@@ -3,7 +3,7 @@
 Stato corrente dello schema PostgreSQL del sito. La fonte eseguibile è
 [`src/db/schema/tables.ts`](../src/db/schema/tables.ts); le migrazioni Drizzle
 sono in [`drizzle/`](../drizzle/). Un database compatibile deve aver applicato
-tutte le migrazioni fino a `0006_gift_cents_and_media.sql` inclusa.
+tutte le migrazioni fino a `0007_registry_common_fund.sql` inclusa.
 
 ## Convenzioni
 
@@ -24,7 +24,7 @@ tutte le migrazioni fino a `0006_gift_cents_and_media.sql` inclusa.
 
 | Enum | Valori | Significato |
 | --- | --- | --- |
-| `gift_intent_kind` | `full_gift`, `contribution` | Regalo intero oppure contributo parziale. |
+| `gift_intent_kind` | `full_gift`, `contribution` | Regalo intero oppure contributo al fondo comune. |
 | `gift_intent_method` | `external_purchase`, `bank_transfer` | Acquisto sul sito del venditore oppure bonifico. |
 | `gift_intent_status` | `pending`, `verified`, `cancelled`, `expired`, `rejected` | Stato operativo della richiesta. |
 | `email_delivery_status` | `pending`, `sent`, `failed`, `skipped` | Stato dell’outbox email. |
@@ -36,7 +36,7 @@ erDiagram
     admin_users ||--o{ admin_action_receipts : "actor_admin_id (cascade)"
     admin_users ||--o{ audit_logs : "actor_admin_id (set null)"
     gift_categories ||--o{ gifts : "category_id (set null)"
-    gifts ||--o{ gift_intents : "gift_id (cascade)"
+    gifts o|--o{ gift_intents : "gift_id opzionale (cascade)"
     gifts ||--o| gift_locks : "gift_id (cascade)"
     gift_intents ||--o| gift_locks : "intent_id (cascade)"
     gift_intents ||--o{ email_deliveries : "intent_id (set null)"
@@ -98,10 +98,8 @@ Elementi pubblicabili della Lista Nozze.
 | `archived_at` | Soft delete opzionale. |
 | `sort_order` | Ordine pubblico; default `0`. |
 
-Il progresso non è memorizzato sul regalo: è la somma di
-`gift_intents.applied_amount_cents` per le richieste `verified`. Il pulsante
-“Regala” è disponibile soltanto quando tale somma è zero; “Contribuisci” resta
-disponibile finché il regalo non è completato.
+I contributi non determinano alcun avanzamento del regalo. Un elemento resta
+disponibile finché non è completato oppure soggetto a un lock per regalo intero.
 
 ### `gift_intents`
 
@@ -110,7 +108,7 @@ Richieste degli ospiti per un regalo intero o un contributo.
 | Gruppo | Colonne / regole |
 | --- | --- |
 | Identità | `id` UUID; `public_reference`, `idempotency_key` e `guest_token_hash` univoci. |
-| Regalo | `gift_id` obbligatorio, FK verso `gifts`, `ON DELETE CASCADE`. |
+| Regalo | `gift_id` obbligatorio per `full_gift` e `NULL` per i contributi comuni; FK verso `gifts`, `ON DELETE CASCADE`. Due vincoli impediscono sia regali interi senza elemento associato sia contributi collegati a un singolo regalo. |
 | Scelta | `kind`, `method`, `status` usano gli enum descritti sopra. |
 | Importi | `amount_cents` ≥ 0; `received_amount_cents` nullo o ≥ 0; `applied_amount_cents` ≥ 0 e non superiore al ricevuto quando quest’ultimo è presente. |
 | Privacy | `guest_details_encrypted`; `guest_email_hash` e `fingerprint_hash` opzionali; `request_fingerprint_hash` obbligatorio. |
@@ -121,7 +119,8 @@ Richieste degli ospiti per un regalo intero o un contributo.
 
 Gli indici coprono regalo, stato, scadenza, email hash e fingerprint di
 richiesta. Le richieste pubbliche sono create in transazioni serializzabili e
-l’idempotenza è legata al payload, non soltanto alla chiave.
+l’idempotenza è legata al payload, non soltanto alla chiave. La migrazione
+`0007` scollega inoltre dai regali tutti i contributi storici.
 
 ### `gift_locks`
 
@@ -182,12 +181,14 @@ pagine e `robots.txt` blocca la scansione del sito.
 
 ## Transazioni e cancellazione
 
-- Prenotazione, contributo e verifica calcolano disponibilità e importi nella
-  stessa transazione dei relativi aggiornamenti.
+- Prenotazione e verifica del regalo intero calcolano disponibilità e importi
+  nella stessa transazione. Il contributo comune registra e verifica soltanto
+  l’importo del fondo, senza leggere o aggiornare alcun regalo.
 - Ogni mutation admin autorizzata registra effect, audit e receipt nella stessa
   transazione.
 - Regali e categorie vengono normalmente archiviati con `archived_at`.
-- Eliminare fisicamente un regalo elimina in cascata richieste e lock; le email
-  collegate sopravvivono con `intent_id = NULL`.
+- Eliminare fisicamente un regalo elimina in cascata le sue richieste intere e
+  i lock; i contributi comuni sopravvivono perché hanno `gift_id = NULL`. Le
+  email collegate sopravvivono con `intent_id = NULL`.
 - Nessun dato bancario è restituito da GET o replay: compare soltanto nella
   risposta `no-store` della mutation appena accettata.

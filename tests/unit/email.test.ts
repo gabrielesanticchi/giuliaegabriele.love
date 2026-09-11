@@ -42,7 +42,7 @@ describe("transactional email templates", () => {
     });
     const contribution = renderContributionEmail({
       firstName: "Ada <3",
-      giftName: "Lampada",
+      giftName: "Fondo comune Lista Nozze",
       amount: "50,00 €",
       reference: "REQ-2",
       instructions: "IBAN configurato",
@@ -55,6 +55,10 @@ describe("transactional email templates", () => {
     );
     expect(reservation.html).toContain("Ada &lt;3");
     expect(contribution.html).toContain("Ada &lt;3");
+    expect(contribution.text).toContain(
+      "destinato al Fondo comune Lista Nozze"
+    );
+    expect(contribution.text).not.toContain("associato a");
     expect(reservation.text).toContain("/richiesta/token");
     expect(contribution.text).toContain("/richiesta/token");
   });

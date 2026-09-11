@@ -50,8 +50,6 @@ export interface PublicGift {
   priceCents: number;
   status: PublicGiftStatus;
   allowFullGift: boolean;
-  allowContributions: boolean;
-  confirmedContributionCents: number;
 }
 
 export interface PublicContent {

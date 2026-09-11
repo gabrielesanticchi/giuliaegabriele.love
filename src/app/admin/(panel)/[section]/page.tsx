@@ -296,7 +296,7 @@ export default async function AdminSectionPage({
                       await archiveGiftAction(row.id);
                     }}
                   >
-                    <button type="submit">Archivia</button>
+                    <button type="submit">Rimuovi dalla lista</button>
                   </form>
                 </td>
               </tr>
@@ -318,15 +318,14 @@ export default async function AdminSectionPage({
         <PageHeader section={section} />
         <StructuredEditor
           title="Inserimento manuale"
-          description="Crea una richiesta rispettando lock e disponibilità del regalo."
+          description="Per i contributi al fondo comune lascia vuoto l’ID regalo: saranno registrati automaticamente come bonifico."
           action={createManualRequestAction}
           hidden={{ idempotencyKey: randomUUID() }}
           fields={[
             {
               name: "giftId",
-              label: "ID regalo",
-              type: "text",
-              required: true
+              label: "ID regalo (solo per regalo completo)",
+              type: "text"
             },
             {
               name: "kind",
@@ -377,7 +376,11 @@ export default async function AdminSectionPage({
             {rows.map((row) => (
               <tr key={row.id}>
                 <td>{row.publicReference}</td>
-                <td>{row.kind}</td>
+                <td>
+                  {row.kind === "contribution"
+                    ? "Fondo comune"
+                    : "Regalo completo"}
+                </td>
                 <td>{row.status}</td>
                 <td>{formatCurrency(row.amountCents)}</td>
                 <td>
@@ -411,20 +414,22 @@ export default async function AdminSectionPage({
                       Verifica
                     </button>
                   </form>
-                  <form
-                    action={async (data) => {
-                      "use server";
-                      await unlockRequestAction(data);
-                    }}
-                  >
-                    <input type="hidden" name="intentId" value={row.id} />
-                    <input
-                      type="hidden"
-                      name="idempotencyKey"
-                      value={randomUUID()}
-                    />
-                    <button type="submit">Sblocca</button>
-                  </form>
+                  {row.kind === "full_gift" ? (
+                    <form
+                      action={async (data) => {
+                        "use server";
+                        await unlockRequestAction(data);
+                      }}
+                    >
+                      <input type="hidden" name="intentId" value={row.id} />
+                      <input
+                        type="hidden"
+                        name="idempotencyKey"
+                        value={randomUUID()}
+                      />
+                      <button type="submit">Sblocca</button>
+                    </form>
+                  ) : null}
                   <form
                     action={async (data) => {
                       "use server";

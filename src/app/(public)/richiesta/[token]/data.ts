@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { getDatabase } from "@/db";
 import { giftIntents, gifts } from "@/db/schema";
@@ -23,7 +23,7 @@ export async function loadGuestRequest(
     const rows = await getDatabase()
       .select({
         reference: giftIntents.publicReference,
-        giftTitle: gifts.title,
+        giftTitle: sql<string>`coalesce(${gifts.title}, 'Fondo comune Lista Nozze')`,
         kind: giftIntents.kind,
         status: giftIntents.status,
         amountCents: giftIntents.amountCents,
@@ -34,7 +34,7 @@ export async function loadGuestRequest(
         updatedAt: giftIntents.updatedAt
       })
       .from(giftIntents)
-      .innerJoin(gifts, eq(gifts.id, giftIntents.giftId))
+      .leftJoin(gifts, eq(gifts.id, giftIntents.giftId))
       .where(eq(giftIntents.guestTokenHash, hashToken(token, secret)))
       .limit(1);
     const request = rows[0];

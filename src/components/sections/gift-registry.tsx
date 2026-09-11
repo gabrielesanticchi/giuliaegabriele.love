@@ -23,7 +23,8 @@ import {
 } from "@/lib/public-api/validation";
 
 type GiftFilter = "all" | "available" | "reserved" | "gifted";
-type GiftAction = "gift" | "contribute";
+type GiftSelection =
+  { gift: PublicGift; action: "gift" } | { gift: null; action: "contribute" };
 
 export interface GiftRegistryProps {
   gifts: PublicGift[];
@@ -48,10 +49,8 @@ export function GiftRegistry({
   privacyVersion = "2026-09-05"
 }: GiftRegistryProps) {
   const [filter, setFilter] = useState<GiftFilter>("all");
-  const [selection, setSelection] = useState<{
-    gift: PublicGift;
-    action: GiftAction;
-  } | null>(null);
+  const [selection, setSelection] = useState<GiftSelection | null>(null);
+  const [externalGift, setExternalGift] = useState<PublicGift | null>(null);
   const invokerRef = useRef<HTMLButtonElement | null>(null);
   const visibleGifts = useMemo(
     () =>
@@ -65,6 +64,37 @@ export function GiftRegistry({
 
   return (
     <>
+      <section className="registry-fund" aria-labelledby="registry-fund-title">
+        <div className="registry-fund-art" aria-hidden="true">
+          <Image
+            src="/graphics/wedding-fund-piggy-bank.png"
+            alt=""
+            width={1254}
+            height={1254}
+          />
+        </div>
+        <div className="registry-fund-copy">
+          <p className="eyebrow">Un mattone per la nostra casa</p>
+          <h3 id="registry-fund-title">
+            Un piccolo regalo, un progetto comune
+          </h3>
+          <p>
+            Contribuisci facendo un piccolo regalo per la nostra casa. Ti
+            comunicheremo nelle prossime settimane a che cosa avrà contribuito
+            il regalo che ci hai fatto con tanto amore.
+          </p>
+          <button
+            className="primary-action"
+            type="button"
+            onClick={(event) => {
+              invokerRef.current = event.currentTarget;
+              setSelection({ gift: null, action: "contribute" });
+            }}
+          >
+            Contribuisci
+          </button>
+        </div>
+      </section>
       <div
         className="registry-filters"
         role="group"
@@ -85,102 +115,69 @@ export function GiftRegistry({
         {countLabel}
       </p>
       <div className="gift-grid">
-        {visibleGifts.map((gift) => {
-          const progress = Math.min(
-            100,
-            Math.round(
-              (gift.confirmedContributionCents / gift.priceCents) * 100
-            )
-          );
-          return (
-            <article className="gift-card" key={gift.id}>
-              {gift.imagePath ? (
-                <div className="gift-art gift-art--image">
-                  <Image
-                    src={gift.imagePath}
-                    alt={gift.name}
-                    fill
-                    sizes="(max-width: 767px) 100vw, 50vw"
-                  />
-                </div>
-              ) : (
-                <div className="gift-art" aria-hidden="true">
-                  <span>
-                    {String(gifts.indexOf(gift) + 1).padStart(2, "0")}
-                  </span>
-                  <i />
-                </div>
-              )}
-              <div className="gift-copy">
-                <div className="gift-meta">
-                  <span>{gift.category}</span>
-                </div>
-                <h3>{gift.name}</h3>
-                <p>{gift.description}</p>
-                <p className={`gift-status gift-status--${gift.status}`}>
-                  {statusLabels[gift.status]}
-                </p>
-                <p className="gift-price">
-                  Prezzo di listino {formatWholeEuro(gift.priceCents)}
-                </p>
-                {gift.productUrl ? (
-                  <a
-                    className="gift-product-link"
-                    href={gift.productUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Vedi il prodotto <ArrowUpRight aria-hidden="true" />
-                  </a>
-                ) : null}
-                {gift.allowContributions &&
-                gift.confirmedContributionCents > 0 ? (
-                  <div className="gift-progress">
-                    <p>La nostra casa sta prendendo forma</p>
-                    <div
-                      className="progress-track"
-                      role="progressbar"
-                      aria-label={`Progresso confermato per ${gift.name}`}
-                      aria-valuemin={0}
-                      aria-valuemax={100}
-                      aria-valuenow={progress}
-                    >
-                      <span style={{ width: `${progress}%` }} />
-                    </div>
-                  </div>
-                ) : null}
-                {gift.status === "available" ? (
-                  <div className="gift-actions">
-                    {gift.allowFullGift ? (
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          invokerRef.current = event.currentTarget;
-                          setSelection({ gift, action: "gift" });
-                        }}
-                      >
-                        Regala <ArrowUpRight aria-hidden="true" />
-                      </button>
-                    ) : null}
-                    {gift.allowContributions ? (
-                      <button
-                        className="text-action"
-                        type="button"
-                        onClick={(event) => {
-                          invokerRef.current = event.currentTarget;
-                          setSelection({ gift, action: "contribute" });
-                        }}
-                      >
-                        Contribuisci
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
+        {visibleGifts.map((gift) => (
+          <article className="gift-card" key={gift.id}>
+            {gift.imagePath ? (
+              <div className="gift-art gift-art--image">
+                <Image
+                  src={gift.imagePath}
+                  alt={gift.name}
+                  fill
+                  sizes="(max-width: 767px) 100vw, 50vw"
+                />
               </div>
-            </article>
-          );
-        })}
+            ) : (
+              <div className="gift-art" aria-hidden="true">
+                <span>{String(gifts.indexOf(gift) + 1).padStart(2, "0")}</span>
+                <i />
+              </div>
+            )}
+            <div className="gift-copy">
+              <div className="gift-meta">
+                <span>{gift.category}</span>
+              </div>
+              <h3>{gift.name}</h3>
+              <p>{gift.description}</p>
+              <p className={`gift-status gift-status--${gift.status}`}>
+                {statusLabels[gift.status]}
+              </p>
+              {gift.status === "available" ? (
+                <div className="gift-actions">
+                  {gift.productUrl ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        invokerRef.current = event.currentTarget;
+                        setExternalGift(gift);
+                      }}
+                    >
+                      Regala tramite acquisto sul sito
+                      <ArrowUpRight aria-hidden="true" />
+                    </button>
+                  ) : null}
+                  {gift.allowFullGift ? (
+                    <button
+                      className="text-action"
+                      type="button"
+                      onClick={(event) => {
+                        invokerRef.current = event.currentTarget;
+                        setSelection({ gift, action: "gift" });
+                      }}
+                    >
+                      Regala tramite bonifico
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </article>
+        ))}
       </div>
+      <ExternalPurchaseDialog
+        gift={externalGift}
+        onOpenChange={(open) => !open && setExternalGift(null)}
+        invokerRef={invokerRef}
+      />
       <GiftActionDialog
         selection={selection}
         onOpenChange={(open) => !open && setSelection(null)}
@@ -191,8 +188,75 @@ export function GiftRegistry({
   );
 }
 
+interface ExternalPurchaseDialogProps {
+  gift: PublicGift | null;
+  onOpenChange: (open: boolean) => void;
+  invokerRef: RefObject<HTMLButtonElement | null>;
+}
+
+function ExternalPurchaseDialog({
+  gift,
+  onOpenChange,
+  invokerRef
+}: ExternalPurchaseDialogProps) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <Dialog.Root open={gift !== null} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="dialog-overlay" />
+        <Dialog.Content
+          ref={contentRef}
+          className="gift-dialog external-purchase-dialog"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            contentRef.current
+              ?.querySelector<HTMLElement>("[data-dialog-close]")
+              ?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            invokerRef.current?.focus();
+          }}
+        >
+          <Dialog.Close asChild>
+            <button
+              data-dialog-close
+              className="dialog-close"
+              type="button"
+              aria-label="Chiudi"
+            >
+              <X aria-hidden="true" />
+            </button>
+          </Dialog.Close>
+          <p className="eyebrow">{gift?.category}</p>
+          <Dialog.Title>Prima di acquistare il regalo</Dialog.Title>
+          <Dialog.Description>
+            Se decidi di acquistare davvero questo regalo, contatta Giulia o
+            Gabriele tramite WhatsApp per confermarlo. In questo modo potremo
+            rimuoverlo dalla Lista Nozze ed evitare acquisti doppi.
+          </Dialog.Description>
+          {gift?.productUrl ? (
+            <Dialog.Close asChild>
+              <a
+                className="primary-action"
+                href={gift.productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Continua sul sito del negozio
+                <ArrowUpRight aria-hidden="true" />
+              </a>
+            </Dialog.Close>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 interface GiftActionDialogProps {
-  selection: { gift: PublicGift; action: GiftAction } | null;
+  selection: GiftSelection | null;
   onOpenChange: (open: boolean) => void;
   privacyVersion: string;
   invokerRef: RefObject<HTMLButtonElement | null>;
@@ -211,7 +275,7 @@ function GiftActionDialog({
     : "Vuoi regalarci questo pezzo della nostra casa?";
   const description = isContribution
     ? "Scegli l’importo che desideri. Il pagamento avverrà tramite bonifico e verrà conteggiato nella lista soltanto dopo la nostra verifica."
-    : "Per evitare doppioni, terremo il regalo riservato a tuo nome per 48 ore. Il pagamento non avviene su questo sito: potrai acquistarlo dal negozio indicato oppure procedere con bonifico. Quando avremo verificato l’acquisto o il bonifico, lo segneremo come “Regalato ❤️”.";
+    : "Per evitare doppioni, terremo il regalo riservato a tuo nome per 48 ore. Il pagamento non avviene su questo sito: riceverai le coordinate per procedere con bonifico. Quando lo avremo verificato, segneremo il regalo come “Regalato ❤️”.";
 
   return (
     <Dialog.Root open={selection !== null} onOpenChange={onOpenChange}>
@@ -242,9 +306,17 @@ function GiftActionDialog({
               <X aria-hidden="true" />
             </button>
           </Dialog.Close>
-          <p className="eyebrow">{selection?.gift.category}</p>
+          <p className="eyebrow">
+            {selection?.gift?.category ?? "Fondo comune Lista Nozze"}
+          </p>
           <Dialog.Title>{title}</Dialog.Title>
           <Dialog.Description>{description}</Dialog.Description>
+          {!isContribution && selection?.gift ? (
+            <p className="gift-dialog-price">
+              Prezzo di listino pieno:{" "}
+              {formatWholeEuro(selection.gift.priceCents)}
+            </p>
+          ) : null}
           {!isContribution ? (
             <p className="dialog-note">
               La prenotazione non costituisce un pagamento né un ordine
@@ -253,7 +325,7 @@ function GiftActionDialog({
           ) : null}
           {selection ? (
             <GiftIntentForm
-              key={`${selection.gift.id}:${selection.action}`}
+              key={`${selection.gift?.id ?? "registry-fund"}:${selection.action}`}
               selection={selection}
               privacyVersion={privacyVersion}
             />
@@ -308,7 +380,7 @@ function GiftIntentForm({
   selection,
   privacyVersion
 }: {
-  selection: { gift: PublicGift; action: GiftAction };
+  selection: GiftSelection;
   privacyVersion: string;
 }) {
   const isContribution = selection.action === "contribute";
@@ -392,16 +464,15 @@ function GiftIntentForm({
         : { ...common, method: values.method };
 
       try {
-        const response = await fetch(
-          `/api/gifts/${encodeURIComponent(selection.gift.id)}/${
-            isContribution ? "contribute" : "reserve"
-          }`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(payload)
-          }
-        );
+        const endpoint =
+          selection.action === "contribute"
+            ? "/api/registry/contribute"
+            : `/api/gifts/${encodeURIComponent(selection.gift.id)}/reserve`;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload)
+        });
         const body = (await response.json()) as
           GiftSuccess | { error?: { code?: string } };
         if (!response.ok || !("ok" in body)) {
@@ -463,11 +534,6 @@ function GiftIntentForm({
       inputId: `${formId}-amount`,
       errorId: `${formId}-amount-error`,
       message: errors.amount?.message
-    },
-    {
-      inputId: `${formId}-method`,
-      errorId: `${formId}-method-error`,
-      message: errors.method?.message
     },
     {
       inputId: `${formId}-privacy`,
@@ -642,32 +708,11 @@ function GiftIntentForm({
               {fieldError(errors.amount?.message, `${formId}-amount-error`)}
             </label>
           ) : (
-            <fieldset
-              id={`${formId}-method`}
-              aria-invalid={Boolean(errors.method)}
-              aria-describedby={
-                errors.method ? `${formId}-method-error` : undefined
-              }
-            >
-              <legend>Come desideri procedere?</legend>
-              <label>
-                <input
-                  type="radio"
-                  value="bank_transfer"
-                  {...register("method")}
-                />
-                Bonifico
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  value="external_purchase"
-                  {...register("method")}
-                />
-                Acquisto esterno
-              </label>
-              {fieldError(errors.method?.message, `${formId}-method-error`)}
-            </fieldset>
+            <input
+              type="hidden"
+              value="bank_transfer"
+              {...register("method")}
+            />
           )}
           <label className="privacy-check">
             <input

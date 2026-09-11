@@ -17,8 +17,7 @@ describe("public gift adapter", () => {
     published: true,
     archivedAt: null,
     categoryName: "Cucina",
-    hasLock: true,
-    verifiedCents: 25000
+    hasLock: true
   };
 
   it("mappa soltanto i regali dinamici senza gate editoriale", () => {
@@ -31,34 +30,20 @@ describe("public gift adapter", () => {
         status: "reserved",
         priceCents: 100000,
         productUrl: "https://example.com/tavolo",
-        imagePath: "/gifts/tavolo.png",
-        confirmedContributionCents: 25000
+        imagePath: "/gifts/tavolo.png"
       })
     ]);
   });
 
-  it.each([
-    { verifiedCents: 0, expectedAllowFullGift: true },
-    { verifiedCents: 1, expectedAllowFullGift: false }
-  ])(
-    "consente il regalo intero solo senza contributi verificati ($verifiedCents centesimi)",
-    ({ verifiedCents, expectedAllowFullGift }) => {
-      const [gift] = mapPublicGifts({
-        gifts: [
-          {
-            ...databaseGift,
-            hasLock: false,
-            verifiedCents
-          }
-        ]
-      });
+  it("mantiene il regalo disponibile indipendentemente dai contributi storici", () => {
+    const [gift] = mapPublicGifts({
+      gifts: [{ ...databaseGift, hasLock: false }]
+    });
 
-      expect(gift).toMatchObject({
-        allowFullGift: expectedAllowFullGift,
-        allowContributions: true
-      });
-    }
-  );
+    expect(gift).toMatchObject({ status: "available", allowFullGift: true });
+    expect(gift).not.toHaveProperty("allowContributions");
+    expect(gift).not.toHaveProperty("confirmedContributionCents");
+  });
 
   it("restituisce una lista vuota se il database non risponde", async () => {
     const gifts = await loadPublicGiftsSafely(async () => {
