@@ -2,7 +2,7 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ArrowDown, ArrowUpRight, Copy, X } from "lucide-react";
+import { ArrowUpRight, Copy, X } from "lucide-react";
 import Image from "next/image";
 import {
   type RefObject,
@@ -57,9 +57,11 @@ export function GiftRegistry({
       filter === "all" ? gifts : gifts.filter((gift) => gift.status === filter),
     [filter, gifts]
   );
+  const showCommonFund = filter === "all" || filter === "available";
+  const visibleGiftCount = visibleGifts.length + (showCommonFund ? 1 : 0);
 
-  const countLabel = `${visibleGifts.length} ${
-    visibleGifts.length === 1 ? "regalo mostrato" : "regali mostrati"
+  const countLabel = `${visibleGiftCount} ${
+    visibleGiftCount === 1 ? "regalo mostrato" : "regali mostrati"
   }`;
 
   return (
@@ -83,7 +85,7 @@ export function GiftRegistry({
       <p className="registry-count" aria-live="polite">
         {countLabel}
       </p>
-      <div className="gift-grid">
+      <div className="gift-grid" role="group" aria-label="Lista dei regali">
         {visibleGifts.map((gift) => (
           <article className="gift-card" key={gift.id}>
             {gift.imagePath ? (
@@ -141,46 +143,44 @@ export function GiftRegistry({
             </div>
           </article>
         ))}
+        {showCommonFund ? (
+          <article className="gift-card gift-card--fund" id="fondo-comune">
+            <div className="gift-art gift-art--image">
+              <Image
+                src="/graphics/wedding-fund-piggy-bank.png"
+                alt="Salvadanaio per il fondo comune"
+                fill
+                sizes="(max-width: 767px) 100vw, 50vw"
+              />
+            </div>
+            <div className="gift-copy">
+              <div className="gift-meta">
+                <span>Fondo comune</span>
+              </div>
+              <h3>Se preferisci fare un’offerta libera</h3>
+              <p>
+                Un piccolo regalo, un progetto comune. Contribuisci facendoci un
+                regalo per la nostra casa. Ti comunicheremo nelle prossime
+                settimane a cosa avrà contribuito il regalo.
+              </p>
+              <p className="gift-status gift-status--available">
+                {statusLabels.available}
+              </p>
+              <div className="gift-actions">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    invokerRef.current = event.currentTarget;
+                    setSelection({ gift: null, action: "contribute" });
+                  }}
+                >
+                  Contribuisci
+                </button>
+              </div>
+            </div>
+          </article>
+        ) : null}
       </div>
-      <p className="registry-fund-cue">
-        Se preferisci lasciare un’offerta libera…
-        <ArrowDown aria-hidden="true" />
-      </p>
-      <section
-        className="registry-fund"
-        id="fondo-comune"
-        aria-labelledby="registry-fund-title"
-      >
-        <div className="registry-fund-art" aria-hidden="true">
-          <Image
-            src="/graphics/wedding-fund-piggy-bank.png"
-            alt=""
-            width={1254}
-            height={1254}
-          />
-        </div>
-        <div className="registry-fund-copy">
-          <p className="eyebrow">Un mattone per la nostra casa</p>
-          <h3 id="registry-fund-title">
-            Un piccolo regalo, un progetto comune
-          </h3>
-          <p>
-            Contribuisci facendo un piccolo regalo per la nostra casa. Ti
-            comunicheremo nelle prossime settimane a che cosa avrà contribuito
-            il regalo che ci hai fatto con tanto amore.
-          </p>
-          <button
-            className="primary-action"
-            type="button"
-            onClick={(event) => {
-              invokerRef.current = event.currentTarget;
-              setSelection({ gift: null, action: "contribute" });
-            }}
-          >
-            Contribuisci
-          </button>
-        </div>
-      </section>
       <ExternalPurchaseDialog
         gift={externalGift}
         onOpenChange={(open) => !open && setExternalGift(null)}

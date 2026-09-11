@@ -67,8 +67,8 @@ describe("GiftRegistry", () => {
   it("rende i regali nei tre stati pubblici previsti", () => {
     render(<GiftRegistry gifts={testGifts} />);
 
-    expect(screen.getAllByRole("article")).toHaveLength(3);
-    expect(screen.getByText("DISPONIBILE")).toBeInTheDocument();
+    expect(screen.getAllByRole("article")).toHaveLength(4);
+    expect(screen.getAllByText("DISPONIBILE")).toHaveLength(2);
     expect(
       screen.getByText("QUALCUNO STA GIÀ PENSANDO A QUESTO REGALO")
     ).toBeInTheDocument();
@@ -92,9 +92,20 @@ describe("GiftRegistry", () => {
     expect(
       screen.getAllByRole("button", { name: "Contribuisci" })
     ).toHaveLength(1);
+    const commonFundCard = screen.getAllByRole("article").at(-1)!;
     expect(
-      screen.getByText(/Ti comunicheremo nelle prossime settimane/)
+      within(commonFundCard).getByRole("heading", {
+        name: "Se preferisci fare un’offerta libera"
+      })
     ).toBeInTheDocument();
+    expect(
+      within(commonFundCard).getByRole("img", {
+        name: "Salvadanaio per il fondo comune"
+      })
+    ).toBeInTheDocument();
+    expect(commonFundCard).toHaveTextContent(
+      "Un piccolo regalo, un progetto comune. Contribuisci facendoci un regalo per la nostra casa. Ti comunicheremo nelle prossime settimane a cosa avrà contribuito il regalo."
+    );
     expect(screen.queryByRole("progressbar")).toBeNull();
     expect(
       within(screen.getAllByRole("article")[0]!)
@@ -103,23 +114,37 @@ describe("GiftRegistry", () => {
     ).toEqual(["Regala tramite acquisto sul sito", "Regala tramite bonifico"]);
   });
 
-  it("mostra il fondo comune dopo l'intera lista dei regali", () => {
+  it("mostra il fondo comune come ultima scheda della lista", () => {
     render(<GiftRegistry gifts={testGifts} />);
 
-    const lastGift = screen.getAllByRole("article").at(-1);
-    const cue = screen.getByText("Se preferisci lasciare un’offerta libera…");
-    const fundTitle = screen.getByRole("heading", {
-      name: "Un piccolo regalo, un progetto comune"
+    const giftGrid = screen.getByRole("group", { name: "Lista dei regali" });
+    const cards = within(giftGrid).getAllByRole("article");
+    const fundTitle = within(cards.at(-1)!).getByRole("heading", {
+      name: "Se preferisci fare un’offerta libera"
     });
 
-    expect(lastGift).toBeDefined();
+    expect(cards).toHaveLength(4);
+    expect(fundTitle.closest("article")).toHaveAttribute("id", "fondo-comune");
     expect(
-      lastGift!.compareDocumentPosition(fundTitle) &
-        Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+      screen.queryByText("Se preferisci lasciare un’offerta libera…")
+    ).toBeNull();
+  });
+
+  it("tratta il fondo comune come disponibile nei filtri e nel conteggio", async () => {
+    const user = userEvent.setup();
+    render(<GiftRegistry gifts={testGifts} />);
+
+    expect(screen.getByText("4 regali mostrati")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Disponibili" }));
+    expect(screen.getByText("2 regali mostrati")).toBeInTheDocument();
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Regalati" }));
+    expect(screen.getByText("1 regalo mostrato")).toBeInTheDocument();
     expect(
-      cue.compareDocumentPosition(fundTitle) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+      screen.queryByRole("heading", {
+        name: "Se preferisci fare un’offerta libera"
+      })
+    ).toBeNull();
   });
 
   it("filtra i regali e aggiorna il conteggio accessibile", async () => {

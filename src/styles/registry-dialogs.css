@@ -23,46 +23,8 @@
 .registry-intro a:focus-visible {
   color: var(--color-clay);
 }
-.registry-fund-cue {
-  display: flex;
-  gap: 0.65rem;
-  margin-top: clamp(3rem, 7vw, 6rem);
-  align-items: center;
-  justify-content: center;
-  color: var(--color-forest);
-  font-weight: 700;
-  text-align: center;
-}
-.registry-fund-cue svg {
-  width: 1.15rem;
-  height: 1.15rem;
-  flex: 0 0 auto;
-}
-.registry-fund {
-  display: grid;
-  gap: clamp(1.5rem, 4vw, 4rem);
-  margin-top: 1.25rem;
-  padding: clamp(1.25rem, 4vw, 3rem);
+.gift-card--fund {
   scroll-margin-top: 6rem;
-  align-items: center;
-  border: 1px solid var(--color-line);
-  background: var(--color-ivory);
-}
-.registry-fund-art {
-  min-width: 0;
-}
-.registry-fund-art img {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-.registry-fund-copy h3 {
-  margin: 0.5rem 0 1rem;
-  font-size: clamp(2rem, 5vw, 4.5rem);
-}
-.registry-fund-copy > p:not(.eyebrow) {
-  max-width: 38rem;
-  color: var(--color-muted);
 }
 .registry-filters {
   display: flex;
@@ -418,9 +380,6 @@
 }
 
 @media (min-width: 48rem) {
-  .registry-fund {
-    grid-template-columns: minmax(14rem, 0.8fr) minmax(0, 1.2fr);
-  }
   .form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
