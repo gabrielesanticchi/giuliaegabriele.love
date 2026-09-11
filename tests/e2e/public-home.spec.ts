@@ -8,7 +8,7 @@ test.describe("public home", () => {
     await page.goto("/");
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "Giulia e Gabriele" })
+      page.getByRole("heading", { level: 1, name: "Giulia & Gabriele" })
     ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Vai al contenuto principale" })

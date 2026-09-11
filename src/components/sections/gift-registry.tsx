@@ -64,37 +64,6 @@ export function GiftRegistry({
 
   return (
     <>
-      <section className="registry-fund" aria-labelledby="registry-fund-title">
-        <div className="registry-fund-art" aria-hidden="true">
-          <Image
-            src="/graphics/wedding-fund-piggy-bank.png"
-            alt=""
-            width={1254}
-            height={1254}
-          />
-        </div>
-        <div className="registry-fund-copy">
-          <p className="eyebrow">Un mattone per la nostra casa</p>
-          <h3 id="registry-fund-title">
-            Un piccolo regalo, un progetto comune
-          </h3>
-          <p>
-            Contribuisci facendo un piccolo regalo per la nostra casa. Ti
-            comunicheremo nelle prossime settimane a che cosa avrà contribuito
-            il regalo che ci hai fatto con tanto amore.
-          </p>
-          <button
-            className="primary-action"
-            type="button"
-            onClick={(event) => {
-              invokerRef.current = event.currentTarget;
-              setSelection({ gift: null, action: "contribute" });
-            }}
-          >
-            Contribuisci
-          </button>
-        </div>
-      </section>
       <div
         className="registry-filters"
         role="group"
@@ -173,6 +142,37 @@ export function GiftRegistry({
           </article>
         ))}
       </div>
+      <section className="registry-fund" aria-labelledby="registry-fund-title">
+        <div className="registry-fund-art" aria-hidden="true">
+          <Image
+            src="/graphics/wedding-fund-piggy-bank.png"
+            alt=""
+            width={1254}
+            height={1254}
+          />
+        </div>
+        <div className="registry-fund-copy">
+          <p className="eyebrow">Un mattone per la nostra casa</p>
+          <h3 id="registry-fund-title">
+            Un piccolo regalo, un progetto comune
+          </h3>
+          <p>
+            Contribuisci facendo un piccolo regalo per la nostra casa. Ti
+            comunicheremo nelle prossime settimane a che cosa avrà contribuito
+            il regalo che ci hai fatto con tanto amore.
+          </p>
+          <button
+            className="primary-action"
+            type="button"
+            onClick={(event) => {
+              invokerRef.current = event.currentTarget;
+              setSelection({ gift: null, action: "contribute" });
+            }}
+          >
+            Contribuisci
+          </button>
+        </div>
+      </section>
       <ExternalPurchaseDialog
         gift={externalGift}
         onOpenChange={(open) => !open && setExternalGift(null)}

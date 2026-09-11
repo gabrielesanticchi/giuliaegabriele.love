@@ -21,11 +21,11 @@ describe("PublicHome", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     const title = screen.getByRole("heading", {
       level: 1,
-      name: "Giulia e Gabriele"
+      name: "Giulia & Gabriele"
     });
     expect(title).toBeInTheDocument();
     expect(title.querySelectorAll(".hero-name-line")).toHaveLength(2);
-    expect(title.querySelector(".hero-and-line")).toHaveTextContent("e");
+    expect(title.querySelector(".hero-and-line")).toHaveTextContent("&");
     expect(screen.getByText("Il matrimonio · 01")).toHaveClass("section-step");
     expect(screen.getByText("La nostra storia · 02")).toHaveClass(
       "section-step"

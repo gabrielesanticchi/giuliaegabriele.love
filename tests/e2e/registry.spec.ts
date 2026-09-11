@@ -2,6 +2,27 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 test.describe("gift registry", () => {
+  test("places the common contribution block below the gift list", async ({
+    page
+  }) => {
+    await page.goto("/");
+
+    const giftGrid = page.locator(".gift-grid");
+    const fund = page.getByRole("region", {
+      name: "Un piccolo regalo, un progetto comune"
+    });
+    const [giftGridBounds, fundBounds] = await Promise.all([
+      giftGrid.boundingBox(),
+      fund.boundingBox()
+    ]);
+
+    expect(giftGridBounds).not.toBeNull();
+    expect(fundBounds).not.toBeNull();
+    expect(
+      fundBounds!.y - (giftGridBounds!.y + giftGridBounds!.height)
+    ).toBeGreaterThanOrEqual(40);
+  });
+
   test("filters are a toggle group with pressed state", async ({ page }) => {
     await page.goto("/");
     const group = page.getByRole("group", { name: "Filtra i regali" });

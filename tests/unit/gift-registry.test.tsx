@@ -103,6 +103,21 @@ describe("GiftRegistry", () => {
     ).toEqual(["Regala tramite acquisto sul sito", "Regala tramite bonifico"]);
   });
 
+  it("mostra il fondo comune dopo l'intera lista dei regali", () => {
+    render(<GiftRegistry gifts={testGifts} />);
+
+    const lastGift = screen.getAllByRole("article").at(-1);
+    const fundTitle = screen.getByRole("heading", {
+      name: "Un piccolo regalo, un progetto comune"
+    });
+
+    expect(lastGift).toBeDefined();
+    expect(
+      lastGift!.compareDocumentPosition(fundTitle) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it("filtra i regali e aggiorna il conteggio accessibile", async () => {
     const user = userEvent.setup();
     render(<GiftRegistry gifts={testGifts} />);

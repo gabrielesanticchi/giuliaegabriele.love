@@ -83,12 +83,12 @@ function Hero({
       <div className="hero-content">
         <Monogram className="hero-monogram" />
         <p className="hero-kicker">Ci sposiamo</p>
-        <h1 id="hero-title" aria-label="Giulia e Gabriele">
+        <h1 id="hero-title" aria-label="Giulia & Gabriele">
           <span className="hero-name-line" aria-hidden="true">
             Giulia
           </span>
           <span className="hero-and-line" aria-hidden="true">
-            e
+            &amp;
           </span>
           <span className="hero-name-line" aria-hidden="true">
             Gabriele
