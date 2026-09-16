@@ -104,7 +104,7 @@ export const siteContent: Omit<PublicContent, "gifts"> = {
       marker: "02",
       title: "Il mondo, un viaggio alla volta",
       description:
-        "Viaggiare è sempre stato uno dei nostri modi preferiti di crescere insieme. Abbiamo attraversato l’Europa, dalle capitali come Parigi e Berlino ai viaggi on the road tra Andalusia, Algarve e Portogallo, fino ai paesaggi della Finlandia. Abbiamo scoperto insieme tanti angoli d’Italia, dalla Puglia alla Calabria e alla Liguria, per poi spingerci più lontano, fino al Madagascar. Ogni viaggio ci ha lasciato qualcosa, ma soprattutto ci ha insegnato che il posto più bello è quello che scopriamo insieme.",
+        "Viaggiare è sempre stato uno dei nostri modi preferiti di crescere insieme. Abbiamo attraversato l’Europa, dalle capitali come Parigi e Berlino ai viaggi on the road tra Andalusia, Algarve e Portogallo, fino ai paesaggi della Finlandia. Abbiamo scoperto insieme tanti angoli d’Italia, dalla Puglia alla Calabria, alla Liguria e alla Toscana, per poi spingerci più lontano, fino al Madagascar. Ogni viaggio ci ha lasciato qualcosa, ma soprattutto ci ha insegnato che il posto più bello è quello che scopriamo insieme.",
       media: {
         url: "/story/2-viaggi-insieme.jpeg",
         alt: "Giulia e Gabriele circondati dai ricordi dei loro viaggi",
