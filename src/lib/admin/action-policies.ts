@@ -13,6 +13,7 @@ export const ADMIN_ACTION_POLICIES = {
   "gift.archive": "editor",
   "gift.publish": "editor",
   "gift.hide": "editor",
+  "gift.complete": "editor",
   "request.verify": "owner",
   "request.cancel": "owner",
   "request.reject": "owner",

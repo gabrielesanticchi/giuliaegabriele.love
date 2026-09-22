@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { saveGiftAction } from "@/actions/admin/gifts";
+import {
+  saveGiftAction,
+  setGiftCompletedAction
+} from "@/actions/admin/gifts";
 import { rejectRequestAction } from "@/actions/admin/requests";
 import { saveBankingAction } from "@/actions/admin/settings";
 import { withAdminAuthDependencies } from "@/actions/admin/shared";
@@ -8,6 +11,15 @@ import { withAdminAuthDependencies } from "@/actions/admin/shared";
 const unauthenticated = { getPrincipal: async () => null };
 const boundaries: Array<[string, () => Promise<unknown>]> = [
   ["gift", () => saveGiftAction(new FormData())],
+  [
+    "gift completion",
+    () =>
+      setGiftCompletedAction(
+        "00000000-0000-4000-8000-000000000000",
+        true,
+        "test-key-123"
+      )
+  ],
   ["request", () => rejectRequestAction(new FormData())],
   ["banking", () => saveBankingAction(new FormData())]
 ];

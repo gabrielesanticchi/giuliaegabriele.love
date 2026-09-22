@@ -9,6 +9,7 @@ import {
   duplicateGiftAction,
   saveGiftAction,
   saveGiftCategoryAction,
+  setGiftCompletedAction,
   setGiftPublishedAction
 } from "@/actions/admin/gifts";
 import {
@@ -195,7 +196,10 @@ export default async function AdminSectionPage({
               <tr key={row.id}>
                 <td>{row.title}</td>
                 <td>{formatCurrency(row.priceCents)}</td>
-                <td>{row.published ? "Pubblicato" : "Nascosto"}</td>
+                <td>
+                  {row.published ? "Pubblicato" : "Nascosto"}
+                  {row.completed ? " · Regalato" : ""}
+                </td>
                 <td>
                   <details>
                     <summary>Modifica / riordina</summary>
@@ -280,6 +284,20 @@ export default async function AdminSectionPage({
                   >
                     <button type="submit">
                       {row.published ? "Nascondi" : "Pubblica"}
+                    </button>
+                  </form>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await setGiftCompletedAction(
+                        row.id,
+                        !row.completed,
+                        randomUUID()
+                      );
+                    }}
+                  >
+                    <button type="submit">
+                      {row.completed ? "Segna disponibile" : "Segna come regalato"}
                     </button>
                   </form>
                   <form

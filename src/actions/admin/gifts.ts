@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { getDatabase } from "@/db";
 import { giftCategories, gifts } from "@/db/schema";
+import { runAdminIdempotentTransaction } from "@/lib/admin/idempotency";
 import { httpsUrlSchema } from "@/lib/domain/schemas";
 import { parseEuroAmount } from "@/lib/public-api/validation";
 
@@ -216,6 +217,46 @@ export async function setGiftPublishedAction(id: string, published: boolean) {
         .returning({ id: gifts.id });
       if (!updated[0]) throw new Error("Regalo non trovato");
     }
+  });
+  await refreshAdmin("/admin/regali");
+}
+
+/** Marks an already received gift without creating a guest request or PII. */
+export async function setGiftCompletedAction(
+  id: string,
+  completed: boolean,
+  idempotencyKey: string
+) {
+  const admin = await authorizedAdmin("gift.complete");
+  const giftId = z.uuid().parse(id);
+  const parsedCompleted = z.boolean().parse(completed);
+  const parsedIdempotencyKey = z
+    .string()
+    .trim()
+    .min(8)
+    .max(128)
+    .parse(idempotencyKey);
+  await runAdminIdempotentTransaction({
+    actorAdminId: admin.id,
+    action: "gift.complete",
+    entityId: giftId,
+    idempotencyKey: parsedIdempotencyKey,
+    payload: { completed: parsedCompleted },
+    effect: async (tx) => {
+      const updated = await tx
+        .update(gifts)
+        .set({ completed: parsedCompleted, updatedAt: new Date() })
+        .where(eq(gifts.id, giftId))
+        .returning({ id: gifts.id, completed: gifts.completed });
+      if (!updated[0]) throw new Error("Regalo non trovato");
+      return updated[0];
+    },
+    audit: (result) => ({
+      action: result.completed ? "gift.completed" : "gift.reopened",
+      targetType: "gift",
+      targetId: result.id,
+      metadata: { completed: result.completed }
+    })
   });
   await refreshAdmin("/admin/regali");
 }
